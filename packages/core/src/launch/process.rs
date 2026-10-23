@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Command;
@@ -11,6 +12,59 @@ use super::LaunchCommand;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// How long output readers may outlive the game process. A grandchild that inherited the pipes
+/// (e.g. a wrapper's daemon) would otherwise keep them open and the exit would never be reported.
+const READER_GRACE: Duration = Duration::from_secs(2);
+
+/// Windows has no process groups: a job object lets the whole process tree be killed at once,
+/// so a wrapper command cannot leave the actual game running.
+#[cfg(windows)]
+struct Job(windows_sys::Win32::Foundation::HANDLE);
+
+// A job handle is just a kernel object reference, valid on any thread.
+#[cfg(windows)]
+unsafe impl Send for Job {}
+
+#[cfg(windows)]
+impl Job {
+    /// `None` (with a warning) when the job cannot be set up; killing then reaches only the child.
+    fn containing(child: &tokio::process::Child) -> Option<Job> {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW};
+
+        let process = child.raw_handle()?;
+        // SAFETY: plain Win32 calls; the job handle is closed on every failure path.
+        unsafe {
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if job.is_null() {
+                tracing::warn!("cannot create a job object: {}", std::io::Error::last_os_error());
+                return None;
+            }
+            if AssignProcessToJobObject(job, process as _) == 0 {
+                tracing::warn!("cannot assign the game to a job object: {}", std::io::Error::last_os_error());
+                CloseHandle(job);
+                return None;
+            }
+            Some(Job(job))
+        }
+    }
+
+    fn terminate(&self) {
+        // SAFETY: the handle is a valid job object owned by `self`.
+        if unsafe { windows_sys::Win32::System::JobObjects::TerminateJobObject(self.0, 1) } == 0 {
+            tracing::warn!("cannot terminate the game's job object: {}", std::io::Error::last_os_error());
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for Job {
+    fn drop(&mut self) {
+        // SAFETY: the handle is owned by `self` and closed exactly once.
+        unsafe { windows_sys::Win32::Foundation::CloseHandle(self.0) };
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogStream {
@@ -85,6 +139,19 @@ where
     })
 }
 
+/// Waits for an output reader after the process exited; gives up on it after `grace`.
+async fn finish_reader(mut reader: JoinHandle<std::io::Result<()>>, grace: Duration) {
+    match tokio::time::timeout(grace, &mut reader).await {
+        Ok(Ok(Ok(()))) => {}
+        Ok(Ok(Err(error))) => tracing::error!("reading game output failed: {error}"),
+        Ok(Err(error)) => tracing::error!("game output task failed: {error}"),
+        Err(_) => {
+            tracing::warn!("game output is still open {grace:?} after the process exited; giving up on it");
+            reader.abort();
+        }
+    }
+}
+
 /// Starts the game with cwd = game dir and a clean environment. Must be called inside a tokio
 /// runtime. Output lines are delivered to `on_log` from separate tasks, one per stream.
 pub fn spawn_game(command: &LaunchCommand, on_log: LogFn) -> Result<GameHandle> {
@@ -110,25 +177,45 @@ pub fn spawn_game(command: &LaunchCommand, on_log: LogFn) -> Result<GameHandle> 
     let readers =
         [pump_lines(stdout, LogStream::Stdout, on_log.clone()), pump_lines(stderr, LogStream::Stderr, on_log)];
 
+    #[cfg(windows)]
+    let job = Job::containing(&child);
+
     let (kill, mut kill_requests) = mpsc::unbounded_channel();
     let (exit_sender, exit) = watch::channel(None);
     tokio::spawn(async move {
         let status = tokio::select! {
             status = child.wait() => status,
-            Some(()) = kill_requests.recv() => match child.kill().await {
-                Ok(()) => child.wait().await,
-                Err(error) => Err(error),
-            },
+            Some(()) = kill_requests.recv() => {
+                #[cfg(windows)]
+                if let Some(job) = &job {
+                    job.terminate();
+                }
+                match child.kill().await {
+                    Ok(()) => child.wait().await,
+                    Err(error) => Err(error),
+                }
+            }
         };
         for reader in readers {
-            match reader.await {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => tracing::error!("reading game output failed: {error}"),
-                Err(error) => tracing::error!("game output task failed: {error}"),
-            }
+            finish_reader(reader, READER_GRACE).await;
         }
         exit_sender.send_replace(Some(status.map(|status| status.code()).map_err(|error| error.to_string())));
     });
 
     Ok(GameHandle { pid, kill, exit })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn reader_with_open_pipe_is_given_up_after_the_grace_period() {
+        // The write half stays alive, like a grandchild holding the game's pipe.
+        let (_writer, reader) = tokio::io::duplex(64);
+        let handle = pump_lines(reader, LogStream::Stdout, Arc::new(|_| {}));
+        tokio::time::timeout(Duration::from_secs(5), finish_reader(handle, Duration::from_millis(50)))
+            .await
+            .expect("finish_reader must not wait for an open pipe");
+    }
 }
