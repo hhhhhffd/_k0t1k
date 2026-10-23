@@ -1,0 +1,10 @@
+{
+  "name": "k0t1k",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev": "pnpm --filter @k0t1k/app tauri dev",
+    "build": "pnpm --filter @k0t1k/app tauri build",
+    "check": "pnpm --filter @k0t1k/app check"
+  }
+}
