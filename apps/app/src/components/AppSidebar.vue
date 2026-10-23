@@ -28,7 +28,7 @@ async function pick(id: string) {
 <template>
   <aside class="dot-grid relative flex w-56 shrink-0 flex-col border-r border-line bg-surface">
     <div class="flex items-center gap-2.5 px-4 pt-5 pb-4">
-      <img :src="mascot" alt="" class="pixelated pix anim-bob size-11 bg-black" />
+      <img :src="mascot" alt="" class="pixelated anim-bob size-11" />
       <div class="leading-tight">
         <div class="font-mono text-[19px] font-bold tracking-tight">_k0t1k</div>
         <div class="text-[11px] text-faint">{{ t.app.tagline }}</div>
