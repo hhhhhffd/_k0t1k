@@ -42,14 +42,39 @@
  *   toggle_resource(instanceId, kind, fileName, enabled)     -> void
  *   delete_resource(instanceId, kind, fileName)              -> void
  *   check_updates(instanceId, kind: LocalResourceKind)       -> AvailableUpdate[]
- *   list_worlds(instanceId)                                  -> World[]
  *   import_modpack_file(path, name?)                         -> ModpackImport (.mrpack / CurseForge .zip; emits `progress`)
  *   install_modpack_version(platform, projectId, versionId, name?) -> ModpackImport (emits `progress`)
+ * Worlds (the modifying commands fail while the instance is running)
+ *   list_worlds(instanceId)                                  -> World[]  (folders with a level.dat, last played first)
+ *   rename_world(instanceId, dirName, name, renameFolder)    -> string   (the folder name afterwards)
+ *   copy_world(instanceId, dirName, name)                    -> string   (folder name of the copy)
+ *   delete_world(instanceId, dirName)                        -> void     (permanent)
+ *   backup_world(instanceId, dirName, destination?)          -> string   (zip path; default <instance>/backups/)
+ *   open_world_folder(instanceId, dirName)                   -> void
+ *   import_world(instanceId, path)                           -> string   (.zip; folder name it got)
+ *   list_datapacks(instanceId, world)                        -> LocalResource[]  (world = dirName)
+ *   toggle_datapack(instanceId, world, fileName, enabled)    -> void
+ *   delete_datapack(instanceId, world, fileName)             -> void
+ *   add_datapack(instanceId, world, path)                    -> string   (.zip file copied into the world)
+ *   install_datapack(instanceId, world, platform, projectId, versionId) -> InstallReport (emits `progress`)
+ * Screenshots
+ *   list_screenshots(instanceId)                             -> Screenshot[]  (newest first; allows the asset protocol for the folder)
+ *   open_screenshot(instanceId, fileName)                    -> void
+ *   delete_screenshot(instanceId, fileName)                  -> void
+ *   open_screenshots_folder(instanceId)                      -> void
+ * Servers (servers.dat; the modifying commands fail while the instance is running)
+ *   list_servers(instanceId)                                 -> Server[]
+ *   add_server(instanceId, server: Server)                   -> void
+ *   update_server(instanceId, index, server: Server)         -> void
+ *   remove_server(instanceId, index)                         -> void
+ *   move_server(instanceId, from, to)                        -> void
+ *   ping_server(address)                                     -> ServerStatus  (host or host:port; rejects on timeout/refusal)
  * Events (backend -> frontend, via emit)
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
  *   game-log        GameLogBatch     (lines are batched)
  *   instance-state  InstanceRunState
  */
+import { convertFileSrc } from '@tauri-apps/api/core'
 import type {
   Account,
   AvailableUpdate,
@@ -72,8 +97,11 @@ import type {
   Platform,
   ProgressEvent,
   ProjectVersion,
+  Screenshot,
   SearchPage,
   SearchQuery,
+  Server,
+  ServerStatus,
   SharedFolder,
   SystemInfo,
   VersionFilter,
@@ -188,7 +216,6 @@ export const deleteResource = (instanceId: string, kind: LocalResourceKind, file
   call<void>('delete_resource', { instanceId, kind, fileName })
 export const checkUpdates = (instanceId: string, kind: LocalResourceKind) =>
   call<AvailableUpdate[]>('check_updates', { instanceId, kind })
-export const listWorlds = (instanceId: string) => call<World[]>('list_worlds', { instanceId })
 export const importModpackFile = (path: string, name?: string) =>
   call<ModpackImport>('import_modpack_file', { path, name })
 export const installModpackVersion = (version: ProjectVersion, name?: string) =>
@@ -198,6 +225,59 @@ export const installModpackVersion = (version: ProjectVersion, name?: string) =>
     versionId: version.id,
     name,
   })
+
+// ---- worlds ----
+export const listWorlds = (instanceId: string) => call<World[]>('list_worlds', { instanceId })
+export const renameWorld = (instanceId: string, dirName: string, name: string, renameFolder: boolean) =>
+  call<string>('rename_world', { instanceId, dirName, name, renameFolder })
+export const copyWorld = (instanceId: string, dirName: string, name: string) =>
+  call<string>('copy_world', { instanceId, dirName, name })
+export const deleteWorld = (instanceId: string, dirName: string) =>
+  call<void>('delete_world', { instanceId, dirName })
+export const backupWorld = (instanceId: string, dirName: string, destination?: string) =>
+  call<string>('backup_world', { instanceId, dirName, destination })
+export const openWorldFolder = (instanceId: string, dirName: string) =>
+  call<void>('open_world_folder', { instanceId, dirName })
+export const importWorld = (instanceId: string, path: string) =>
+  call<string>('import_world', { instanceId, path })
+export const listDatapacks = (instanceId: string, world: string) =>
+  call<LocalResource[]>('list_datapacks', { instanceId, world })
+export const toggleDatapack = (instanceId: string, world: string, fileName: string, enabled: boolean) =>
+  call<void>('toggle_datapack', { instanceId, world, fileName, enabled })
+export const deleteDatapack = (instanceId: string, world: string, fileName: string) =>
+  call<void>('delete_datapack', { instanceId, world, fileName })
+export const addDatapack = (instanceId: string, world: string, path: string) =>
+  call<string>('add_datapack', { instanceId, world, path })
+export const installDatapack = (instanceId: string, world: string, version: ProjectVersion) =>
+  call<InstallReport>('install_datapack', {
+    instanceId,
+    world,
+    platform: version.platform,
+    projectId: version.projectId,
+    versionId: version.id,
+  })
+
+// ---- screenshots ----
+export const listScreenshots = (instanceId: string) => call<Screenshot[]>('list_screenshots', { instanceId })
+export const openScreenshot = (instanceId: string, fileName: string) =>
+  call<void>('open_screenshot', { instanceId, fileName })
+export const deleteScreenshot = (instanceId: string, fileName: string) =>
+  call<void>('delete_screenshot', { instanceId, fileName })
+export const openScreenshotsFolder = (instanceId: string) =>
+  call<void>('open_screenshots_folder', { instanceId })
+/** URL an <img> can load for a file the backend allowed (asset protocol); the mock hands out ready URLs. */
+export const fileUrl = (path: string) => (isTauri ? convertFileSrc(path) : path)
+
+// ---- servers ----
+export const listServers = (instanceId: string) => call<Server[]>('list_servers', { instanceId })
+export const addServer = (instanceId: string, server: Server) => call<void>('add_server', { instanceId, server })
+export const updateServer = (instanceId: string, index: number, server: Server) =>
+  call<void>('update_server', { instanceId, index, server })
+export const removeServer = (instanceId: string, index: number) =>
+  call<void>('remove_server', { instanceId, index })
+export const moveServer = (instanceId: string, from: number, to: number) =>
+  call<void>('move_server', { instanceId, from, to })
+export const pingServer = (address: string) => call<ServerStatus>('ping_server', { address })
 
 // ---- events ----
 export const onProgress = (cb: (e: ProgressEvent) => void) => subscribe('progress', cb)

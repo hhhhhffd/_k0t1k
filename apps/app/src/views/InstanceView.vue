@@ -7,6 +7,8 @@ import InstanceIcon from '../components/InstanceIcon.vue'
 import InstanceSettingsTab from '../components/instance/InstanceSettingsTab.vue'
 import LogsTab from '../components/instance/LogsTab.vue'
 import ResourceList from '../components/instance/ResourceList.vue'
+import ScreenshotsTab from '../components/instance/ScreenshotsTab.vue'
+import ServersTab from '../components/instance/ServersTab.vue'
 import WorldsTab from '../components/instance/WorldsTab.vue'
 import PlayButton from '../components/PlayButton.vue'
 import { t } from '../i18n/ru'
@@ -22,9 +24,9 @@ const router = useRouter()
 const instance = computed(() => store.byId(props.id))
 const loader = computed(() => (instance.value ? loaderOf(instance.value) : undefined))
 
-type Tab = 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'logs' | 'settings'
+type Tab = 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'screenshots' | 'servers' | 'logs' | 'settings'
 const tab = ref<Tab>('mods')
-const tabs: Tab[] = ['mods', 'resourcepacks', 'shaders', 'worlds', 'logs', 'settings']
+const tabs: Tab[] = ['mods', 'resourcepacks', 'shaders', 'worlds', 'screenshots', 'servers', 'logs', 'settings']
 const sharedFolderOfTab = { resourcepacks: 'resourcepacks', shaders: 'shaderpacks' } as const
 /** The notice shown above a resource list whose folder is linked to the shared one. */
 function sharedNote(tab: Tab) {
@@ -55,7 +57,7 @@ const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shader
       <PlayButton :instance-id="instance.id" large />
     </header>
 
-    <div class="flex gap-1 border-b border-line" role="tablist">
+    <div class="flex gap-1 overflow-x-auto border-b border-line" role="tablist">
       <button
         v-for="name in tabs"
         :key="name"
@@ -77,6 +79,8 @@ const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shader
       :shared-note="sharedNote(tab)"
     />
     <WorldsTab v-else-if="tab === 'worlds'" :key="instance.id" :instance-id="instance.id" />
+    <ScreenshotsTab v-else-if="tab === 'screenshots'" :key="instance.id" :instance-id="instance.id" :shared="instance.sharedFolders.includes('screenshots')" />
+    <ServersTab v-else-if="tab === 'servers'" :key="instance.id" :instance-id="instance.id" />
     <LogsTab v-else-if="tab === 'logs'" :instance-id="instance.id" />
     <InstanceSettingsTab v-else :key="instance.id" :instance="instance" />
   </div>
