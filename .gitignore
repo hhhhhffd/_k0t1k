@@ -3,3 +3,5 @@ node_modules
 dist
 .serena/cache
 *.log
+.env
+.claude/worktrees
