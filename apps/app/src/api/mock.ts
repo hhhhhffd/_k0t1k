@@ -5,6 +5,7 @@ import type {
   AvailableUpdate,
   BlockedFile,
   CreateInstanceRequest,
+  GameLogBatch,
   GameLogLine,
   GlobalSettings,
   Instance,
@@ -90,14 +91,17 @@ const defaultSettings: GlobalSettings = {
   commands: { preLaunch: '', postExit: '', wrapper: '' },
   env: {},
   playtime: { record: true, show: true, totalSecs: 0 },
-  ui: { theme: 'k0t1k', liteMode: false },
+  ui: { theme: 'k0t1k', liteMode: false, customThemes: [] },
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],
   selectedAccountId: 'acc-1',
 }
 function loadSettings(): GlobalSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    if (raw) return { ...defaultSettings, ...(JSON.parse(raw) as Partial<GlobalSettings>) }
+    if (raw) {
+      const stored = JSON.parse(raw) as Partial<GlobalSettings>
+      return { ...defaultSettings, ...stored, ui: { ...defaultSettings.ui, ...stored.ui } }
+    }
   } catch {
     // mock only: fall back to defaults when storage is unavailable
   }
@@ -208,7 +212,6 @@ function searchContent(q: SearchQuery): SearchPage {
 
 function projectVersions(platform: Platform, projectId: string, filter: VersionFilter): ProjectVersion[] {
   const slug = projectId.replace(/^(mr|cf)-/, '')
-  const loaders: LoaderId[] = filter.loader ? [filter.loader] : ['fabric', 'quilt']
   const versions: ProjectVersion[] = [
     ['1.4.2', ['1.21.4', '1.21.3'], 'release'], ['1.4.1', ['1.21.1'], 'release'], ['1.4.0-beta.2', ['1.21'], 'beta'],
     ['1.3.9', ['1.20.1', '1.20.4'], 'release'], ['1.3.0-alpha.1', ['1.19.4'], 'alpha'],
@@ -218,7 +221,7 @@ function projectVersions(platform: Platform, projectId: string, filter: VersionF
     const filename = `${slug}-${num as string}.jar`
     return {
       platform, id: `${projectId}-v${i}`, projectId, name: `${slug} ${num as string}`, versionNumber: num as string,
-      releaseType: releaseType as ProjectVersion['releaseType'], gameVersions: gv as string[], loaders, published: daysAgo(10 + i * 45),
+      releaseType: releaseType as ProjectVersion['releaseType'], gameVersions: gv as string[], loaders: (i === 1 ? ['forge'] : ['fabric', 'quilt']) as LoaderId[], published: daysAgo(10 + i * 45),
       dependencies: [],
       files: [{
         url: blocked ? null : `https://cdn.example/${filename}`,
@@ -227,7 +230,9 @@ function projectVersions(platform: Platform, projectId: string, filter: VersionF
       }],
     }
   })
-  return filter.gameVersion ? versions.filter((v) => v.gameVersions.includes(filter.gameVersion as string)) : versions
+  return versions.filter(
+    (v) => (!filter.gameVersion || v.gameVersions.includes(filter.gameVersion)) && (!filter.loader || v.loaders.includes(filter.loader)),
+  )
 }
 
 // ---- local resources ----
@@ -256,6 +261,8 @@ const worlds: World[] = [
   { dirName: 'Hardcore', lastPlayed: daysAgo(40), size: 52_000_000 },
 ]
 
+let dataDir = '%APPDATA%\\_k0t1k'
+
 // ---- launching ----
 const runStates = new Map<string, InstanceRunState>()
 const killFlags = new Set<string>()
@@ -264,8 +271,21 @@ const setRun = (instanceId: string, state: InstanceRunState['state'], exitCode?:
   runStates.set(instanceId, s)
   emit('instance-state', s)
 }
-const log = (instanceId: string, stream: GameLogLine['stream'], line: string) =>
-  emit('game-log', { instanceId, stream, line } satisfies GameLogLine)
+const logBatch = (instanceId: string, lines: GameLogLine[]) => emit('game-log', { instanceId, lines } satisfies GameLogBatch)
+const log = (instanceId: string, stream: GameLogLine['stream'], line: string) => logBatch(instanceId, [{ stream, line }])
+
+/** A chatty modpack: 20k lines in batches, to exercise the log cap and batching. */
+async function logFlood(instanceId: string) {
+  const total = 20_000
+  const batch = 400
+  for (let n = 0; n < total && !killFlags.has(instanceId); n += batch) {
+    logBatch(instanceId, Array.from({ length: batch }, (_, i) => ({
+      stream: 'stdout' as const,
+      line: `[Worker-Main-${i % 8}/INFO]: Loaded recipe #${n + i} of ${total}`,
+    })))
+    await sleep(8)
+  }
+}
 
 async function launch(instanceId: string) {
   const inst = findInstance(instanceId)
@@ -293,6 +313,7 @@ async function launch(instanceId: string) {
       log(instanceId, stream, line)
       await sleep(500)
     }
+    if (instanceId === 'inst-3') void logFlood(instanceId)
     let n = 0
     while (!killFlags.has(instanceId) && runStates.get(instanceId)?.state === 'running') {
       log(instanceId, 'stdout', `[${tag()}] [Server thread/INFO]: Autosave tick ${++n}`)
@@ -350,7 +371,9 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'get_settings': return clone(settings)
     case 'save_settings': settings = clone(a.settings as GlobalSettings); persistSettings(); return undefined
     case 'get_system_info':
-      return { totalRamMib: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir: '%APPDATA%\\_k0t1k' } satisfies SystemInfo
+      return { totalRamMib: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir, portable: false, exeDir: 'C:\\Program Files\\_k0t1k' } satisfies SystemInfo
+    case 'set_data_dir': dataDir = (a.path as string | null) ?? '%APPDATA%\\_k0t1k'; return true
+    case 'open_data_dir': return undefined
     case 'add_offline_account': {
       const acc: Account = { id: nextId('acc'), name: a.name as string, kind: 'offline' }
       settings.accounts.push(acc)

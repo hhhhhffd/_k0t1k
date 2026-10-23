@@ -1,23 +1,39 @@
 import { defineStore } from 'pinia'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, shallowReactive } from 'vue'
 import * as api from '../api/commands'
-import type { GameLogLine, Instance, ModpackImport, RunState } from '../api/types'
+import type { GameLogBatch, GameLogLine, Instance, ModpackImport, RunState } from '../api/types'
 import { useTasksStore } from './tasks'
 
-const MAX_LOG_LINES = 5000
+export const MAX_LOG_LINES = 5000
+const LOG_FLUSH_MS = 100
+
+/** A log line with a stable key, so trimming the head of the buffer does not re-render the rest of the list. */
+export interface LogEntry extends GameLogLine {
+  seq: number
+}
+interface LogBuffer {
+  lines: LogEntry[]
+  /** Lines pushed out by the cap since the last clear. */
+  dropped: number
+}
+const EMPTY_LOG: LogBuffer = { lines: [], dropped: 0 }
 
 export const useInstancesStore = defineStore('instances', () => {
   const tasks = useTasksStore()
   const instances = ref<Instance[]>([])
   const loaded = ref(false)
   const runStates = reactive(new Map<string, RunState>())
-  const logs = reactive(new Map<string, GameLogLine[]>())
+  // Buffers are replaced (never mutated) once per flush, so a flood of lines costs one reactive update per flush.
+  const logs = shallowReactive(new Map<string, LogBuffer>())
+  const pendingLogs = new Map<string, LogBuffer>()
+  let logSeq = 0
+  let flushTimer: ReturnType<typeof setTimeout> | undefined
 
   const groups = computed(() => [...new Set(instances.value.map((i) => i.group).filter((g): g is string => !!g))].sort())
 
   const byId = (id: string) => instances.value.find((i) => i.id === id)
   const stateOf = (id: string): RunState => runStates.get(id) ?? 'stopped'
-  const logOf = (id: string): GameLogLine[] => logs.get(id) ?? []
+  const logOf = (id: string): LogBuffer => logs.get(id) ?? EMPTY_LOG
 
   async function refresh() {
     const listing = await api.listInstances()
@@ -55,7 +71,31 @@ export const useInstancesStore = defineStore('instances', () => {
   const launch = (id: string, accountId?: string) => api.launchInstance(id, accountId)
   const kill = (id: string) => api.killInstance(id)
   function clearLog(id: string) {
-    logs.set(id, [])
+    pendingLogs.delete(id)
+    logs.set(id, { lines: [], dropped: 0 })
+  }
+
+  function flushLogs() {
+    flushTimer = undefined
+    for (const [id, pending] of pendingLogs) {
+      const old = logs.get(id) ?? EMPTY_LOG
+      const merged = old.lines.concat(pending.lines)
+      const overflow = Math.max(0, merged.length - MAX_LOG_LINES)
+      logs.set(id, { lines: overflow ? merged.slice(overflow) : merged, dropped: old.dropped + pending.dropped + overflow })
+    }
+    pendingLogs.clear()
+  }
+
+  function pushLogs(batch: GameLogBatch) {
+    const pending = pendingLogs.get(batch.instanceId) ?? { lines: [], dropped: 0 }
+    for (const l of batch.lines) pending.lines.push({ ...l, seq: logSeq++ })
+    // while the window is hidden nothing flushes, so the pending part is capped as well
+    if (pending.lines.length > MAX_LOG_LINES) {
+      pending.dropped += pending.lines.length - MAX_LOG_LINES
+      pending.lines.splice(0, pending.lines.length - MAX_LOG_LINES)
+    }
+    pendingLogs.set(batch.instanceId, pending)
+    flushTimer ??= setTimeout(() => requestAnimationFrame(flushLogs), LOG_FLUSH_MS)
   }
 
   let started = false
@@ -68,12 +108,7 @@ export const useInstancesStore = defineStore('instances', () => {
         // playtime and lastPlayed change when a session ends
         if (e.state === 'stopped') void refresh()
       }),
-      api.onGameLog((e) => {
-        const lines = logs.get(e.instanceId) ?? []
-        lines.push(e)
-        if (lines.length > MAX_LOG_LINES) lines.splice(0, lines.length - MAX_LOG_LINES)
-        logs.set(e.instanceId, lines)
-      }),
+      api.onGameLog(pushLogs),
     ])
     for (const s of await api.listRunStates()) runStates.set(s.instanceId, s.state)
     await refresh()

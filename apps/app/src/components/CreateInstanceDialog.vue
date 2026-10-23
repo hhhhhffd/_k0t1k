@@ -10,6 +10,7 @@ import { useTasksStore } from '../stores/tasks'
 import { LOADER_LABELS } from '../utils/format'
 import InstanceIcon, { INSTANCE_ICONS } from './InstanceIcon.vue'
 import ModalDialog from './ModalDialog.vue'
+import SelectMenu from './SelectMenu.vue'
 
 const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
@@ -36,6 +37,9 @@ const visibleVersions = computed(() =>
       versionFilter.value === 'old' ? (v.type ?? '').startsWith('old') : v.type === versionFilter.value
     return matchesType && v.version.toLowerCase().includes(versionSearch.value.trim().toLowerCase())
   }),
+)
+const loaderVersionOptions = computed(() =>
+  loaderVersions.value.map((v) => ({ value: v.version, label: v.version, hint: v.recommended ? t.create.recommended : undefined })),
 )
 const canCreate = computed(
   () => name.value.trim() !== '' && mcVersion.value !== '' && (!loader.value || loaderVersion.value !== ''),
@@ -133,9 +137,7 @@ async function importPack() {
           <span class="label">{{ t.create.loaderVersion }}</span>
           <p v-if="loadingLoader" class="text-faint">{{ t.common.loading }}</p>
           <p v-else-if="!loaderVersions.length" class="text-warn">{{ t.create.loaderUnavailable }}</p>
-          <select v-else v-model="loaderVersion" class="input">
-            <option v-for="v in loaderVersions" :key="v.version" :value="v.version">{{ v.version }}{{ v.recommended ? ` (${t.create.recommended})` : '' }}</option>
-          </select>
+          <SelectMenu v-else v-model="loaderVersion" searchable :options="loaderVersionOptions" :aria-label="t.create.loaderVersion" />
         </div>
       </div>
 
