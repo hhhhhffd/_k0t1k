@@ -126,7 +126,8 @@ impl<'a> Reader<'a> {
     /// forged count cannot make the reader allocate gigabytes.
     fn items<T, const N: usize>(&mut self, count: usize, parse: fn([u8; N]) -> T) -> Result<Vec<T>> {
         let bytes = self.take(count.checked_mul(N).ok_or_else(|| invalid("length overflow"))?)?;
-        Ok(bytes.chunks_exact(N).map(|chunk| parse(chunk.try_into().expect("chunk of N bytes"))).collect())
+        let (chunks, _) = bytes.as_chunks::<N>();
+        Ok(chunks.iter().map(|&chunk| parse(chunk)).collect())
     }
 
     fn payload(&mut self, id: u8, depth: usize) -> Result<Tag> {
