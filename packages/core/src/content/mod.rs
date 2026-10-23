@@ -2,6 +2,7 @@
 //! and modpack import. The packwiz `.pw.toml` index keeps the origin of every installed file.
 
 pub mod curseforge;
+mod export;
 mod install;
 mod local;
 mod modpack;
@@ -31,6 +32,7 @@ pub(crate) async fn send_json<T: serde::de::DeserializeOwned>(
     response.json().await.map_err(http)
 }
 
+pub use export::{PackExportReport, PackExportRequest, export_curseforge, export_mrpack};
 pub use install::{
     AvailableUpdate, BlockedFile, InstallContext, InstallReport, InstalledResource, check_updates,
     install_version,

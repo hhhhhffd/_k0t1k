@@ -28,10 +28,10 @@ const CURSEFORGE_MANIFEST: &str = "manifest.json";
 const TASK: &str = "modpack";
 
 /// Loader dependency keys (mrpack) and id prefixes (CurseForge) with their Prism meta uids.
-const FABRIC_UID: &str = "net.fabricmc.fabric-loader";
-const QUILT_UID: &str = "org.quiltmc.quilt-loader";
-const FORGE_UID: &str = "net.minecraftforge";
-const NEOFORGE_UID: &str = "net.neoforged";
+pub(super) const FABRIC_UID: &str = "net.fabricmc.fabric-loader";
+pub(super) const QUILT_UID: &str = "org.quiltmc.quilt-loader";
+pub(super) const FORGE_UID: &str = "net.minecraftforge";
+pub(super) const NEOFORGE_UID: &str = "net.neoforged";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +83,8 @@ pub struct MrpackFile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MrpackEnv {
     pub client: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

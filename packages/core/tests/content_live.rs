@@ -5,10 +5,13 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use k0t1k_core::component::ComponentSpec;
 use k0t1k_core::content::{
     Clients, InstallContext, Loader, ResourceKind, SearchQuery, SearchSort, check_updates,
-    inspect_modpack, install_modpack, install_version, murmur2, packwiz, scan_resources,
+    PackExportRequest, export_mrpack, inspect_modpack, install_modpack, install_version, murmur2, packwiz,
+    scan_resources,
 };
+use k0t1k_core::instance::archive::{ExportFilter, default_excluded};
 use k0t1k_core::download::{download_checked, http_client};
 use k0t1k_core::progress::no_progress;
 
@@ -393,5 +396,52 @@ async fn curseforge_modpack_resolution_with_blocked_file() {
             .all(|m| m.origin.as_ref().is_some_and(|o| o.lock_update))
     );
     assert!(game_dir.join("config/x.txt").exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[tokio::test]
+#[ignore = "network"]
+async fn modrinth_export_of_a_small_instance_resolves_installed_mods() {
+    let clients = clients();
+    let dir = temp_dir("export");
+    let game_dir = dir.join("game");
+    let ctx = fabric_context(&game_dir);
+
+    let versions = clients.modrinth.versions(SODIUM, &["1.21.4".into()], &[Loader::Fabric]).await.unwrap();
+    let sodium = versions.into_iter().max_by(|a, b| a.published.cmp(&b.published)).unwrap();
+    install_version(&clients, &ctx, ResourceKind::Mod, &sodium, &no_progress()).await.unwrap();
+    std::fs::write(game_dir.join("mods/my-own-mod.jar"), b"not a real jar").unwrap();
+    std::fs::create_dir_all(game_dir.join("config")).unwrap();
+    std::fs::write(game_dir.join("config/sodium-options.json"), b"{}").unwrap();
+    std::fs::create_dir_all(game_dir.join("logs")).unwrap();
+    std::fs::write(game_dir.join("logs/latest.log"), b"log").unwrap();
+
+    let components = vec![
+        ComponentSpec { uid: "net.minecraft".into(), version: "1.21.4".into(), dependency_only: false },
+        ComponentSpec { uid: "net.fabricmc.fabric-loader".into(), version: "0.16.9".into(), dependency_only: false },
+    ];
+    let destination = dir.join("export.mrpack");
+    let filter = ExportFilter::new(default_excluded());
+    let request = PackExportRequest {
+        game_dir: &game_dir,
+        destination: &destination,
+        name: "Live export",
+        version: "1.0.0",
+        summary: Some("exported by the live test"),
+        components: &components,
+        filter: &filter,
+    };
+    let report = export_mrpack(&clients, &request, &no_progress()).await.unwrap();
+    println!("listed {}, overrides {}", report.listed, report.overrides);
+    assert_eq!(report.listed, 1, "sodium resolves, the made-up jar does not");
+    assert_eq!(report.overrides, 2, "the made-up jar and the config");
+
+    let manifest = inspect_modpack(&destination).unwrap();
+    assert_eq!(manifest.name, "Live export");
+    let k0t1k_core::content::ModpackSource::Modrinth { files } = &manifest.source else { panic!("not an mrpack") };
+    let file = &files[0];
+    println!("{} -> {:?}", file.path, file.downloads);
+    assert!(file.path.starts_with("mods/") && file.downloads[0].starts_with("https://cdn.modrinth.com/"));
+    assert_eq!(file.env.as_ref().and_then(|env| env.server.as_deref()), Some("unsupported"), "Sodium is client-side only");
     std::fs::remove_dir_all(&dir).unwrap();
 }
