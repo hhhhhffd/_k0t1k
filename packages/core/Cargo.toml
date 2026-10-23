@@ -18,3 +18,8 @@ zip = { version = "9", default-features = false, features = ["deflate"] }
 uuid = { version = "1", features = ["v3", "v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "7"
+sha2 = "0.11"
+toml = "1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
