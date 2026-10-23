@@ -3,7 +3,11 @@
 pub mod component;
 pub mod download;
 pub mod error;
+pub mod install;
+pub mod launch;
+pub mod meta;
 pub mod paths;
+pub mod profile;
 pub mod progress;
 
 pub use error::{Error, Result};
