@@ -23,9 +23,12 @@ import type {
   Platform,
   ProgressEvent,
   ProjectVersion,
+  RunSession,
+  RunState,
   SearchHit,
   SearchPage,
   SearchQuery,
+  SessionId,
   SystemInfo,
   VersionFilter,
   World,
@@ -266,24 +269,35 @@ const worlds: World[] = [
 let dataDir = '%APPDATA%\\_k0t1k'
 
 // ---- launching ----
-const runStates = new Map<string, InstanceRunState>()
-const killFlags = new Set<string>()
-const setRun = (instanceId: string, state: InstanceRunState['state'], exitCode?: number) => {
-  const s: InstanceRunState = { instanceId, state, exitCode }
-  runStates.set(instanceId, s)
-  emit('instance-state', s)
+// Every launch is a session of its own, like in the backend: any number may run per instance.
+const KEPT_FINISHED_SESSIONS = 3
+const sessions = new Map<SessionId, RunSession>()
+const sessionLogs = new Map<SessionId, GameLogLine[]>()
+const killFlags = new Set<SessionId>()
+const launches = new Map<string, number>()
+let nextSession = 1
+const live = (sessionId: SessionId) => sessions.get(sessionId)?.state === 'running'
+const setRun = (sessionId: SessionId, state: RunState, exitCode?: number) => {
+  const session = sessions.get(sessionId)!
+  session.state = state
+  emit('instance-state', { sessionId, instanceId: session.instanceId, number: session.number, state, exitCode } satisfies InstanceRunState)
 }
 let logSeq = 0
-const logBatch = (instanceId: string, lines: Omit<GameLogLine, 'seq'>[]) =>
-  emit('game-log', { instanceId, lines: lines.map((l) => ({ ...l, seq: logSeq++ })) } satisfies GameLogBatch)
-const log = (instanceId: string, stream: GameLogLine['stream'], line: string) => logBatch(instanceId, [{ stream, line }])
+const logBatch = (sessionId: SessionId, lines: Omit<GameLogLine, 'seq'>[]) => {
+  const numbered = lines.map((l) => ({ ...l, seq: logSeq++ }))
+  const kept = sessionLogs.get(sessionId)!
+  kept.push(...numbered)
+  kept.splice(0, Math.max(0, kept.length - 5000))
+  emit('game-log', { sessionId, lines: numbered } satisfies GameLogBatch)
+}
+const log = (sessionId: SessionId, stream: GameLogLine['stream'], line: string) => logBatch(sessionId, [{ stream, line }])
 
 /** A chatty modpack: 20k lines in batches, to exercise the log cap and batching. */
-async function logFlood(instanceId: string) {
+async function logFlood(sessionId: SessionId) {
   const total = 20_000
   const batch = 400
-  for (let n = 0; n < total && !killFlags.has(instanceId); n += batch) {
-    logBatch(instanceId, Array.from({ length: batch }, (_, i) => ({
+  for (let n = 0; n < total && !killFlags.has(sessionId); n += batch) {
+    logBatch(sessionId, Array.from({ length: batch }, (_, i) => ({
       stream: 'stdout' as const,
       line: `[Worker-Main-${i % 8}/INFO]: Loaded recipe #${n + i} of ${total}`,
     })))
@@ -291,16 +305,34 @@ async function logFlood(instanceId: string) {
   }
 }
 
-async function launch(instanceId: string) {
+/** Ends a session the way the backend does: `stopped` event, then the oldest finished logs of the instance go. */
+function finish(sessionId: SessionId, exitCode: number) {
+  const session = sessions.get(sessionId)!
+  const inst = findInstance(session.instanceId)
+  inst.lastPlayed = new Date().toISOString()
+  inst.playtime = { totalSecs: inst.playtime.totalSecs + 120, lastSecs: 120 }
+  log(sessionId, 'launcher', `Процесс игры завершён с кодом ${exitCode}`)
+  setRun(sessionId, 'stopped', exitCode)
+  const finished = [...sessions.values()].filter((s) => s.instanceId === session.instanceId && s.state === 'stopped')
+  for (const old of finished.slice(0, Math.max(0, finished.length - KEPT_FINISHED_SESSIONS))) {
+    sessions.delete(old.sessionId)
+    sessionLogs.delete(old.sessionId)
+  }
+}
+
+function launch(instanceId: string): SessionId {
   const inst = findInstance(instanceId)
-  if (runStates.get(instanceId)?.state && runStates.get(instanceId)?.state !== 'stopped') return
-  killFlags.delete(instanceId)
-  setRun(instanceId, 'preparing')
-  log(instanceId, 'launcher', `Запуск ${inst.name}...`)
+  const sessionId = nextSession++
+  const number = (launches.get(instanceId) ?? 0) + 1
+  launches.set(instanceId, number)
+  sessions.set(sessionId, { sessionId, instanceId, number, state: 'preparing', startedAt: new Date().toISOString() })
+  sessionLogs.set(sessionId, [])
+  setRun(sessionId, 'preparing')
+  log(sessionId, 'launcher', `Запуск ${inst.name}...`)
   void (async () => {
-    await fakeTask(`launch-${instanceId}`, `Подготовка ${inst.name}`, ['Метаданные', 'Библиотеки', 'Ассеты', 'Java'], 400)
-    if (killFlags.has(instanceId)) return
-    setRun(instanceId, 'running')
+    await fakeTask(`launch-${sessionId}`, `Подготовка ${inst.name}`, ['Метаданные', 'Библиотеки', 'Ассеты', 'Java'], 400)
+    if (killFlags.has(sessionId)) return
+    setRun(sessionId, 'running')
     const tag = () => new Date().toTimeString().slice(0, 8)
     const lines: [GameLogLine['stream'], string][] = [
       ['stdout', `[${tag()}] [main/INFO]: Loading Minecraft ${inst.components[0]?.version ?? ''}`],
@@ -313,28 +345,33 @@ async function launch(instanceId: string) {
       ['stdout', `[${tag()}] [Server thread/INFO]: Done (3.412s)! For help, type "help"`],
     ]
     for (const [stream, line] of lines) {
-      if (killFlags.has(instanceId)) return
-      log(instanceId, stream, line)
+      if (killFlags.has(sessionId)) return
+      log(sessionId, stream, line)
       await sleep(500)
     }
-    if (instanceId === 'inst-3') void logFlood(instanceId)
+    if (instanceId === 'inst-3') void logFlood(sessionId)
     let n = 0
-    while (!killFlags.has(instanceId) && runStates.get(instanceId)?.state === 'running') {
-      log(instanceId, 'stdout', `[${tag()}] [Server thread/INFO]: Autosave tick ${++n}`)
+    while (!killFlags.has(sessionId) && live(sessionId)) {
+      log(sessionId, 'stdout', `[${tag()}] [Server thread/INFO]: Autosave tick ${++n}`)
       await sleep(2500)
     }
   })()
+  return sessionId
 }
 
-async function kill(instanceId: string) {
-  killFlags.add(instanceId)
-  setRun(instanceId, 'stopping')
+async function killSession(sessionId: SessionId) {
+  const session = sessions.get(sessionId)
+  if (!session || session.state === 'stopped') throw new Error('the session is not running')
+  killFlags.add(sessionId)
+  setRun(sessionId, 'stopping')
   await sleep(600)
-  const inst = findInstance(instanceId)
-  inst.lastPlayed = new Date().toISOString()
-  inst.playtime = { totalSecs: inst.playtime.totalSecs + 120, lastSecs: 120 }
-  log(instanceId, 'launcher', 'Процесс игры завершён с кодом 0')
-  setRun(instanceId, 'stopped', 0)
+  finish(sessionId, 0)
+}
+
+async function killInstance(instanceId: string) {
+  const liveSessions = [...sessions.values()].filter((s) => s.instanceId === instanceId && s.state !== 'stopped')
+  if (!liveSessions.length) throw new Error('the instance is not running')
+  await Promise.all(liveSessions.map((s) => killSession(s.sessionId)))
 }
 
 // ---- command table ----
@@ -350,7 +387,11 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       return clone(inst)
     }
     case 'rename_instance': { const i = findInstance(a.instanceId); i.name = a.name as string; return clone(i) }
-    case 'delete_instance': instances.splice(instances.indexOf(findInstance(a.instanceId)), 1); return undefined
+    case 'delete_instance':
+      if ([...sessions.values()].some((s) => s.instanceId === a.instanceId && s.state !== 'stopped')) {
+        throw new Error('the instance is running; stop all its sessions before deleting')
+      }
+      instances.splice(instances.indexOf(findInstance(a.instanceId)), 1); return undefined
     case 'copy_instance': {
       const src = findInstance(a.instanceId)
       const copy: Instance = { ...clone(src), id: nextId('inst'), name: a.name as string, created: new Date().toISOString(), lastPlayed: null, playtime: { totalSecs: 0, lastSecs: 0 } }
@@ -365,10 +406,11 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       return clone(i)
     }
     case 'open_instance_folder': return undefined
-    case 'launch_instance': await launch(a.instanceId as string); return undefined
-    case 'kill_instance': await kill(a.instanceId as string); return undefined
-    case 'list_run_states': return [...runStates.values()]
-    case 'get_game_logs': return []
+    case 'launch_instance': return launch(a.instanceId as string)
+    case 'kill_session': await killSession(a.sessionId as SessionId); return undefined
+    case 'kill_instance': await killInstance(a.instanceId as string); return undefined
+    case 'list_run_states': return clone([...sessions.values()])
+    case 'get_game_logs': return clone(sessionLogs.get(a.sessionId as SessionId) ?? [])
     case 'list_minecraft_versions': return minecraftVersions
     case 'list_loader_versions': { await sleep(250); return loaderVersions(a.minecraftVersion as string, a.loader as LoaderId) }
     case 'detect_java': await sleep(400); return javaInstalls

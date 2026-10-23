@@ -13,10 +13,18 @@
  *   update_instance_settings(instanceId, settings: InstanceSettingsUpdate) -> Instance
  *   open_instance_folder(instanceId)                         -> void
  * Launch
- *   launch_instance(instanceId, accountId?)                  -> void          (state via `instance-state`, output via `game-log`)
- *   kill_instance(instanceId)                                -> void
- *   list_run_states()                                        -> InstanceRunState[]
- *   get_game_logs(instanceId)                                -> GameLogLine[]  (recent lines, up to MAX_LOG_LINES; for a window opened mid-game)
+ *   launch_instance(instanceId, accountId?)                  -> SessionId     (always starts a NEW session, also when the instance already
+ *                                                                              runs; state via `instance-state`, output via `game-log`)
+ *   kill_session(sessionId)                                  -> void          (stops the game or cancels its preparation; errors when the session is gone)
+ *   kill_instance(instanceId)                                -> void          (= kill_session for every live session; errors when none)
+ *   list_run_states()                                        -> RunSession[]  (live sessions + up to 3 finished ones per instance, `state: 'stopped'`,
+ *                                                                              whose log is kept; for a window opened mid-game)
+ *   get_game_logs(sessionId)                                 -> GameLogLine[]  (ring buffer of one session, up to MAX_LOG_LINES)
+ *
+ * Sessions: ids are numbers that grow during the app run and are never reused. Each session has its own natives
+ * directory and log, records its own playtime when it ends (overlapping sessions of one instance are counted
+ * separately, so the total may exceed wall-clock time), and counts as a running game for the tray and for
+ * `behavior.onGameLaunch`. delete_instance errors while any session of the instance is live.
  * Versions
  *   list_minecraft_versions()                                -> MinecraftVersion[]
  *   list_loader_versions(minecraftVersion, loader: LoaderId) -> LoaderVersion[]
@@ -47,8 +55,8 @@
  *   install_modpack_version(platform, projectId, versionId, name?) -> ModpackImport (emits `progress`)
  * Events (backend -> frontend, via emit)
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
- *   game-log        GameLogBatch     (lines are batched)
- *   instance-state  InstanceRunState
+ *   game-log        GameLogBatch     (lines of one session, batched)
+ *   instance-state  InstanceRunState (one session; `stopped` is the last event of a session)
  */
 import type {
   Account,
@@ -72,8 +80,10 @@ import type {
   Platform,
   ProgressEvent,
   ProjectVersion,
+  RunSession,
   SearchPage,
   SearchQuery,
+  SessionId,
   SharedFolder,
   SystemInfo,
   VersionFilter,
@@ -132,10 +142,11 @@ export const openInstanceFolder = (instanceId: string) =>
 
 // ---- launch ----
 export const launchInstance = (instanceId: string, accountId?: string) =>
-  call<void>('launch_instance', { instanceId, accountId })
+  call<SessionId>('launch_instance', { instanceId, accountId })
+export const killSession = (sessionId: SessionId) => call<void>('kill_session', { sessionId })
 export const killInstance = (instanceId: string) => call<void>('kill_instance', { instanceId })
-export const listRunStates = () => call<InstanceRunState[]>('list_run_states')
-export const getGameLogs = (instanceId: string) => call<GameLogLine[]>('get_game_logs', { instanceId })
+export const listRunStates = () => call<RunSession[]>('list_run_states')
+export const getGameLogs = (sessionId: SessionId) => call<GameLogLine[]>('get_game_logs', { sessionId })
 
 // ---- versions ----
 export const listMinecraftVersions = () => call<MinecraftVersion[]>('list_minecraft_versions')

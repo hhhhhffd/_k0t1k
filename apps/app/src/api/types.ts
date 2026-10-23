@@ -341,17 +341,34 @@ export interface GameLogLine {
   line: string
 }
 
+/** One launch of an instance. An instance may have any number of sessions at once. */
+export type SessionId = number
+
 /** `game-log` event payload: the backend sends lines in batches. */
 export interface GameLogBatch {
-  instanceId: string
+  sessionId: SessionId
   lines: GameLogLine[]
 }
 
 export type RunState = 'stopped' | 'preparing' | 'running' | 'stopping'
 
+/** `instance-state` event payload: one session changed state. */
 export interface InstanceRunState {
+  sessionId: SessionId
   instanceId: string
+  /** 1 for the first launch of the instance in this app run, 2 for the next, ... Stable for the session. */
+  number: number
   state: RunState
   /** Set when the game process has exited, if the OS reported a code. */
   exitCode?: number
+}
+
+/** `list_run_states` item: a live session, or (`state: 'stopped'`) a finished one whose log is still kept. */
+export interface RunSession {
+  sessionId: SessionId
+  instanceId: string
+  number: number
+  state: RunState
+  /** ISO time of the launch request. */
+  startedAt: string
 }
