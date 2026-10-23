@@ -3,7 +3,7 @@ import { Copy, Trash2 } from '@lucide/vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { GameLogLine } from '../../api/types'
 import { t } from '../../i18n/ru'
-import { useInstancesStore } from '../../stores/instances'
+import { MAX_LOG_LINES, useInstancesStore } from '../../stores/instances'
 import { useTasksStore } from '../../stores/tasks'
 import { errorMessage } from '../../utils/format'
 import ToggleSwitch from '../ToggleSwitch.vue'
@@ -12,7 +12,8 @@ const props = defineProps<{ instanceId: string }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
 
-const lines = computed(() => store.logOf(props.instanceId))
+const buffer = computed(() => store.logOf(props.instanceId))
+const lines = computed(() => buffer.value.lines)
 const autoscroll = ref(true)
 const box = ref<HTMLElement | null>(null)
 
@@ -29,7 +30,8 @@ function scrollToEnd() {
     if (autoscroll.value && box.value) box.value.scrollTop = box.value.scrollHeight
   })
 }
-watch(() => lines.value.length, scrollToEnd)
+// the buffer is replaced on every flush, and its length stops changing once the cap is reached
+watch(lines, scrollToEnd)
 onMounted(scrollToEnd)
 
 /** Scrolling away from the bottom pauses autoscroll, like a terminal. */
@@ -59,8 +61,10 @@ async function copy() {
       <button class="btn" :disabled="!lines.length" @click="store.clearLog(instanceId)"><Trash2 :size="15" />{{ t.common.clear }}</button>
     </div>
     <div ref="box" class="selectable min-h-0 flex-1 overflow-y-auto rounded-xl border border-line bg-base p-3 font-mono text-[12px] leading-5" role="log" @scroll="onScroll">
+      <p v-if="buffer.dropped" class="mb-2 text-faint">{{ t.instance.logsTrimmed(MAX_LOG_LINES) }}</p>
       <p v-if="!lines.length" class="text-faint">{{ t.instance.logsEmpty }}</p>
-      <div v-for="(l, i) in lines" :key="i" class="break-all whitespace-pre-wrap" :class="levelClass(l)">{{ l.line }}</div>
+      <!-- v-memo: a line never changes, so the thousands of existing rows are skipped on every flush -->
+      <div v-for="l in lines" :key="l.seq" v-memo="[l.seq]" class="break-all whitespace-pre-wrap" :class="levelClass(l)">{{ l.line }}</div>
     </div>
   </div>
 </template>
