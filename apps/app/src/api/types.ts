@@ -146,6 +146,8 @@ export interface GlobalSettings {
   /** `theme` is a built-in `ThemeId` or the id of one of `customThemes`. */
   ui: { theme: string; liteMode: boolean; customThemes: CustomTheme[] }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
+  /** Owned by the onboarding commands: `save_settings` never overwrites it. */
+  onboarding: { keepPortableAt: string | null; createdShortcuts: string[] }
   /** Folders that new instances (and imported modpacks) share. */
   sharedFoldersDefault: SharedFolder[]
   accounts: Account[]
@@ -174,6 +176,29 @@ export interface SystemInfo {
   portable: boolean
   /** Folder of the executable. */
   exeDir: string
+}
+
+/** Why the launcher asks where to live: its folder is Desktop/Downloads/Documents, or it runs from the temp folder (a zip). */
+export interface OnboardingInfo {
+  reason: 'folder' | 'temp'
+  exeDir: string
+  /** Folder of the recommended install. */
+  defaultTarget: string
+}
+
+/** What the previous launcher process left to tell the user after an install. */
+export interface RelocationReport {
+  installedTo: string | null
+  /** Entries of the old folder that were moved to the new one. */
+  moved: string[]
+  /** Things that could not be moved, deleted or created, each with the path where it is. */
+  problems: string[]
+}
+
+export interface UninstallPlan {
+  /** The launcher's content in these folders is deleted; other files in them stay. */
+  folders: string[]
+  shortcuts: string[]
 }
 
 /** An entry of a Prism meta version list. `type` is `release`/`snapshot`/`old_beta`/`old_alpha` for Minecraft. */

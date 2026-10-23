@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { Check, FolderOpen, RefreshCw, RotateCcw, Trash2, UserPlus } from '@lucide/vue'
+import { Check, FolderOpen, Link, RefreshCw, RotateCcw, Trash2, UserPlus } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { detectJava, getSystemInfo, isTauri, listManagedJava, openDataDir, openSharedFolder, setDataDir } from '../api/commands'
-import { type JavaInstall, SHARED_FOLDERS, type SharedFolder, type SystemInfo } from '../api/types'
+import { createShortcuts, detectJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, openDataDir, openSharedFolder, setDataDir, uninstall } from '../api/commands'
+import { type JavaInstall, SHARED_FOLDERS, type SharedFolder, type SystemInfo, type UninstallPlan } from '../api/types'
 import mascot from '../assets/mascot.png'
 import CommandFields from '../components/fields/CommandFields.vue'
 import MemoryFields from '../components/fields/MemoryFields.vue'
 import WindowFields from '../components/fields/WindowFields.vue'
+import ModalDialog from '../components/ModalDialog.vue'
 import SelectMenu from '../components/SelectMenu.vue'
 import ThemeEditor from '../components/ThemeEditor.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
@@ -32,6 +33,7 @@ const managed = ref<JavaInstall[]>([])
 const scanning = ref(false)
 const newName = ref('')
 const restartNeeded = ref(false)
+const uninstallPlan = ref<UninstallPlan | null>(null)
 
 const s = computed(() => store.settings)
 const themeTiles = computed(() => [
@@ -73,6 +75,19 @@ async function changeDataDir(reset: boolean) {
   if (needsRestart === undefined) return
   restartNeeded.value = needsRestart
   system.value = (await tasks.guard(getSystemInfo)) ?? system.value
+}
+
+async function makeShortcuts() {
+  if (await tasks.guard(() => createShortcuts(true, true))) tasks.toast(t.settings.shortcutsCreated, 'ok')
+}
+
+async function askUninstall() {
+  uninstallPlan.value = (await tasks.guard(getUninstallPlan)) ?? null
+}
+
+async function confirmUninstall() {
+  uninstallPlan.value = null
+  await tasks.guard(uninstall)
 }
 
 function setSharedDefault(folder: SharedFolder, on: boolean) {
@@ -267,6 +282,10 @@ async function addAccount() {
             <button class="btn" @click="changeDataDir(false)">{{ t.settings.changeDataDir }}</button>
             <button class="btn btn-ghost" @click="changeDataDir(true)"><RotateCcw :size="15" />{{ t.settings.resetDataDir }}</button>
           </div>
+          <div class="flex flex-wrap gap-2 border-t border-line pt-3">
+            <button class="btn" @click="makeShortcuts"><Link :size="15" />{{ t.settings.createShortcuts }}</button>
+            <button class="btn btn-danger" @click="askUninstall"><Trash2 :size="15" />{{ t.settings.uninstall }}</button>
+          </div>
         </section>
         <p v-if="restartNeeded" class="rounded-lg border border-warn/50 bg-warn/10 px-4 py-3 text-warn" role="status">{{ t.settings.restartNotice }}</p>
       </template>
@@ -284,5 +303,23 @@ async function addAccount() {
         </div>
       </section>
     </div>
+    <ModalDialog v-if="uninstallPlan" :title="t.settings.uninstallTitle" :width="520" @close="uninstallPlan = null">
+      <div class="flex flex-col gap-3">
+        <p class="text-muted">{{ t.settings.uninstallIntro }}</p>
+        <div class="flex flex-col gap-1">
+          <span class="text-faint">{{ t.settings.uninstallFolders }}</span>
+          <span v-for="folder in uninstallPlan.folders" :key="folder" class="selectable font-mono text-[12px] break-all">{{ folder }}</span>
+        </div>
+        <div v-if="uninstallPlan.shortcuts.length" class="flex flex-col gap-1">
+          <span class="text-faint">{{ t.settings.uninstallShortcuts }}</span>
+          <span v-for="lnk in uninstallPlan.shortcuts" :key="lnk" class="selectable font-mono text-[12px] break-all">{{ lnk }}</span>
+        </div>
+        <p class="text-[12px] text-faint">{{ t.settings.uninstallNote }}</p>
+      </div>
+      <template #footer>
+        <button class="btn" @click="uninstallPlan = null">{{ t.common.cancel }}</button>
+        <button class="btn btn-danger" @click="confirmUninstall">{{ t.settings.uninstall }}</button>
+      </template>
+    </ModalDialog>
   </div>
 </template>
