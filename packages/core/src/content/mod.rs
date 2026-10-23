@@ -7,7 +7,9 @@ mod local;
 mod modpack;
 pub mod modrinth;
 pub mod murmur2;
+pub mod pack_state;
 pub mod packwiz;
+mod update;
 
 use serde::{Deserialize, Serialize};
 
@@ -36,10 +38,13 @@ pub use install::{
 pub use local::{
     LocalResource, ResourceMetadata, delete_resource, parse_mod_jar, scan_resources, set_enabled,
 };
+pub(crate) use modpack::safe_join;
 pub use modpack::{
     ModpackFormat, ModpackInstallReport, ModpackManifest, ModpackSource, inspect_modpack,
     install_modpack,
 };
+pub use pack_state::PackState;
+pub use update::update_modpack;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -1,7 +1,7 @@
 //! Modpack import: `.mrpack` (Modrinth) and CurseForge zips. This parses the pack and fills a game
 //! dir; creating the instance around it (components, name) is the caller's job.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
@@ -12,11 +12,13 @@ use serde::{Deserialize, Serialize};
 
 use super::install::checksum_of;
 use super::modrinth::HashAlgorithm;
+use super::pack_state::{PackFileState, PackState, remove_mod_index};
 use super::packwiz::{self, PwMod};
 use super::{BlockedFile, Clients, Hashes, Platform, Project, ProjectVersion, ResourceKind};
 use crate::component::{ComponentSpec, MINECRAFT_UID};
 use crate::download::{Checksum, download_checked};
 use crate::error::{Error, IoContext, Result};
+use crate::instance::archive::{self, InstanceSource};
 use crate::instance::exists_in_linked_shared_folder;
 use crate::progress::{ProgressEvent, ProgressFn};
 
@@ -36,6 +38,8 @@ const NEOFORGE_UID: &str = "net.neoforged";
 pub enum ModpackFormat {
     Modrinth,
     CurseForge,
+    /// An instance exported by this launcher, or a Prism/MultiMC instance zip.
+    Instance,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -61,6 +65,7 @@ pub enum ModpackSource {
         files: Vec<CurseForgePackFile>,
         overrides: String,
     },
+    Instance(Box<InstanceSource>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,6 +106,8 @@ pub struct ModpackInstallReport {
     pub blocked: Vec<BlockedFile>,
     /// Installed files the pack marks as optional (paths relative to the game dir); all are enabled.
     pub optional_files: Vec<String>,
+    /// What the pack now has in the game dir; kept so a later update can diff against it.
+    pub state: PackState,
 }
 
 #[derive(Deserialize)]
@@ -154,7 +161,7 @@ fn default_overrides() -> String {
 
 /// Joins an archive-supplied relative path onto `root`, rejecting absolute paths, drive prefixes,
 /// `.`/`..` and empty segments, so nothing can escape `root` (zip-slip).
-pub(super) fn safe_join(root: &Path, relative: &str) -> Result<PathBuf> {
+pub(crate) fn safe_join(root: &Path, relative: &str) -> Result<PathBuf> {
     let normalized = relative.replace('\\', "/");
     let mut path = root.to_path_buf();
     for segment in normalized.split('/') {
@@ -174,7 +181,7 @@ pub(super) fn safe_join(root: &Path, relative: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
-/// Reads the pack description from a `.mrpack` or CurseForge zip.
+/// Reads the pack description from a `.mrpack`, a CurseForge zip, or an instance zip (ours or Prism's).
 pub fn inspect_modpack(zip_path: &Path) -> Result<ModpackManifest> {
     let mut archive = zip::ZipArchive::new(File::open(zip_path).at(zip_path)?)?;
     // Modrinth first, so an `overrides/manifest.json` cannot be mistaken for the CurseForge manifest.
@@ -185,10 +192,26 @@ pub fn inspect_modpack(zip_path: &Path) -> Result<ModpackManifest> {
         let manifest: CurseForgeManifest =
             serde_json::from_reader(archive.by_name(CURSEFORGE_MANIFEST)?)?;
         parse_curseforge(manifest)
+    } else if let Some(imported) = archive::read_k0t1k_zip(&mut archive)? {
+        Ok(instance_manifest(imported))
+    } else if let Some(imported) = archive::read_prism_zip(&mut archive)? {
+        Ok(instance_manifest(imported))
     } else {
         Err(Error::Other(
             "Archive does not contain a recognized modpack type.".into(),
         ))
+    }
+}
+
+fn instance_manifest(imported: archive::ImportedInstance) -> ModpackManifest {
+    ModpackManifest {
+        format: ModpackFormat::Instance,
+        name: imported.name,
+        version: String::new(),
+        summary: None,
+        recommended_ram_mb: None,
+        components: imported.components,
+        source: ModpackSource::Instance(Box::new(imported.source)),
     }
 }
 
@@ -301,6 +324,16 @@ struct Download {
     checksum: Option<Checksum>,
 }
 
+/// Where an install writes and what it replaces. A fresh install passes an empty `previous`.
+pub(super) struct InstallTarget<'a> {
+    pub game_dir: &'a Path,
+    /// What the pack installed last time; files it does not change again are left alone and the
+    /// ones it no longer has are removed.
+    pub previous: &'a PackState,
+    /// Called once with every game dir path about to be changed, before anything is.
+    pub before_apply: &'a mut dyn FnMut(&[String]) -> Result<()>,
+}
+
 /// Downloads `manifest`'s files into `game_dir`, then unpacks the pack's override folders over them.
 /// Metadata (`.pw.toml`) is written for mods whose project could be identified.
 pub async fn install_modpack(
@@ -310,25 +343,125 @@ pub async fn install_modpack(
     clients: &Clients,
     progress: &ProgressFn,
 ) -> Result<ModpackInstallReport> {
+    let previous = PackState::default();
+    let mut target = InstallTarget {
+        game_dir,
+        previous: &previous,
+        before_apply: &mut |_| Ok(()),
+    };
+    apply_modpack(manifest, zip_path, &mut target, clients, progress).await
+}
+
+pub(super) async fn apply_modpack(
+    manifest: &ModpackManifest,
+    zip_path: &Path,
+    target: &mut InstallTarget<'_>,
+    clients: &Clients,
+    progress: &ProgressFn,
+) -> Result<ModpackInstallReport> {
     match &manifest.source {
         ModpackSource::Modrinth { files } => {
-            install_mrpack(files, zip_path, game_dir, clients, progress).await
+            install_mrpack(files, zip_path, target, clients, progress).await
         }
         ModpackSource::CurseForge { files, overrides } => {
-            install_curseforge(files, overrides, zip_path, game_dir, clients, progress).await
+            install_curseforge(files, overrides, zip_path, target, clients, progress).await
+        }
+        ModpackSource::Instance(source) => {
+            let folder = source.game_prefix.trim_end_matches('/');
+            extract_overrides(zip_path, target.game_dir, &[folder], progress).await?;
+            Ok(ModpackInstallReport {
+                state: source.pack_state.clone().unwrap_or_default(),
+                ..ModpackInstallReport::default()
+            })
         }
     }
+}
+
+fn disabled_variant(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".disabled");
+    PathBuf::from(name)
+}
+
+/// True when the file (or its `.disabled` copy, which the user switched off) is on disk.
+fn is_present(game_dir: &Path, relative_path: &str) -> Result<bool> {
+    let path = safe_join(game_dir, relative_path)?;
+    Ok(path.exists() || disabled_variant(&path).exists())
+}
+
+/// Removes a file the old pack brought, its disabled copy and, for a mod, its metadata. A file in a
+/// linked shared folder is not the pack's to delete.
+fn remove_pack_path(game_dir: &Path, relative_path: &str) -> Result<()> {
+    let path = safe_join(game_dir, relative_path)?;
+    if exists_in_linked_shared_folder(game_dir, &path) {
+        return Ok(());
+    }
+    for candidate in [disabled_variant(&path), path] {
+        match std::fs::remove_file(&candidate) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).at(&candidate),
+        }
+    }
+    if let Some(name) = relative_path.strip_prefix("mods/").filter(|_| is_direct_mod(relative_path)) {
+        remove_mod_index(game_dir, name)?;
+    }
+    Ok(())
+}
+
+/// Reconciles the new pack with what the old one installed, before any file is written: drops
+/// downloads that are already in place, keeps a disabled mod disabled, reports every path that
+/// will change (`before_apply`) and removes what the pack no longer has.
+fn begin_apply(
+    target: &mut InstallTarget<'_>,
+    new_files: &[PackFileState],
+    overrides: &[String],
+    downloads: &mut Vec<Download>,
+) -> Result<()> {
+    let diff = target.previous.diff(new_files, overrides);
+    let mut unchanged = BTreeSet::new();
+    for download in downloads.iter() {
+        let current = new_files.iter().find(|file| file.path == download.relative_path);
+        if current.is_some_and(|file| target.previous.has_file(&file.path, &file.id))
+            && is_present(target.game_dir, &download.relative_path)?
+        {
+            unchanged.insert(download.relative_path.clone());
+        }
+    }
+    downloads.retain(|download| !unchanged.contains(&download.relative_path));
+    for download in downloads.iter_mut() {
+        let disabled = disabled_variant(&download.destination);
+        if !download.destination.exists() && disabled.exists() {
+            download.destination = disabled;
+        }
+    }
+
+    let touched: Vec<String> = diff
+        .removed_files
+        .iter()
+        .chain(&diff.removed_overrides)
+        .chain(overrides)
+        .cloned()
+        .chain(downloads.iter().map(|download| download.relative_path.clone()))
+        .collect();
+    (target.before_apply)(&touched)?;
+    for path in diff.removed_files.iter().chain(&diff.removed_overrides) {
+        remove_pack_path(target.game_dir, path)?;
+    }
+    Ok(())
 }
 
 async fn install_mrpack(
     files: &[MrpackFile],
     zip_path: &Path,
-    game_dir: &Path,
+    target: &mut InstallTarget<'_>,
     clients: &Clients,
     progress: &ProgressFn,
 ) -> Result<ModpackInstallReport> {
+    let game_dir = target.game_dir;
     let mut report = ModpackInstallReport::default();
     let mut downloads = Vec::new();
+    let mut new_files = Vec::new();
     // Every path is validated before anything is downloaded, so a hostile pack writes nothing.
     for file in files {
         let client_env = file.env.as_ref().and_then(|env| env.client.as_deref());
@@ -344,25 +477,27 @@ async fn install_mrpack(
         if file.downloads.is_empty() {
             return Err(Error::Other(format!("{} has no download URLs", file.path)));
         }
+        let relative_path = file.path.replace('\\', "/");
         if client_env == Some("optional") {
-            report.optional_files.push(file.path.replace('\\', "/"));
+            report.optional_files.push(relative_path.clone());
         }
+        new_files.push(PackFileState {
+            path: relative_path.clone(),
+            id: sha512.to_ascii_lowercase(),
+        });
         downloads.push(Download {
-            relative_path: file.path.replace('\\', "/"),
+            relative_path,
             destination,
             urls: file.downloads.clone(),
             checksum: Some(Checksum::Sha512(sha512.to_ascii_lowercase())),
         });
     }
+    let folders = ["overrides", "client-overrides"];
+    let overrides = list_overrides(zip_path, &folders)?;
+    begin_apply(target, &new_files, &overrides, &mut downloads)?;
 
     run_downloads(clients, &downloads, game_dir, progress).await?;
-    extract_overrides(
-        zip_path,
-        game_dir,
-        &["overrides", "client-overrides"],
-        progress,
-    )
-    .await?;
+    extract_overrides(zip_path, game_dir, &folders, progress).await?;
 
     let mod_hashes: Vec<String> = downloads
         .iter()
@@ -406,6 +541,10 @@ async fn install_mrpack(
             &PwMod::new(project, version, file, true)?,
         )?;
     }
+    report.state = PackState {
+        files: new_files,
+        overrides,
+    };
     Ok(report)
 }
 
@@ -420,10 +559,11 @@ async fn install_curseforge(
     files: &[CurseForgePackFile],
     overrides: &str,
     zip_path: &Path,
-    game_dir: &Path,
+    target: &mut InstallTarget<'_>,
     clients: &Clients,
     progress: &ProgressFn,
 ) -> Result<ModpackInstallReport> {
+    let game_dir = target.game_dir;
     safe_join(game_dir, overrides)?;
     let curseforge = clients.require_curseforge()?;
     let mut report = ModpackInstallReport::default();
@@ -472,6 +612,7 @@ async fn install_curseforge(
         .collect();
 
     let mut downloads = Vec::new();
+    let mut new_files = Vec::new();
     let mut mod_metadata = Vec::new();
     for pack_file in files {
         let version = by_file[pack_file.file_id.to_string().as_str()];
@@ -495,6 +636,15 @@ async fn install_curseforge(
             .collect();
         let relative_path = format!("{}/{file_name}", kind.folder());
         let destination = safe_join(game_dir, &relative_path)?;
+        let id = pack_file.file_id.to_string();
+        new_files.push(PackFileState {
+            path: relative_path.clone(),
+            id: id.clone(),
+        });
+        // Installed by the previous version of the pack (blocked files included, once supplied).
+        if target.previous.has_file(&relative_path, &id) && is_present(game_dir, &relative_path)? {
+            continue;
+        }
 
         let url = file.url.clone().or_else(|| {
             let sha1 = file.hashes.sha1.as_ref()?;
@@ -534,6 +684,8 @@ async fn install_curseforge(
             checksum: checksum_of(file),
         });
     }
+    let overrides_list = list_overrides(zip_path, &[overrides])?;
+    begin_apply(target, &new_files, &overrides_list, &mut downloads)?;
 
     run_downloads(clients, &downloads, game_dir, progress).await?;
     extract_overrides(zip_path, game_dir, &[overrides], progress).await?;
@@ -542,7 +694,33 @@ async fn install_curseforge(
     for (slug, pw) in mod_metadata {
         packwiz::write(&index_dir, &slug, &pw)?;
     }
+    report.state = PackState {
+        files: new_files,
+        overrides: overrides_list,
+    };
     Ok(report)
+}
+
+/// The files `extract_overrides` would unpack, relative to the game dir (later folders replace earlier ones).
+fn list_overrides(zip_path: &Path, folders: &[&str]) -> Result<Vec<String>> {
+    let mut archive = zip::ZipArchive::new(File::open(zip_path).at(zip_path)?)?;
+    let mut found = BTreeSet::new();
+    for folder in folders {
+        let prefix = format!("{}/", folder.trim_end_matches('/'));
+        for index in 0..archive.len() {
+            let entry = archive.by_index(index)?;
+            let Some(relative) = entry.name()?.strip_prefix(&prefix).map(str::to_owned) else {
+                continue;
+            };
+            let relative = relative.trim_end_matches('/');
+            if relative.is_empty() || entry.is_dir() {
+                continue;
+            }
+            safe_join(Path::new(""), relative)?;
+            found.insert(relative.replace('\\', "/"));
+        }
+    }
+    Ok(found.into_iter().collect())
 }
 
 /// Files that already exist in a linked shared folder are kept: they are the user's, shared with
@@ -914,6 +1092,69 @@ mod tests {
                 .is_err()
         );
         assert!(!dir.join("game").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn exported_instance_zip_imports_back_with_its_files_and_settings() {
+        use crate::instance::archive::{ExportFilter, default_excluded, export_instance};
+        use crate::instance::{InstanceManager, ManagedPack, ManagedPlatform, NewInstance};
+        use crate::paths::Paths;
+        use crate::settings::{JavaSettings, MemorySettings};
+
+        let clients = Clients::new(reqwest::Client::new(), None).unwrap();
+        let dir = temp_dir("round-trip");
+        let manager = InstanceManager::new(Paths::new(dir.join("data")));
+        let created = manager
+            .create(NewInstance {
+                name: "Round trip".into(),
+                icon: Some("grass".into()),
+                group: None,
+                components: vec![component(MINECRAFT_UID, "1.21.4"), component(FABRIC_UID, "0.16.9")],
+                managed_pack: Some(ManagedPack {
+                    platform: ManagedPlatform::Modrinth,
+                    project_id: "p".into(),
+                    version_id: "v".into(),
+                    name: "Pack".into(),
+                    version_name: "1.0".into(),
+                }),
+            })
+            .unwrap();
+        let instance = manager
+            .update(&created.id, |instance| {
+                instance.notes = "remember".into();
+                instance.settings.memory = Some(MemorySettings { min_mib: 512, max_mib: 4096 });
+                instance.settings.java = Some(JavaSettings { path: Some("/opt/java".into()), ..JavaSettings::default() });
+                instance.playtime.total_secs = 500;
+            })
+            .unwrap();
+        let (instance_dir, game_dir) = (instance.dir(manager.paths()), instance.game_dir(manager.paths()));
+        std::fs::create_dir_all(game_dir.join("mods")).unwrap();
+        std::fs::create_dir_all(game_dir.join("logs")).unwrap();
+        std::fs::write(game_dir.join("mods/a.jar"), "jar").unwrap();
+        std::fs::write(game_dir.join("options.txt"), "fov:90").unwrap();
+        std::fs::write(game_dir.join("logs/latest.log"), "log").unwrap();
+
+        let zip = dir.join("export.zip");
+        export_instance(&instance, &instance_dir, &game_dir, &zip, &ExportFilter::new(default_excluded()), &no_progress()).unwrap();
+
+        let manifest = inspect_modpack(&zip).unwrap();
+        assert_eq!(manifest.format, ModpackFormat::Instance);
+        assert_eq!(manifest.name, "Round trip");
+        assert_eq!(manifest.components, instance.components);
+        let ModpackSource::Instance(source) = &manifest.source else { panic!("wrong source") };
+        assert_eq!(source.notes, "remember");
+        assert_eq!(source.icon.as_deref(), Some("grass"));
+        assert_eq!(source.settings.memory, Some(MemorySettings { min_mib: 512, max_mib: 4096 }));
+        assert!(source.settings.java.as_ref().is_some_and(|java| java.path.is_none()));
+        assert_eq!(source.managed_pack.as_ref().map(|pack| pack.project_id.as_str()), Some("p"));
+
+        let imported = dir.join("imported/minecraft");
+        install_modpack(&manifest, &zip, &imported, &clients, &no_progress()).await.unwrap();
+        assert_eq!(std::fs::read_to_string(imported.join("mods/a.jar")).unwrap(), "jar");
+        assert_eq!(std::fs::read_to_string(imported.join("options.txt")).unwrap(), "fov:90");
+        assert!(!imported.join("logs").exists(), "logs are excluded by default");
+        assert!(!imported.join("instance.json").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
