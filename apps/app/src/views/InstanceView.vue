@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { ArrowLeft, Clock, FolderOpen, History } from '@lucide/vue'
+import { ArrowLeft, Clock, FileArchive, Flame, FolderOpen, History, Package, RefreshCw, Upload } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { openInstanceFolder } from '../api/commands'
+import { addLocalFiles, openInstanceFolder } from '../api/commands'
+import type { ExportFormat } from '../api/types'
+import ContextMenu from '../components/ContextMenu.vue'
+import type { MenuItem } from '../components/ContextMenu.vue'
+import DropOverlay from '../components/DropOverlay.vue'
+import ExportDialog from '../components/ExportDialog.vue'
+import PackUpdateDialog from '../components/PackUpdateDialog.vue'
 import InstanceIcon from '../components/InstanceIcon.vue'
 import InstanceSettingsTab from '../components/instance/InstanceSettingsTab.vue'
 import LogsTab from '../components/instance/LogsTab.vue'
@@ -13,6 +19,7 @@ import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
 import { formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'
+import { baseName, useFileDrop } from '../utils/useFileDrop'
 
 const props = defineProps<{ id: string }>()
 const store = useInstancesStore()
@@ -33,6 +40,33 @@ function sharedNote(tab: Tab) {
   return instance.value?.sharedFolders.includes(folder) ? t.sharedFolder.notes[folder] : undefined
 }
 const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shaderPack' } as const
+
+const exportMenu = ref<{ x: number; y: number } | null>(null)
+const exportFormat = ref<ExportFormat | null>(null)
+const showPackUpdate = ref(false)
+const exportItems: MenuItem[] = [
+  { label: t.transfer.exportInstance, icon: FileArchive, action: () => (exportFormat.value = 'instance') },
+  { label: t.transfer.exportModrinth, icon: Package, action: () => (exportFormat.value = 'modrinth') },
+  { label: t.transfer.exportCurseForge, icon: Flame, action: () => (exportFormat.value = 'curseForge') },
+]
+function openExportMenu(e: MouseEvent) {
+  const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  exportMenu.value = { x: box.left, y: box.bottom + 4 }
+}
+
+// Files dropped on a content tab go into its folder; elsewhere on the page each file's type is identified.
+const listKey = ref(0)
+const { dragging } = useFileDrop(async (paths) => {
+  if (!instance.value) return
+  const kind = tab.value === 'mods' || tab.value === 'resourcepacks' || tab.value === 'shaders' ? kindOfTab[tab.value] : null
+  const report = await tasks.guard(() => addLocalFiles(instance.value!.id, kind, paths))
+  if (!report) return
+  if (report.added.length) tasks.toast(t.transfer.addedFiles(report.added.length), 'ok')
+  for (const skipped of report.skipped) {
+    tasks.toast(t.transfer.skippedFile(baseName(skipped.path), t.transfer.skipped[skipped.reason]), 'error')
+  }
+  listKey.value++
+})
 </script>
 
 <template>
@@ -51,6 +85,8 @@ const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shader
           <span class="flex items-center gap-1.5 text-muted"><History :size="13" />{{ formatRelative(instance.lastPlayed) }}</span>
         </div>
       </div>
+      <button v-if="instance.managedPack" class="btn shrink-0" @click="showPackUpdate = true"><RefreshCw :size="15" />{{ t.pack.check }}</button>
+      <button class="btn shrink-0" @click="openExportMenu"><Upload :size="15" />{{ t.transfer.export }}</button>
       <button class="btn btn-icon" :title="t.library.openFolder" :aria-label="t.library.openFolder" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="16" /></button>
       <PlayButton :instance-id="instance.id" large />
     </header>
@@ -71,7 +107,7 @@ const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shader
 
     <ResourceList
       v-if="tab === 'mods' || tab === 'resourcepacks' || tab === 'shaders'"
-      :key="`${instance.id}-${tab}`"
+      :key="`${instance.id}-${tab}-${listKey}`"
       :instance-id="instance.id"
       :kind="kindOfTab[tab]"
       :shared-note="sharedNote(tab)"
@@ -81,4 +117,10 @@ const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shader
     <InstanceSettingsTab v-else :key="instance.id" :instance="instance" />
   </div>
   <p v-else-if="store.loaded" class="p-10 text-center text-faint">{{ t.instance.notFound }}</p>
+  <template v-if="instance">
+    <ContextMenu v-if="exportMenu" :x="exportMenu.x" :y="exportMenu.y" :items="exportItems" @close="exportMenu = null" />
+    <ExportDialog v-if="exportFormat" :instance="instance" :format="exportFormat" @close="exportFormat = null" />
+    <PackUpdateDialog v-if="showPackUpdate && instance.managedPack" :instance="instance" @close="showPackUpdate = false" />
+    <DropOverlay v-if="dragging" :text="t.transfer.dropHere" />
+  </template>
 </template>

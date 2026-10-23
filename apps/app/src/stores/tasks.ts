@@ -15,6 +15,8 @@ export const useTasksStore = defineStore('tasks', () => {
   const toasts = ref<Toast[]>([])
   /** Files the user has to download by hand; shown in a dialog until dismissed. */
   const blocked = ref<BlockedFile[]>([])
+  /** The instance the blocked files belong to; the dialog places the files it finds there. */
+  const blockedInstanceId = ref('')
   // Errors already shown through a progress event, so the rejected command does not toast them again.
   const reported = new Set<string>()
   let toastId = 0
@@ -50,8 +52,10 @@ export const useTasksStore = defineStore('tasks', () => {
     if (e.finished || e.error) setTimeout(() => tasks.delete(e.task), e.error ? 6000 : 2500)
   }
 
-  function showBlocked(files: BlockedFile[]) {
-    if (files.length) blocked.value = files
+  function showBlocked(files: BlockedFile[], instanceId: string) {
+    if (!files.length) return
+    blocked.value = files
+    blockedInstanceId.value = instanceId
   }
 
   let started = false
@@ -61,5 +65,5 @@ export const useTasksStore = defineStore('tasks', () => {
     await onProgress(handle)
   }
 
-  return { tasks: list, toasts, blocked, toast, dismiss, guard, showBlocked, init }
+  return { tasks: list, toasts, blocked, blockedInstanceId, toast, dismiss, guard, showBlocked, init }
 })

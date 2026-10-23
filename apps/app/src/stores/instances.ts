@@ -59,12 +59,14 @@ export const useInstancesStore = defineStore('instances', () => {
     instances.value = instances.value.filter((i) => i.id !== id)
   }
   function upsertImport(result: ModpackImport) {
-    tasks.showBlocked(result.blocked)
+    tasks.showBlocked(result.blocked, result.instance.id)
     return upsert(result.instance)
   }
   const importModpack = async (path: string) => upsertImport(await api.importModpackFile(path))
   const installModpack = async (...args: Parameters<typeof api.installModpackVersion>) =>
     upsertImport(await api.installModpackVersion(...args))
+
+  const updateModpack = async (instanceId: string, versionId: string) => upsertImport(await api.updateModpack(instanceId, versionId))
 
   const launch = (id: string, accountId?: string) => api.launchInstance(id, accountId)
   const kill = (id: string) => api.killInstance(id)
@@ -130,6 +132,6 @@ export const useInstancesStore = defineStore('instances', () => {
 
   return {
     instances, loaded, groups, byId, stateOf, logOf, refresh, upsert, create, rename, copy, setGroup,
-    updateSettings, remove, importModpack, installModpack, launch, kill, clearLog, init,
+    updateSettings, remove, importModpack, installModpack, updateModpack, launch, kill, clearLog, init,
   }
 })

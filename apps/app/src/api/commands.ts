@@ -45,6 +45,14 @@
  *   list_worlds(instanceId)                                  -> World[]
  *   import_modpack_file(path, name?)                         -> ModpackImport (.mrpack / CurseForge .zip; emits `progress`)
  *   install_modpack_version(platform, projectId, versionId, name?) -> ModpackImport (emits `progress`)
+ *   update_modpack(instanceId, versionId)                    -> ModpackImport (in-place update of a managed pack; backs up and rolls back; emits `progress`)
+ * Transfer
+ *   list_export_entries(instanceId, dir)                     -> ExportEntry[]  (dir relative to the game folder, '' = root)
+ *   export_instance(instanceId, request: ExportRequest)      -> PackExportReport | null (null for an instance zip; emits `progress`)
+ *   add_local_files_to_instance(instanceId, kind: LocalResourceKind | null, paths) -> AddFilesReport (null kind = identify each file)
+ *   scan_blocked_files(instanceId, files: BlockedFile[], folder: string | null) -> BlockedScan (copies matches by SHA-1; null folder = Downloads)
+ *   get_downloads_dir()                                      -> string
+ *   set_update_lock(instanceId, kind, fileName, locked)      -> void
  * Events (backend -> frontend, via emit)
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
  *   game-log        GameLogBatch     (lines are batched)
@@ -52,7 +60,14 @@
  */
 import type {
   Account,
+  AddFilesReport,
   AvailableUpdate,
+  BlockedFile,
+  BlockedScan,
+  DragDropEvent,
+  ExportEntry,
+  ExportRequest,
+  PackExportReport,
   CreateInstanceRequest,
   GameLogBatch,
   GameLogLine,
@@ -86,6 +101,7 @@ type Args = Record<string, unknown>
 interface Backend {
   invoke: (cmd: string, args?: Args) => Promise<unknown>
   listen: (event: string, cb: (payload: unknown) => void) => Promise<Unlisten>
+  dragDrop: (cb: (event: DragDropEvent) => void) => Promise<Unlisten>
 }
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -94,12 +110,19 @@ let backendPromise: Promise<Backend> | undefined
 
 function loadBackend(): Promise<Backend> {
   backendPromise ??= isTauri
-    ? Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event')]).then(
-        ([core, event]) => ({
-          invoke: core.invoke,
-          listen: (name, cb) => event.listen(name, (e) => cb(e.payload)),
-        }),
-      )
+    ? Promise.all([
+        import('@tauri-apps/api/core'),
+        import('@tauri-apps/api/event'),
+        import('@tauri-apps/api/webviewWindow'),
+      ]).then(([core, event, webviewWindow]) => ({
+        invoke: core.invoke,
+        listen: (name, cb) => event.listen(name, (e) => cb(e.payload)),
+        dragDrop: (cb) =>
+          webviewWindow.getCurrentWebviewWindow().onDragDropEvent((e) => {
+            const p = e.payload
+            cb(p.type === 'enter' || p.type === 'drop' ? { type: p.type, paths: p.paths } : { type: p.type })
+          }),
+      }))
     : import('./mock').then((m) => m.mockBackend)
   return backendPromise
 }
@@ -199,8 +222,29 @@ export const installModpackVersion = (version: ProjectVersion, name?: string) =>
     name,
   })
 
+export const updateModpack = (instanceId: string, versionId: string) =>
+  call<ModpackImport>('update_modpack', { instanceId, versionId })
+
+// ---- transfer ----
+export const listExportEntries = (instanceId: string, dir: string) =>
+  call<ExportEntry[]>('list_export_entries', { instanceId, dir })
+export const exportInstance = (instanceId: string, request: ExportRequest) =>
+  call<PackExportReport | null>('export_instance', { instanceId, request })
+export const addLocalFiles = (instanceId: string, kind: LocalResourceKind | null, paths: string[]) =>
+  call<AddFilesReport>('add_local_files_to_instance', { instanceId, kind, paths })
+export const scanBlockedFiles = (instanceId: string, files: BlockedFile[], folder: string | null) =>
+  call<BlockedScan>('scan_blocked_files', { instanceId, files, folder })
+export const getDownloadsDir = () => call<string>('get_downloads_dir')
+export const setUpdateLock = (instanceId: string, kind: LocalResourceKind, fileName: string, locked: boolean) =>
+  call<void>('set_update_lock', { instanceId, kind, fileName, locked })
+
 // ---- events ----
 export const onProgress = (cb: (e: ProgressEvent) => void) => subscribe('progress', cb)
 export const onGameLog = (cb: (e: GameLogBatch) => void) => subscribe('game-log', cb)
 export const onInstanceState = (cb: (e: InstanceRunState) => void) =>
   subscribe('instance-state', cb)
+/** Files dropped onto the window; a no-op in the browser mock unless it is driven by hand. */
+export async function onDragDrop(cb: (event: DragDropEvent) => void): Promise<Unlisten> {
+  const backend = await loadBackend()
+  return backend.dragDrop(cb)
+}

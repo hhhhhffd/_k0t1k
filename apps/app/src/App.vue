@@ -31,7 +31,7 @@ onMounted(async () => {
       </main>
     </div>
     <TaskBar />
-    <BlockedFilesDialog v-if="tasks.blocked.length" :files="tasks.blocked" @close="tasks.blocked = []" />
+    <BlockedFilesDialog v-if="tasks.blocked.length" :files="tasks.blocked" :instance-id="tasks.blockedInstanceId" @close="tasks.blocked = []" />
     <ToastHost />
   </div>
 </template>

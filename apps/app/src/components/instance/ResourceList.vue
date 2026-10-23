@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ArrowUpCircle, Plus, RefreshCw, Search, Trash2 } from '@lucide/vue'
+import { ArrowUpCircle, ArrowUpFromLine, Lock, LockOpen, Plus, RefreshCw, Search, Trash2 } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as api from '../../api/commands'
-import type { AvailableUpdate, LocalResource, LocalResourceKind } from '../../api/types'
+import type { AvailableUpdate, BlockedFile, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n/ru'
 import { useTasksStore } from '../../stores/tasks'
-import { formatBytes, originPlatform } from '../../utils/format'
+import { errorMessage, formatBytes, originPlatform } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
@@ -20,6 +20,8 @@ const filter = ref('')
 const updates = ref<Map<string, AvailableUpdate>>(new Map())
 const checking = ref(false)
 const toDelete = ref<LocalResource | null>(null)
+/** Progress of "update all"; `null` when it is not running. */
+const bulk = ref<{ done: number; total: number } | null>(null)
 
 const visible = computed(() => {
   const needle = filter.value.trim().toLowerCase()
@@ -70,10 +72,47 @@ async function applyUpdate(r: LocalResource) {
   if (!update) return
   const report = await tasks.guard(() => api.installVersion(props.instanceId, update.latest, props.kind))
   if (!report) return
-  tasks.showBlocked(report.blocked)
+  tasks.showBlocked(report.blocked, props.instanceId)
   // core replaces the old file of an already installed project, so nothing is deleted here
   tasks.toast(t.instance.updated, 'ok')
   await load()
+}
+
+async function updateAll() {
+  const pending = [...updates.value.values()]
+  bulk.value = { done: 0, total: pending.length }
+  const blocked: BlockedFile[] = []
+  let updated = 0
+  for (const update of pending) {
+    try {
+      blocked.push(...(await api.installVersion(props.instanceId, update.latest, props.kind)).blocked)
+      updated++
+    } catch (e) {
+      tasks.toast(t.updates.updateFailed(update.name, errorMessage(e)), 'error')
+    }
+    bulk.value.done++
+  }
+  bulk.value = null
+  tasks.showBlocked(blocked, props.instanceId)
+  if (updated) tasks.toast(t.updates.updatedAll(updated), 'ok')
+  await load()
+}
+
+const isLocked = (r: LocalResource) => r.origin?.['x-prismlauncher-lock-update'] === true
+
+async function toggleLock(r: LocalResource) {
+  const locked = !isLocked(r)
+  const ok = await tasks.guard(async () => {
+    await api.setUpdateLock(props.instanceId, props.kind, r.fileName, locked)
+    return true
+  })
+  if (!ok || !r.origin) return
+  r.origin['x-prismlauncher-lock-update'] = locked
+  if (locked) {
+    const next = new Map(updates.value)
+    next.delete(r.fileName)
+    updates.value = next
+  }
 }
 
 function browse() {
@@ -92,7 +131,10 @@ function browse() {
         <input v-model="filter" class="input !pl-8" :placeholder="t.instance.filterPlaceholder" :aria-label="t.instance.filterPlaceholder" />
       </div>
       <span class="mr-auto text-faint">{{ resources.length }}</span>
-      <button class="btn" :disabled="checking || !resources.length" @click="checkUpdates">
+      <button v-if="updates.size" class="btn btn-primary" :disabled="!!bulk" @click="updateAll">
+        <ArrowUpFromLine :size="15" />{{ bulk ? t.updates.updatingAll(bulk.done, bulk.total) : `${t.updates.updateAll} (${updates.size})` }}
+      </button>
+      <button class="btn" :disabled="checking || !!bulk || !resources.length" @click="checkUpdates">
         <RefreshCw :size="15" :class="checking ? 'animate-spin' : ''" />{{ checking ? t.instance.checking : t.instance.checkUpdates }}
       </button>
       <button class="btn btn-primary" @click="browse"><Plus :size="16" />{{ t.instance.addContent }}</button>
@@ -116,7 +158,18 @@ function browse() {
           </div>
           <div class="truncate text-[12px] text-faint">{{ r.fileName }} · {{ formatBytes(r.size) }}<template v-if="r.metadata?.authors"> · {{ r.metadata.authors.join(', ') }}</template></div>
         </div>
-        <button v-if="updates.has(r.fileName)" class="btn btn-primary h-7" @click="applyUpdate(r)">
+        <button
+          v-if="r.origin"
+          class="btn btn-ghost btn-icon"
+          :class="isLocked(r) ? 'text-warn' : 'text-faint'"
+          :title="isLocked(r) ? t.updates.unlock : t.updates.lock"
+          :aria-label="isLocked(r) ? t.updates.unlock : t.updates.lock"
+          :aria-pressed="isLocked(r)"
+          @click="toggleLock(r)"
+        >
+          <component :is="isLocked(r) ? Lock : LockOpen" :size="15" />
+        </button>
+        <button v-if="updates.has(r.fileName)" class="btn btn-primary h-7" :disabled="!!bulk" @click="applyUpdate(r)">
           <ArrowUpCircle :size="14" />{{ t.instance.updateTo }} {{ updates.get(r.fileName)!.latest.versionNumber }}
         </button>
         <button class="btn btn-ghost btn-icon text-muted hover:!text-danger" :aria-label="t.common.delete" @click="toDelete = r"><Trash2 :size="15" /></button>

@@ -76,7 +76,7 @@ async function install(v: ProjectVersion) {
     const kind = props.kind
     const report = await tasks.guard(() => installVersion(target.value, v, kind))
     if (report) {
-      tasks.showBlocked(report.blocked)
+      tasks.showBlocked(report.blocked, target.value)
       const installed = report.installed.find((i) => !i.isDependency)
       if (installed) {
         installedIds.value = new Set(installedIds.value).add(v.id)

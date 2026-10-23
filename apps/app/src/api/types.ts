@@ -266,6 +266,8 @@ export interface ResourceMetadata {
 export interface PwMod {
   name: string
   filename: string
+  /** Set by the user (or by a modpack install): bulk updates skip this file. */
+  'x-prismlauncher-lock-update'?: boolean
   update: {
     modrinth?: { 'mod-id': string; version: string }
     curseforge?: { 'file-id': number; 'project-id': number }
@@ -317,6 +319,52 @@ export interface ModpackImport {
   blocked: BlockedFile[]
 }
 
+export type ExportFormat = 'instance' | 'modrinth' | 'curseForge'
+
+export interface ExportRequest {
+  format: ExportFormat
+  /** Where to save the archive. */
+  destination: string
+  name: string
+  version: string
+  summary: string
+  /** Game folder paths (`/` separators) left out, each with everything below it. */
+  excluded: string[]
+}
+
+/** One row of the export file picker: an entry of a game folder directory. */
+export interface ExportEntry {
+  name: string
+  /** Relative to the game folder. */
+  path: string
+  isDir: boolean
+  /** Bytes; `null` for folders. */
+  size: number | null
+  /** A shared folder: exported as a copy of its content, or skipped. */
+  linked: boolean
+  /** Unchecked when the picker opens (logs, crash reports, caches). */
+  defaultExcluded: boolean
+}
+
+/** Result of a Modrinth/CurseForge export: files listed for download and files packed as overrides. */
+export interface PackExportReport {
+  listed: number
+  overrides: number
+}
+
+export type SkipReason = 'notAFile' | 'unsupportedType' | 'unknownType' | 'worldOrDataPack'
+
+export interface AddFilesReport {
+  added: { fileName: string; kind: ResourceKind }[]
+  skipped: { path: string; reason: SkipReason }[]
+}
+
+/** `targetPath`s of blocked files that are now in the instance, and those still missing. */
+export interface BlockedScan {
+  found: string[]
+  missing: string[]
+}
+
 // ---- events ----
 
 export interface ProgressEvent {
@@ -355,3 +403,6 @@ export interface InstanceRunState {
   /** Set when the game process has exited, if the OS reported a code. */
   exitCode?: number
 }
+
+/** Files dragged over the window (real paths, from Tauri's drag-drop events). */
+export type DragDropEvent = { type: 'enter' | 'drop'; paths: string[] } | { type: 'over' } | { type: 'leave' }
