@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
+import BlockedFilesDialog from './components/BlockedFilesDialog.vue'
 import TaskBar from './components/TaskBar.vue'
 import ToastHost from './components/ToastHost.vue'
 import { useInstancesStore } from './stores/instances'
@@ -28,6 +29,7 @@ onMounted(async () => {
       </main>
     </div>
     <TaskBar />
+    <BlockedFilesDialog v-if="tasks.blocked.length" :files="tasks.blocked" @close="tasks.blocked = []" />
     <ToastHost />
   </div>
 </template>

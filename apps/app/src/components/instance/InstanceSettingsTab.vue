@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import type { Instance, InstanceOverrides } from '../../api/types'
+import type { Instance, InstanceSettings } from '../../api/types'
 import { t } from '../../i18n/ru'
 import { useInstancesStore } from '../../stores/instances'
 import { useSettingsStore } from '../../stores/settings'
@@ -23,32 +23,32 @@ const draft = reactive({
   icon: props.instance.icon,
   notes: props.instance.notes,
   shareResourcepacks: props.instance.shareResourcepacks,
-  overrides: clone(props.instance.overrides) as InstanceOverrides,
+  settings: clone(props.instance.settings) as InstanceSettings,
 })
 const dirty = ref(false)
 const markDirty = () => (dirty.value = true)
 
-/** Toggle for one override group: off -> inherit (null), on -> start from the global value. */
-function overrideModel<K extends keyof InstanceOverrides>(key: K, fromGlobal: () => InstanceOverrides[K]) {
+/** Toggle for one override group: off -> inherit (group removed), on -> start from the global value. */
+function overrideModel<K extends keyof InstanceSettings>(key: K, fromGlobal: () => InstanceSettings[K]) {
   return computed({
-    get: () => draft.overrides[key] !== null,
+    get: () => draft.settings[key] != null,
     set: (on: boolean) => {
-      draft.overrides[key] = on ? fromGlobal() : (null as InstanceOverrides[K])
+      draft.settings[key] = on ? fromGlobal() : undefined
       markDirty()
     },
   })
 }
-const javaOn = overrideModel('java', () => ({ path: global.value?.java.path ?? null, autoSelect: global.value?.java.autoSelect ?? true }))
+const javaOn = overrideModel('java', () => clone(global.value!.java))
 const memoryOn = overrideModel('memory', () => clone(global.value!.memory))
 const jvmOn = overrideModel('jvmArgs', () => global.value?.jvmArgs ?? '')
 const windowOn = overrideModel('window', () => clone(global.value!.window))
 const commandsOn = overrideModel('commands', () => clone(global.value!.commands))
 
 // Views of each group: the override when set, otherwise the (read-only) global value.
-const javaView = computed(() => draft.overrides.java ?? { path: global.value?.java.path ?? null, autoSelect: global.value?.java.autoSelect ?? true })
-const memoryView = computed(() => draft.overrides.memory ?? global.value?.memory ?? { minMb: 512, maxMb: 4096 })
-const windowView = computed(() => draft.overrides.window ?? global.value?.window ?? { width: 854, height: 480, maximized: false })
-const commandsView = computed(() => draft.overrides.commands ?? global.value?.commands ?? { preLaunch: '', postExit: '', wrapper: '' })
+const javaView = computed(() => draft.settings.java ?? global.value?.java ?? { path: null, autoSelect: true, autoDownload: true })
+const memoryView = computed(() => draft.settings.memory ?? global.value?.memory ?? { minMib: 512, maxMib: 4096 })
+const windowView = computed(() => draft.settings.window ?? global.value?.window ?? { width: 854, height: 480, maximized: false })
+const commandsView = computed(() => draft.settings.commands ?? global.value?.commands ?? { preLaunch: '', postExit: '', wrapper: '' })
 
 async function save() {
   const saved = await tasks.guard(() =>
@@ -56,7 +56,7 @@ async function save() {
       icon: draft.icon,
       notes: draft.notes,
       shareResourcepacks: draft.shareResourcepacks,
-      overrides: clone(draft.overrides),
+      settings: clone(draft.settings),
     }),
   )
   if (saved) {
@@ -103,14 +103,14 @@ async function save() {
             :disabled="disabled"
             :value="javaView.path ?? ''"
             :placeholder="t.settings.javaPath"
-            @input="draft.overrides.java && (draft.overrides.java.path = ($event.target as HTMLInputElement).value || null)"
+            @input="draft.settings.java && (draft.settings.java.path = ($event.target as HTMLInputElement).value || null)"
           />
           <label class="flex items-center gap-2">
             <ToggleSwitch
               :model-value="javaView.autoSelect"
               :disabled="disabled"
               :label="t.settings.autoSelect"
-              @update:model-value="draft.overrides.java && ((draft.overrides.java.autoSelect = $event), markDirty())"
+              @update:model-value="draft.settings.java && ((draft.settings.java.autoSelect = $event), markDirty())"
             />
             <span>{{ t.settings.autoSelect }}</span>
           </label>
@@ -123,7 +123,7 @@ async function save() {
         <MemoryFields
           :model-value="memoryView"
           :disabled="disabled"
-          @update:model-value="((draft.overrides.memory = $event), markDirty())"
+          @update:model-value="((draft.settings.memory = $event), markDirty())"
         />
       </template>
     </OverrideBlock>
@@ -134,8 +134,8 @@ async function save() {
           class="input font-mono"
           rows="2"
           :disabled="disabled"
-          :value="draft.overrides.jvmArgs ?? global.jvmArgs"
-          @input="draft.overrides.jvmArgs = ($event.target as HTMLTextAreaElement).value"
+          :value="draft.settings.jvmArgs ?? global.jvmArgs"
+          @input="draft.settings.jvmArgs = ($event.target as HTMLTextAreaElement).value"
         />
       </template>
     </OverrideBlock>

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
 import { onProgress } from '../api/commands'
-import type { ProgressEvent } from '../api/types'
+import type { BlockedFile, ProgressEvent } from '../api/types'
 import { errorMessage } from '../utils/format'
 
 export interface Toast {
@@ -13,6 +13,10 @@ export interface Toast {
 export const useTasksStore = defineStore('tasks', () => {
   const tasks = reactive(new Map<string, ProgressEvent>())
   const toasts = ref<Toast[]>([])
+  /** Files the user has to download by hand; shown in a dialog until dismissed. */
+  const blocked = ref<BlockedFile[]>([])
+  // Errors already shown through a progress event, so the rejected command does not toast them again.
+  const reported = new Set<string>()
   let toastId = 0
 
   const list = computed(() => [...tasks.values()])
@@ -30,15 +34,24 @@ export const useTasksStore = defineStore('tasks', () => {
     try {
       return await action()
     } catch (e) {
-      toast(errorMessage(e), 'error')
+      const message = errorMessage(e)
+      if (!reported.has(message)) toast(message, 'error')
       return undefined
     }
   }
 
   function handle(e: ProgressEvent) {
     tasks.set(e.task, e)
-    if (e.error) toast(`${e.title ?? e.task}: ${e.error}`, 'error')
+    if (e.error) {
+      reported.add(e.error)
+      setTimeout(() => reported.delete(e.error!), 10_000)
+      toast(`${e.title ?? e.task}: ${e.error}`, 'error')
+    }
     if (e.finished || e.error) setTimeout(() => tasks.delete(e.task), e.error ? 6000 : 2500)
+  }
+
+  function showBlocked(files: BlockedFile[]) {
+    if (files.length) blocked.value = files
   }
 
   let started = false
@@ -48,5 +61,5 @@ export const useTasksStore = defineStore('tasks', () => {
     await onProgress(handle)
   }
 
-  return { tasks: list, toasts, toast, dismiss, guard, init }
+  return { tasks: list, toasts, blocked, toast, dismiss, guard, showBlocked, init }
 })

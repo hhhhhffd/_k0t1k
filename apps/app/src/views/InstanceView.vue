@@ -25,7 +25,7 @@ const loader = computed(() => (instance.value ? loaderOf(instance.value) : undef
 type Tab = 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'logs' | 'settings'
 const tab = ref<Tab>('mods')
 const tabs: Tab[] = ['mods', 'resourcepacks', 'shaders', 'worlds', 'logs', 'settings']
-const kindOfTab = { mods: 'mod', resourcepacks: 'resourcepack', shaders: 'shader' } as const
+const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shaderPack' } as const
 </script>
 
 <template>

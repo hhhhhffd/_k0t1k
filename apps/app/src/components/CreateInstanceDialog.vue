@@ -28,12 +28,12 @@ const loaderVersions = ref<LoaderVersion[]>([])
 const loaderVersion = ref('')
 const loadingLoader = ref(false)
 
-const loaders: LoaderId[] = ['fabric', 'quilt', 'forge', 'neoforge']
+const loaders: LoaderId[] = ['fabric', 'quilt', 'forge', 'neoForge']
 
 const visibleVersions = computed(() =>
   versions.value.filter((v) => {
     const matchesType =
-      versionFilter.value === 'old' ? v.type.startsWith('old') : v.type === versionFilter.value
+      versionFilter.value === 'old' ? (v.type ?? '').startsWith('old') : v.type === versionFilter.value
     return matchesType && v.version.toLowerCase().includes(versionSearch.value.trim().toLowerCase())
   }),
 )

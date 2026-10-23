@@ -24,11 +24,7 @@ onMounted(async () => {
   <ul v-else class="flex flex-col gap-1.5">
     <li v-for="w in worlds" :key="w.dirName" class="card flex items-center gap-3 px-3 py-2.5">
       <span class="pix flex size-9 items-center justify-center bg-ok/15 text-ok"><Globe :size="17" /></span>
-      <div class="min-w-0 flex-1">
-        <div class="truncate font-semibold">{{ w.name }}</div>
-        <div class="truncate text-[12px] text-faint">{{ w.dirName }}</div>
-      </div>
-      <span class="badge">{{ t.instance.gameMode[w.gameMode] ?? w.gameMode }}</span>
+      <div class="min-w-0 flex-1 truncate font-semibold">{{ w.dirName }}</div>
       <span class="w-24 text-right text-muted">{{ formatBytes(w.size) }}</span>
       <span class="w-28 text-right text-muted">{{ formatRelative(w.lastPlayed) }}</span>
     </li>

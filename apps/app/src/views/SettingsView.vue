@@ -91,7 +91,7 @@ async function addAccount() {
           </label>
           <label class="flex flex-col gap-1">
             <span class="label">{{ t.settings.javaPath }}</span>
-            <input v-model="s.java.path" class="input font-mono" placeholder="C:\Program Files\Java\...\javaw.exe" />
+            <input :value="s.java.path ?? ''" class="input font-mono" placeholder="C:\Program Files\Java\...\javaw.exe" @input="s.java.path = ($event.target as HTMLInputElement).value || null" />
           </label>
         </section>
         <section class="card p-4">
@@ -126,7 +126,7 @@ async function addAccount() {
         </section>
       </template>
 
-      <section v-else-if="section === 'memory'" class="card p-4"><MemoryFields v-model="s.memory" :total-ram-mb="system?.totalRamMb" /></section>
+      <section v-else-if="section === 'memory'" class="card p-4"><MemoryFields v-model="s.memory" :total-ram-mib="system?.totalRamMib" /></section>
 
       <section v-else-if="section === 'jvm'" class="card p-4">
         <textarea v-model="s.jvmArgs" class="input font-mono" rows="4" :aria-label="t.settings.sections.jvm" />

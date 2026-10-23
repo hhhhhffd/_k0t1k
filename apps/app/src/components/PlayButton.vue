@@ -15,7 +15,7 @@ const state = computed(() => store.stateOf(props.instanceId))
 
 function toggle() {
   if (state.value === 'stopped') {
-    void tasks.guard(() => store.launch(props.instanceId, settings.settings?.selectedAccountId))
+    void tasks.guard(() => store.launch(props.instanceId, settings.settings?.selectedAccountId ?? undefined))
   } else {
     void tasks.guard(() => store.kill(props.instanceId))
   }

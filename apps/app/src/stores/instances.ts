@@ -1,11 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
 import * as api from '../api/commands'
-import type { GameLogLine, Instance, RunState } from '../api/types'
+import type { GameLogLine, Instance, ModpackImport, RunState } from '../api/types'
+import { useTasksStore } from './tasks'
 
 const MAX_LOG_LINES = 5000
 
 export const useInstancesStore = defineStore('instances', () => {
+  const tasks = useTasksStore()
   const instances = ref<Instance[]>([])
   const loaded = ref(false)
   const runStates = reactive(new Map<string, RunState>())
@@ -18,7 +20,9 @@ export const useInstancesStore = defineStore('instances', () => {
   const logOf = (id: string): GameLogLine[] => logs.get(id) ?? []
 
   async function refresh() {
-    instances.value = await api.listInstances()
+    const listing = await api.listInstances()
+    instances.value = listing.instances
+    for (const broken of listing.errors) tasks.toast(`${broken.id}: ${broken.error}`, 'error')
     loaded.value = true
   }
 
@@ -40,12 +44,13 @@ export const useInstancesStore = defineStore('instances', () => {
     await api.deleteInstance(id)
     instances.value = instances.value.filter((i) => i.id !== id)
   }
-  async function importModpack(path: string) {
-    return upsert(await api.importModpackFile(path))
+  function upsertImport(result: ModpackImport) {
+    tasks.showBlocked(result.blocked)
+    return upsert(result.instance)
   }
-  async function installModpack(...args: Parameters<typeof api.installModpackVersion>) {
-    return upsert(await api.installModpackVersion(...args))
-  }
+  const importModpack = async (path: string) => upsertImport(await api.importModpackFile(path))
+  const installModpack = async (...args: Parameters<typeof api.installModpackVersion>) =>
+    upsertImport(await api.installModpackVersion(...args))
 
   const launch = (id: string, accountId?: string) => api.launchInstance(id, accountId)
   const kill = (id: string) => api.killInstance(id)

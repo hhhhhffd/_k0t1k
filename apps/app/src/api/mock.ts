@@ -2,29 +2,31 @@
 // It implements the same commands/events as the Rust side so the UI can be developed in a browser.
 import type {
   Account,
+  AvailableUpdate,
+  BlockedFile,
   CreateInstanceRequest,
   GameLogLine,
   GlobalSettings,
   Instance,
   InstanceComponent,
   InstanceRunState,
-  InstanceSettings,
+  InstanceSettingsUpdate,
+  InstallReport,
   JavaInstall,
   LoaderId,
   LoaderVersion,
   LocalResource,
   LocalResourceKind,
   MinecraftVersion,
+  ModpackImport,
   Platform,
   ProgressEvent,
   ProjectVersion,
-  ResourceKind,
   SearchHit,
+  SearchPage,
   SearchQuery,
-  SearchResult,
   SystemInfo,
   VersionFilter,
-  VersionType,
   World,
 } from './types'
 import { COMPONENT_MINECRAFT, LOADER_UIDS } from './types'
@@ -52,7 +54,7 @@ async function fakeTask(task: string, title: string, stages: string[], stepMs = 
 }
 
 // ---- versions ----
-const MC: [string, VersionType, string][] = [
+const MC: [string, string, string][] = [
   ['1.21.4', 'release', '2024-12-03'], ['1.21.3', 'release', '2024-10-23'], ['1.21.1', 'release', '2024-08-08'],
   ['1.21', 'release', '2024-06-13'], ['1.20.6', 'release', '2024-04-29'], ['1.20.4', 'release', '2023-12-07'],
   ['1.20.1', 'release', '2023-06-12'], ['1.19.4', 'release', '2023-03-14'], ['1.19.2', 'release', '2022-08-05'],
@@ -70,22 +72,24 @@ function loaderVersions(mc: string, loader: LoaderId): LoaderVersion[] {
     fabric: ['0.16.10', '0.16.9', '0.16.7', '0.15.11', '0.15.7'],
     quilt: ['0.27.1', '0.27.0', '0.26.4', '0.26.0'],
     forge: [`${mc}-54.0.16`, `${mc}-54.0.12`, `${mc}-53.0.40`, `${mc}-52.0.1`],
-    neoforge: ['21.4.100', '21.4.80', '21.1.172', '21.1.100'],
+    neoForge: ['21.4.100', '21.4.80', '21.1.172', '21.1.100'],
   }
   if (mc.length > 7 && /[a-z]/.test(mc)) return []
   return seeds[loader].map((version, i) => ({
-    version, releaseTime: daysAgo(20 + i * 40), recommended: i === 0,
+    version, type: null, releaseTime: daysAgo(20 + i * 40), recommended: i === 0,
   }))
 }
 
 // ---- settings ----
 const SETTINGS_KEY = 'k0t1k.mock.settings'
 const defaultSettings: GlobalSettings = {
-  java: { autoSelect: true, autoDownload: true },
-  memory: { minMb: 512, maxMb: 4096 },
+  java: { path: null, autoSelect: true, autoDownload: true },
+  memory: { minMib: 512, maxMib: 4096 },
   jvmArgs: '-XX:+UseG1GC -XX:+ParallelRefProcEnabled',
   window: { width: 854, height: 480, maximized: false },
   commands: { preLaunch: '', postExit: '', wrapper: '' },
+  env: {},
+  playtime: { record: true, show: true, totalSecs: 0 },
   ui: { theme: 'k0t1k', liteMode: false },
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],
   selectedAccountId: 'acc-1',
@@ -109,36 +113,37 @@ function persistSettings() {
 }
 
 const javaInstalls: JavaInstall[] = [
-  { path: 'C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.5.11-hotspot\\bin\\javaw.exe', vendor: 'Eclipse Adoptium', version: '21.0.5', major: 21, arch: 'x64', source: 'system' },
-  { path: 'C:\\Program Files\\Java\\jre1.8.0_431\\bin\\javaw.exe', vendor: 'Oracle', version: '1.8.0_431', major: 8, arch: 'x64', source: 'system' },
-  { path: 'C:\\Program Files\\Microsoft\\jdk-17.0.13.11-hotspot\\bin\\javaw.exe', vendor: 'Microsoft', version: '17.0.13', major: 17, arch: 'x64', source: 'system' },
+  { path: 'C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.5.11-hotspot\\bin\\javaw.exe', vendor: 'Eclipse Adoptium', version: '21.0.5', major: 21, arch: 'amd64', is64bit: true, source: 'system' },
+  { path: 'C:\\Program Files\\Java\\jre1.8.0_431\\bin\\javaw.exe', vendor: 'Oracle', version: '1.8.0_431', major: 8, arch: 'amd64', is64bit: true, source: 'system' },
+  { path: 'C:\\Program Files\\Microsoft\\jdk-17.0.13.11-hotspot\\bin\\javaw.exe', vendor: 'Microsoft', version: '17.0.13', major: 17, arch: 'amd64', is64bit: true, source: 'system' },
 ]
 const managedJava: JavaInstall[] = [
-  { path: '%APPDATA%\\_k0t1k\\java\\java-runtime-delta\\bin\\javaw.exe', vendor: 'Mojang', version: '21.0.3', major: 21, arch: 'x64', source: 'managed' },
-  { path: '%APPDATA%\\_k0t1k\\java\\java-runtime-gamma\\bin\\javaw.exe', vendor: 'Mojang', version: '17.0.8', major: 17, arch: 'x64', source: 'managed' },
+  { path: '%APPDATA%\\_k0t1k\\java\\java-runtime-delta\\bin\\javaw.exe', vendor: 'Mojang', version: '21.0.3', major: 21, arch: 'amd64', is64bit: true, source: 'managed' },
+  { path: '%APPDATA%\\_k0t1k\\java\\java-runtime-gamma\\bin\\javaw.exe', vendor: 'Mojang', version: '17.0.8', major: 17, arch: 'amd64', is64bit: true, source: 'managed' },
 ]
 
 // ---- instances ----
-const noOverrides = (): Instance['overrides'] => ({ java: null, memory: null, jvmArgs: null, window: null, commands: null })
 function components(mc: string, loader?: { id: LoaderId; version: string }): InstanceComponent[] {
   const list: InstanceComponent[] = [{ uid: COMPONENT_MINECRAFT, version: mc, dependencyOnly: false }]
   if (loader) list.push({ uid: LOADER_UIDS[loader.id], version: loader.version, dependencyOnly: false })
   return list
 }
+const newInstance = (fields: Pick<Instance, 'id' | 'name' | 'icon' | 'components'> & Partial<Instance>): Instance => ({
+  group: null, created: new Date().toISOString(), lastPlayed: null, playtime: { totalSecs: 0, lastSecs: 0 },
+  managedPack: null, notes: '', shareResourcepacks: true, settings: {}, ...fields,
+})
 const instances: Instance[] = [
-  { id: 'inst-1', name: 'Vanilla 1.21.4', icon: 'grass', components: components('1.21.4'), createdAt: daysAgo(90), lastPlayed: daysAgo(1),
-    playtime: { totalSecs: 86_400 * 1.5, lastSecs: 5400 }, notes: '', shareResourcepacks: true, overrides: noOverrides() },
-  { id: 'inst-2', name: 'Fabric Optimized', icon: 'zap', group: 'Выживание', components: components('1.21.1', { id: 'fabric', version: '0.16.10' }),
-    createdAt: daysAgo(60), lastPlayed: daysAgo(0.1), playtime: { totalSecs: 3600 * 74, lastSecs: 7200 }, notes: 'Sodium + Lithium + Iris', shareResourcepacks: true,
-    overrides: { ...noOverrides(), memory: { minMb: 1024, maxMb: 6144 } } },
-  { id: 'inst-3', name: 'Create: Above and Beyond', icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'forge', version: '1.20.1-47.3.0' }),
-    createdAt: daysAgo(30), lastPlayed: daysAgo(6), playtime: { totalSecs: 3600 * 12, lastSecs: 1800 }, notes: '',
-    shareResourcepacks: false, overrides: noOverrides(),
-    managedPack: { platform: 'modrinth', projectId: 'create-aab', versionId: 'v-aab-1', name: 'Create: Above and Beyond', versionName: '1.4.0' } },
-  { id: 'inst-4', name: 'PvP 1.8.9', icon: 'sword', group: 'Выживание', components: components('1.8.9', { id: 'forge', version: '1.8.9-11.15.1.2318' }),
-    createdAt: daysAgo(200), playtime: { totalSecs: 3600 * 140, lastSecs: 900 }, lastPlayed: daysAgo(30), notes: '', shareResourcepacks: true, overrides: noOverrides() },
-  { id: 'inst-5', name: 'Снапшоты', icon: 'ghost', components: components('25w06a'), createdAt: daysAgo(5),
-    playtime: { totalSecs: 0, lastSecs: 0 }, notes: '', shareResourcepacks: true, overrides: noOverrides() },
+  newInstance({ id: 'inst-1', name: 'Vanilla 1.21.4', icon: 'grass', components: components('1.21.4'), created: daysAgo(90), lastPlayed: daysAgo(1),
+    playtime: { totalSecs: 86_400 * 1.5, lastSecs: 5400 } }),
+  newInstance({ id: 'inst-2', name: 'Fabric Optimized', icon: 'zap', group: 'Выживание', components: components('1.21.1', { id: 'fabric', version: '0.16.10' }),
+    created: daysAgo(60), lastPlayed: daysAgo(0.1), playtime: { totalSecs: 3600 * 74, lastSecs: 7200 }, notes: 'Sodium + Lithium + Iris',
+    settings: { memory: { minMib: 1024, maxMib: 6144 } } }),
+  newInstance({ id: 'inst-3', name: 'Create: Above and Beyond', icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'forge', version: '1.20.1-47.3.0' }),
+    created: daysAgo(30), lastPlayed: daysAgo(6), playtime: { totalSecs: 3600 * 12, lastSecs: 1800 }, shareResourcepacks: false,
+    managedPack: { platform: 'modrinth', projectId: 'create-aab', versionId: 'v-aab-1', name: 'Create: Above and Beyond', versionName: '1.4.0' } }),
+  newInstance({ id: 'inst-4', name: 'PvP 1.8.9', icon: 'sword', group: 'Выживание', components: components('1.8.9', { id: 'forge', version: '1.8.9-11.15.1.2318' }),
+    created: daysAgo(200), playtime: { totalSecs: 3600 * 140, lastSecs: 900 }, lastPlayed: daysAgo(30) }),
+  newInstance({ id: 'inst-5', name: 'Снапшоты', icon: 'ghost', components: components('25w06a'), created: daysAgo(5) }),
 ]
 const findInstance = (id: unknown): Instance => {
   const inst = instances.find((i) => i.id === id)
@@ -148,7 +153,8 @@ const findInstance = (id: unknown): Instance => {
 
 // ---- content catalog ----
 type Seed = [slug: string, title: string, author: string, description: string, downloads: number, categories: string[]]
-const catalog: Record<ResourceKind, Seed[]> = {
+type CatalogKind = 'mod' | 'modpack' | 'resourcePack' | 'shaderPack'
+const catalog: Record<CatalogKind, Seed[]> = {
   mod: [
     ['sodium', 'Sodium', 'jellysquid3', 'Современный движок рендеринга, сильно повышающий FPS.', 98_000_000, ['optimization']],
     ['lithium', 'Lithium', 'jellysquid3', 'Оптимизация игровой логики, тиков и ИИ мобов.', 61_000_000, ['optimization']],
@@ -170,14 +176,14 @@ const catalog: Record<ResourceKind, Seed[]> = {
     ['better-mc', 'Better MC', 'LunaPixelStudios', 'Ванильное расширение с новыми биомами.', 4_100_000, ['adventure']],
     ['rlcraft', 'RLCraft', 'Shivaxi', 'Хардкорное выживание в жестком мире.', 6_000_000, ['hardcore']],
   ],
-  resourcepack: [
+  resourcePack: [
     ['faithful-32x', 'Faithful 32x', 'Faithful Team', 'Классический стиль, вдвое выше разрешение.', 18_000_000, ['vanilla-like']],
     ['fresh-animations', 'Fresh Animations', 'FreshLX', 'Новые анимации мобов.', 12_000_000, ['entities']],
     ['bare-bones', 'Bare Bones', 'Cleanstone', 'Минималистичная палитра.', 9_000_000, ['simplistic']],
     ['stay-true', 'Stay True', 'Stay True Team', 'Ванильный стиль с мелкими улучшениями.', 5_000_000, ['vanilla-like']],
     ['xray-ultimate', 'Dokucraft', 'Docm77', 'Средневековая тема.', 3_000_000, ['themed']],
   ],
-  shader: [
+  shaderPack: [
     ['complementary-reimagined', 'Complementary Shaders - Reimagined', 'EminGT', 'Красивые и быстрые шейдеры.', 31_000_000, ['quality']],
     ['bsl', 'BSL Shaders', 'CaptTatsu', 'Реалистичное освещение и вода.', 27_000_000, ['realistic']],
     ['photon', 'Photon', 'sixthsurge', 'Современные шейдеры для Iris.', 3_000_000, ['quality']],
@@ -185,38 +191,42 @@ const catalog: Record<ResourceKind, Seed[]> = {
   ],
 }
 
-function hitFor(platform: Platform, kind: ResourceKind, s: Seed, i: number): SearchHit {
+function hitFor(platform: Platform, s: Seed): SearchHit {
   return {
-    platform, kind, projectId: `${platform === 'modrinth' ? 'mr' : 'cf'}-${s[0]}`, slug: s[0], title: s[1], author: s[2],
-    description: s[3], downloads: platform === 'modrinth' ? s[4] : Math.round(s[4] * 0.8), categories: s[5], updatedAt: daysAgo(3 + i * 11),
+    platform, projectId: `${platform === 'modrinth' ? 'mr' : 'cf'}-${s[0]}`, slug: s[0], title: s[1], author: s[2],
+    description: s[3], iconUrl: null, downloads: platform === 'modrinth' ? s[4] : Math.round(s[4] * 0.8), categories: s[5],
   }
 }
 
-function searchContent(q: SearchQuery): SearchResult {
+function searchContent(q: SearchQuery): SearchPage {
   const needle = q.query.trim().toLowerCase()
-  const all = catalog[q.kind]
-    .map((s, i) => hitFor(q.platform, q.kind, s, i))
+  const all = catalog[q.kind as CatalogKind]
+    .map((s) => hitFor(q.platform, s))
     .filter((h) => !needle || h.title.toLowerCase().includes(needle) || h.description.toLowerCase().includes(needle))
-  return { hits: all.slice(q.offset, q.offset + q.limit), total: all.length }
+  return { hits: all.slice(q.offset, q.offset + q.limit), offset: q.offset, totalHits: all.length }
 }
 
 function projectVersions(platform: Platform, projectId: string, filter: VersionFilter): ProjectVersion[] {
   const slug = projectId.replace(/^(mr|cf)-/, '')
-  const loaders = filter.loader ? [filter.loader] : ['fabric', 'quilt']
+  const loaders: LoaderId[] = filter.loader ? [filter.loader] : ['fabric', 'quilt']
   const versions: ProjectVersion[] = [
     ['1.4.2', ['1.21.4', '1.21.3'], 'release'], ['1.4.1', ['1.21.1'], 'release'], ['1.4.0-beta.2', ['1.21'], 'beta'],
     ['1.3.9', ['1.20.1', '1.20.4'], 'release'], ['1.3.0-alpha.1', ['1.19.4'], 'alpha'],
-  ].map(([num, gv, releaseType], i) => ({
-    id: `${projectId}-v${i}`, projectId, platform, name: `${slug} ${num as string}`, versionNumber: num as string,
-    releaseType: releaseType as ProjectVersion['releaseType'], gameVersions: gv as string[], loaders, datePublished: daysAgo(10 + i * 45),
-    downloads: 1_000_000 - i * 150_000,
-    files: [{
-      fileName: `${slug}-${num as string}.jar`, size: 1_200_000 + i * 90_000, primary: true,
-      // CurseForge: the third version has third-party downloads disabled by the author
-      blocked: platform === 'curseforge' && i === 2,
-      manualUrl: platform === 'curseforge' && i === 2 ? `https://www.curseforge.com/minecraft/mc-mods/${slug}/files/${5_000_000 + i}` : undefined,
-    }],
-  }))
+  ].map(([num, gv, releaseType], i) => {
+    // CurseForge: the third version has third-party downloads disabled by the author
+    const blocked = platform === 'curseForge' && i === 2
+    const filename = `${slug}-${num as string}.jar`
+    return {
+      platform, id: `${projectId}-v${i}`, projectId, name: `${slug} ${num as string}`, versionNumber: num as string,
+      releaseType: releaseType as ProjectVersion['releaseType'], gameVersions: gv as string[], loaders, published: daysAgo(10 + i * 45),
+      dependencies: [],
+      files: [{
+        url: blocked ? null : `https://cdn.example/${filename}`,
+        downloadPage: blocked ? `https://www.curseforge.com/minecraft/mc-mods/${slug}/files/${5_000_000 + i}` : null,
+        filename, size: 1_200_000 + i * 90_000, hashes: { sha1: null, sha512: null }, primary: true,
+      }],
+    }
+  })
   return filter.gameVersion ? versions.filter((v) => v.gameVersions.includes(filter.gameVersion as string)) : versions
 }
 
@@ -226,22 +236,24 @@ function resourcesFor(instanceId: string, kind: LocalResourceKind): LocalResourc
   const key = `${instanceId}:${kind}`
   let list = localResources.get(key)
   if (!list) {
-    const seeds = catalog[kind].slice(0, instanceId === 'inst-2' || instanceId === 'inst-3' ? 7 : 2)
-    list = seeds.map((s, i) => ({
-      fileName: `${s[0]}-1.${i}.${i + 2}.jar`, enabled: i !== 3, size: 600_000 + i * 410_000,
-      metadata: { name: s[1], version: `1.${i}.${i + 2}`, authors: [s[2]], description: s[3] },
-      origin: i % 3 === 2 ? undefined : { platform: 'modrinth' as const, projectId: `mr-${s[0]}`, versionId: `mr-${s[0]}-v${i}` },
-    }))
-    if (kind !== 'mod') list.forEach((r) => (r.fileName = r.fileName.replace('.jar', '.zip')))
+    const seeds = (catalog[kind as CatalogKind] ?? []).slice(0, instanceId === 'inst-2' || instanceId === 'inst-3' ? 7 : 2)
+    list = seeds.map((s, i) => {
+      const fileName = `${s[0]}-1.${i}.${i + 2}.${kind === 'mod' ? 'jar' : 'zip'}`
+      return {
+        fileName, enabled: i !== 3, size: 600_000 + i * 410_000,
+        metadata: { id: s[0], name: s[1], version: `1.${i}.${i + 2}`, authors: [s[2]], description: s[3], icon: null, loader: null },
+        origin: i % 3 === 2 ? null : { name: s[1], filename: fileName, update: { modrinth: { 'mod-id': `mr-${s[0]}`, version: `mr-${s[0]}-v${i}` } } },
+      }
+    })
     localResources.set(key, list)
   }
   return list
 }
 
 const worlds: World[] = [
-  { dirName: 'New World', name: 'Новый мир', gameMode: 'survival', lastPlayed: daysAgo(1), size: 84_000_000 },
-  { dirName: 'Creative Build', name: 'Креатив — стройка', gameMode: 'creative', lastPlayed: daysAgo(14), size: 210_000_000 },
-  { dirName: 'Hardcore', name: 'Хардкор #3', gameMode: 'hardcore', lastPlayed: daysAgo(40), size: 52_000_000 },
+  { dirName: 'New World', lastPlayed: daysAgo(1), size: 84_000_000 },
+  { dirName: 'Creative Build', lastPlayed: daysAgo(14), size: 210_000_000 },
+  { dirName: 'Hardcore', lastPlayed: daysAgo(40), size: 52_000_000 },
 ]
 
 // ---- launching ----
@@ -304,13 +316,10 @@ async function kill(instanceId: string) {
 async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
   await sleep(60)
   switch (cmd) {
-    case 'list_instances': return clone(instances)
+    case 'list_instances': return clone({ instances, errors: [] })
     case 'create_instance': {
       const r = a.request as CreateInstanceRequest
-      const inst: Instance = {
-        id: nextId('inst'), name: r.name, icon: r.icon, group: r.group || undefined, components: components(r.minecraftVersion, r.loader),
-        createdAt: new Date().toISOString(), playtime: { totalSecs: 0, lastSecs: 0 }, notes: '', shareResourcepacks: true, overrides: noOverrides(),
-      }
+      const inst = newInstance({ id: nextId('inst'), name: r.name, icon: r.icon, group: r.group || null, components: components(r.minecraftVersion, r.loader) })
       await fakeTask(`create-${inst.id}`, `Создание ${inst.name}`, ['Метаданные Minecraft', 'Метаданные загрузчика', 'Подготовка папки'], 300)
       instances.push(inst)
       return clone(inst)
@@ -319,14 +328,15 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'delete_instance': instances.splice(instances.indexOf(findInstance(a.instanceId)), 1); return undefined
     case 'copy_instance': {
       const src = findInstance(a.instanceId)
-      const copy = { ...clone(src), id: nextId('inst'), name: a.name as string, createdAt: new Date().toISOString(), lastPlayed: undefined, playtime: { totalSecs: 0, lastSecs: 0 } }
+      const copy: Instance = { ...clone(src), id: nextId('inst'), name: a.name as string, created: new Date().toISOString(), lastPlayed: null, playtime: { totalSecs: 0, lastSecs: 0 } }
       instances.push(copy)
       return clone(copy)
     }
-    case 'set_instance_group': { const i = findInstance(a.instanceId); i.group = (a.group as string | null) || undefined; return clone(i) }
+    case 'set_instance_group': { const i = findInstance(a.instanceId); i.group = (a.group as string | null) || null; return clone(i) }
     case 'update_instance_settings': {
       const i = findInstance(a.instanceId)
-      Object.assign(i, clone(a.settings as InstanceSettings))
+      const { icon, notes, shareResourcepacks, settings: groups } = clone(a.settings as InstanceSettingsUpdate)
+      Object.assign(i, { icon, notes, shareResourcepacks, settings: groups })
       return clone(i)
     }
     case 'open_instance_folder': return undefined
@@ -340,7 +350,7 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'get_settings': return clone(settings)
     case 'save_settings': settings = clone(a.settings as GlobalSettings); persistSettings(); return undefined
     case 'get_system_info':
-      return { totalRamMb: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir: '%APPDATA%\\_k0t1k' } satisfies SystemInfo
+      return { totalRamMib: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir: '%APPDATA%\\_k0t1k' } satisfies SystemInfo
     case 'add_offline_account': {
       const acc: Account = { id: nextId('acc'), name: a.name as string, kind: 'offline' }
       settings.accounts.push(acc)
@@ -350,23 +360,33 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     }
     case 'remove_offline_account':
       settings.accounts = settings.accounts.filter((x) => x.id !== a.accountId)
-      if (settings.selectedAccountId === a.accountId) settings.selectedAccountId = settings.accounts[0]?.id
+      if (settings.selectedAccountId === a.accountId) settings.selectedAccountId = settings.accounts[0]?.id ?? null
       persistSettings()
       return undefined
     case 'select_account': settings.selectedAccountId = a.accountId as string; persistSettings(); return undefined
     case 'search_content': await sleep(250); return searchContent(a.query as SearchQuery)
     case 'get_project_versions': await sleep(250); return projectVersions(a.platform as Platform, a.projectId as string, a.filter as VersionFilter)
     case 'install_version': {
-      const v = a.version as ProjectVersion
-      const file = v.files.find((f) => f.primary) ?? v.files[0]
-      if (!file) throw new Error('У версии нет файлов')
-      if (file.blocked) return { status: 'blocked', fileName: file.fileName, manualUrl: file.manualUrl ?? '' }
+      const v = projectVersions(a.platform as Platform, a.projectId as string, {}).find((x) => x.id === a.versionId)
+      const file = v?.files.find((f) => f.primary) ?? v?.files[0]
+      if (!v || !file) throw new Error('У версии нет файлов')
+      if (file.url === null) {
+        const blocked: BlockedFile = {
+          platform: v.platform, projectId: v.projectId, name: v.name, fileName: file.filename,
+          targetPath: `mods/${file.filename}`, downloadPage: file.downloadPage, sha1: null,
+        }
+        return { installed: [], blocked: [blocked], unresolvedDependencies: [] } satisfies InstallReport
+      }
       await fakeTask(`install-${v.id}`, `Установка ${v.name}`, ['Скачивание', 'Проверка хеша'], 450)
       resourcesFor(a.instanceId as string, a.kind as LocalResourceKind).unshift({
-        fileName: file.fileName, enabled: true, size: file.size,
-        metadata: { name: v.name, version: v.versionNumber }, origin: { platform: v.platform, projectId: v.projectId, versionId: v.id },
+        fileName: file.filename, enabled: true, size: file.size,
+        metadata: { id: v.projectId, name: v.name, version: v.versionNumber, authors: [], description: null, icon: null, loader: null },
+        origin: { name: v.name, filename: file.filename, update: { modrinth: { 'mod-id': v.projectId, version: v.id } } },
       })
-      return { status: 'installed', fileName: file.fileName }
+      return {
+        installed: [{ platform: v.platform, projectId: v.projectId, name: v.name, fileName: file.filename, isDependency: false }],
+        blocked: [], unresolvedDependencies: [],
+      } satisfies InstallReport
     }
     case 'list_local_resources': return clone(resourcesFor(a.instanceId as string, a.kind as LocalResourceKind))
     case 'toggle_resource': {
@@ -383,33 +403,38 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'check_updates': {
       await sleep(700)
       return resourcesFor(a.instanceId as string, a.kind as LocalResourceKind)
-        .filter((r) => r.origin)
+        .filter((r) => r.origin?.update.modrinth)
         .slice(0, 2)
-        .map((r) => ({ fileName: r.fileName, newVersion: projectVersions(r.origin!.platform, r.origin!.projectId, {})[0]! }))
+        .map((r): AvailableUpdate => ({
+          fileName: r.fileName, name: r.metadata?.name ?? r.fileName, currentVersion: r.metadata?.version ?? '',
+          latest: projectVersions('modrinth', r.origin!.update.modrinth!['mod-id'], {})[0]!,
+        }))
     }
     case 'list_worlds': return a.instanceId === 'inst-5' ? [] : worlds
     case 'import_modpack_file': {
       const path = a.path as string
-      const inst: Instance = {
+      const inst = newInstance({
         id: nextId('inst'), name: (a.name as string | undefined) || (path.split(/[\\/]/).pop() ?? 'Модпак').replace(/\.(mrpack|zip)$/i, ''),
-        icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'fabric', version: '0.16.10' }), createdAt: new Date().toISOString(),
-        playtime: { totalSecs: 0, lastSecs: 0 }, notes: '', shareResourcepacks: false, overrides: noOverrides(),
-      }
+        icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'fabric', version: '0.16.10' }), shareResourcepacks: false,
+      })
       await fakeTask(`import-${inst.id}`, `Импорт ${inst.name}`, ['Чтение манифеста', 'Скачивание модов', 'Применение overrides'], 450)
       instances.push(inst)
-      return clone(inst)
+      return clone({ instance: inst, blocked: [] } satisfies ModpackImport)
     }
     case 'install_modpack_version': {
-      const v = a.version as ProjectVersion
-      const inst: Instance = {
+      const v = projectVersions(a.platform as Platform, a.projectId as string, {})[0]!
+      const inst = newInstance({
         id: nextId('inst'), name: (a.name as string | undefined) || v.name, icon: 'gem', group: 'Модпаки',
-        components: components(v.gameVersions[0] ?? '1.20.1', { id: 'fabric', version: '0.16.10' }), createdAt: new Date().toISOString(),
-        playtime: { totalSecs: 0, lastSecs: 0 }, notes: '', shareResourcepacks: false, overrides: noOverrides(),
-        managedPack: { platform: v.platform, projectId: v.projectId, versionId: v.id, name: v.name, versionName: v.versionNumber },
-      }
+        components: components(v.gameVersions[0] ?? '1.20.1', { id: 'fabric', version: '0.16.10' }), shareResourcepacks: false,
+        managedPack: { platform: v.platform === 'modrinth' ? 'modrinth' : 'curseforge', projectId: v.projectId, versionId: v.id, name: v.name, versionName: v.versionNumber },
+      })
       await fakeTask(`pack-${inst.id}`, `Установка ${v.name}`, ['Скачивание пакета', 'Скачивание модов', 'Применение overrides'], 450)
       instances.push(inst)
-      return clone(inst)
+      const blocked: BlockedFile[] = v.platform === 'curseForge'
+        ? [{ platform: v.platform, projectId: '306612', name: 'Blocked Example Mod', fileName: 'blocked-example.jar', targetPath: 'mods/blocked-example.jar',
+            downloadPage: 'https://www.curseforge.com/minecraft/mc-mods/blocked-example/files/1', sha1: null }]
+        : []
+      return clone({ instance: inst, blocked } satisfies ModpackImport)
     }
     default: throw new Error(`mock: неизвестная команда ${cmd}`)
   }

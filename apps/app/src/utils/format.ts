@@ -1,11 +1,11 @@
 import { COMPONENT_MINECRAFT, LOADER_UIDS } from '../api/types'
-import type { Instance, LoaderId } from '../api/types'
+import type { Instance, LoaderId, Platform, PwMod } from '../api/types'
 
 export const LOADER_LABELS: Record<LoaderId, string> = {
   fabric: 'Fabric',
   quilt: 'Quilt',
   forge: 'Forge',
-  neoforge: 'NeoForge',
+  neoForge: 'NeoForge',
 }
 
 export function minecraftVersionOf(inst: Instance): string {
@@ -20,6 +20,13 @@ export function loaderOf(inst: Instance): { id: LoaderId; label: string; version
   return undefined
 }
 
+/** Platform a local file was installed from, according to its packwiz entry. */
+export function originPlatform(origin: PwMod): Platform | undefined {
+  if (origin.update.modrinth) return 'modrinth'
+  if (origin.update.curseforge) return 'curseForge'
+  return undefined
+}
+
 export function formatPlaytime(secs: number): string {
   if (secs < 60) return secs > 0 ? '<1 мин' : '—'
   const h = Math.floor(secs / 3600)
@@ -27,7 +34,7 @@ export function formatPlaytime(secs: number): string {
   return h > 0 ? `${h} ч ${m} мин` : `${m} мин`
 }
 
-export function formatRelative(iso?: string): string {
+export function formatRelative(iso?: string | null): string {
   if (!iso) return 'никогда'
   const diff = Date.now() - new Date(iso).getTime()
   const min = Math.floor(diff / 60_000)
@@ -40,7 +47,7 @@ export function formatRelative(iso?: string): string {
   return new Date(iso).toLocaleDateString('ru-RU')
 }
 
-export function formatDate(iso?: string): string {
+export function formatDate(iso?: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('ru-RU') : '—'
 }
 

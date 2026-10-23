@@ -1,6 +1,7 @@
-// Frontend <-> backend contract types. All field names are camelCase; the Rust side
-// must serialize with `#[serde(rename_all = "camelCase")]`. Timestamps are ISO-8601 strings
-// (UTC), durations are seconds, sizes are bytes unless the name says Mb.
+// Frontend <-> backend contract types. They mirror what `k0t1k-core` serialises (camelCase JSON, which
+// is also the on-disk format), so a field's `null` means a Rust `Option::None`. The few exceptions are
+// thin Rust view types: `Instance` (+ `id`), `JavaInstall` (+ `source`), local resource icons and `World`.
+// Timestamps are ISO-8601 strings (UTC), durations are seconds, sizes are bytes, memory is MiB.
 
 /** Component uids follow Prism meta. */
 export const COMPONENT_MINECRAFT = 'net.minecraft'
@@ -8,7 +9,7 @@ export const LOADER_UIDS = {
   fabric: 'net.fabricmc.fabric-loader',
   quilt: 'org.quiltmc.quilt-loader',
   forge: 'net.minecraftforge',
-  neoforge: 'net.neoforged',
+  neoForge: 'net.neoforged',
 } as const
 export type LoaderId = keyof typeof LOADER_UIDS
 
@@ -24,21 +25,22 @@ export interface Playtime {
 }
 
 export interface ManagedPack {
-  platform: Platform
+  /** Note: lowercase here, unlike `Platform`. */
+  platform: 'modrinth' | 'curseforge'
   projectId: string
   versionId: string
   name: string
   versionName: string
 }
 
-/** `null` in an override group means "inherit the global value". */
-export interface JavaOverride {
+export interface JavaSettings {
   path: string | null
   autoSelect: boolean
+  autoDownload: boolean
 }
 export interface MemorySettings {
-  minMb: number
-  maxMb: number
+  minMib: number
+  maxMib: number
 }
 export interface WindowSettings {
   width: number
@@ -51,12 +53,14 @@ export interface CommandSettings {
   wrapper: string
 }
 
-export interface InstanceOverrides {
-  java: JavaOverride | null
-  memory: MemorySettings | null
-  jvmArgs: string | null
-  window: WindowSettings | null
-  commands: CommandSettings | null
+/** Per-instance override groups; a missing group inherits the global value. */
+export interface InstanceSettings {
+  java?: JavaSettings | null
+  memory?: MemorySettings | null
+  jvmArgs?: string | null
+  window?: WindowSettings | null
+  commands?: CommandSettings | null
+  env?: Record<string, string> | null
 }
 
 export interface Instance {
@@ -64,23 +68,34 @@ export interface Instance {
   name: string
   /** Built-in icon key (see InstanceIcon.vue). */
   icon: string
-  group?: string
+  group: string | null
   components: InstanceComponent[]
-  createdAt: string
-  lastPlayed?: string
+  created: string
+  lastPlayed: string | null
   playtime: Playtime
-  managedPack?: ManagedPack
+  managedPack: ManagedPack | null
   notes: string
+  settings: InstanceSettings
   shareResourcepacks: boolean
-  overrides: InstanceOverrides
+}
+
+/** An instance whose `instance.json` could not be read. */
+export interface BrokenInstance {
+  id: string
+  error: string
+}
+
+export interface InstanceListing {
+  instances: Instance[]
+  errors: BrokenInstance[]
 }
 
 /** Fields editable through `update_instance_settings`. */
-export interface InstanceSettings {
+export interface InstanceSettingsUpdate {
   icon: string
   notes: string
   shareResourcepacks: boolean
-  overrides: InstanceOverrides
+  settings: InstanceSettings
 }
 
 export interface CreateInstanceRequest {
@@ -92,12 +107,6 @@ export interface CreateInstanceRequest {
 }
 
 export type ThemeId = 'k0t1k' | 'light' | 'amoled' | 'mint'
-
-export interface JavaSettings {
-  path?: string
-  autoSelect: boolean
-  autoDownload: boolean
-}
 
 export interface Account {
   id: string
@@ -111,49 +120,49 @@ export interface GlobalSettings {
   jvmArgs: string
   window: WindowSettings
   commands: CommandSettings
+  env: Record<string, string>
+  playtime: { record: boolean; show: boolean; totalSecs: number }
   ui: { theme: ThemeId; liteMode: boolean }
   accounts: Account[]
-  selectedAccountId?: string
+  selectedAccountId: string | null
 }
 
 export interface JavaInstall {
   path: string
-  vendor: string
+  /** Display string, e.g. `21.0.7` or `1.8.0_392`. */
   version: string
   major: number
+  /** Raw `os.arch`, e.g. `amd64`. */
   arch: string
+  vendor: string
+  is64bit: boolean
   /** `managed` = downloaded by the launcher, `system` = detected on the machine. */
   source: 'managed' | 'system'
 }
 
 export interface SystemInfo {
-  totalRamMb: number
+  totalRamMib: number | null
   os: string
   appVersion: string
   dataDir: string
 }
 
-export type VersionType = 'release' | 'snapshot' | 'old_beta' | 'old_alpha'
-
-export interface MinecraftVersion {
+/** An entry of a Prism meta version list. `type` is `release`/`snapshot`/`old_beta`/`old_alpha` for Minecraft. */
+export interface VersionEntry {
   version: string
-  type: VersionType
+  type: string | null
   releaseTime: string
   recommended: boolean
 }
-
-export interface LoaderVersion {
-  version: string
-  releaseTime: string
-  recommended: boolean
-}
+export type MinecraftVersion = VersionEntry
+export type LoaderVersion = VersionEntry
 
 // ---- content ----
 
-export type Platform = 'modrinth' | 'curseforge'
-export type ResourceKind = 'mod' | 'modpack' | 'resourcepack' | 'shader'
-/** Kinds that exist as local files inside an instance. */
-export type LocalResourceKind = Exclude<ResourceKind, 'modpack'>
+export type Platform = 'modrinth' | 'curseForge'
+export type ResourceKind = 'mod' | 'resourcePack' | 'shaderPack' | 'dataPack' | 'modpack' | 'world'
+/** Kinds that exist as files inside an instance and can be installed into it. */
+export type LocalResourceKind = Exclude<ResourceKind, 'modpack' | 'world'>
 
 export interface SearchQuery {
   platform: Platform
@@ -168,20 +177,19 @@ export interface SearchQuery {
 export interface SearchHit {
   platform: Platform
   projectId: string
-  kind: ResourceKind
   slug: string
   title: string
-  author: string
   description: string
-  iconUrl?: string
+  author: string
+  iconUrl: string | null
   downloads: number
   categories: string[]
-  updatedAt: string
 }
 
-export interface SearchResult {
+export interface SearchPage {
   hits: SearchHit[]
-  total: number
+  offset: number
+  totalHits: number
 }
 
 export interface VersionFilter {
@@ -190,67 +198,95 @@ export interface VersionFilter {
 }
 
 export interface VersionFile {
-  fileName: string
+  /** `null` when the author disabled third-party downloads (CurseForge); see `downloadPage`. */
+  url: string | null
+  /** Page where the user can download a file with no `url` by hand. */
+  downloadPage: string | null
+  filename: string
   size: number
+  hashes: { sha1: string | null; sha512: string | null }
   primary: boolean
-  /** CurseForge: the author disabled third-party downloads for this file. */
-  blocked: boolean
-  /** Page where the user can download a blocked file manually. */
-  manualUrl?: string
 }
 
 export interface ProjectVersion {
+  platform: Platform
   id: string
   projectId: string
-  platform: Platform
   name: string
   versionNumber: string
   releaseType: 'release' | 'beta' | 'alpha'
   gameVersions: string[]
-  loaders: string[]
-  datePublished: string
-  downloads: number
+  loaders: LoaderId[]
   files: VersionFile[]
+  dependencies: { projectId: string | null; versionId: string | null; kind: 'required' | 'optional' | 'embedded' | 'incompatible' }[]
+  published: string
 }
 
 export interface ResourceMetadata {
+  id: string
   name: string
-  version?: string
-  authors?: string[]
-  description?: string
-  iconUrl?: string
+  version: string | null
+  authors: string[]
+  description: string | null
+  /** `data:image/png;base64,...` URL of the embedded icon. */
+  icon: string | null
+  loader: LoaderId | null
 }
 
-export interface ResourceOrigin {
-  platform: Platform
-  projectId: string
-  versionId: string
+/** The packwiz `.pw.toml` entry that describes where a local file came from (only the fields the UI reads). */
+export interface PwMod {
+  name: string
+  filename: string
+  update: {
+    modrinth?: { 'mod-id': string; version: string }
+    curseforge?: { 'file-id': number; 'project-id': number }
+  }
 }
 
 export interface LocalResource {
   fileName: string
   enabled: boolean
   size: number
-  metadata?: ResourceMetadata
-  origin?: ResourceOrigin
+  metadata: ResourceMetadata | null
+  origin: PwMod | null
 }
 
-export interface ResourceUpdate {
+export interface AvailableUpdate {
   fileName: string
-  newVersion: ProjectVersion
+  name: string
+  currentVersion: string
+  latest: ProjectVersion
 }
 
 export interface World {
   dirName: string
-  name: string
-  gameMode: string
-  lastPlayed?: string
   size: number
+  lastPlayed: string | null
 }
 
-export type InstallOutcome =
-  | { status: 'installed'; fileName: string }
-  | { status: 'blocked'; fileName: string; manualUrl: string }
+/** A file the author forbids third parties to download; the user fetches it and drops it into `targetPath`. */
+export interface BlockedFile {
+  platform: Platform
+  projectId: string
+  name: string
+  fileName: string
+  /** Relative to the instance's game folder, e.g. `mods/example.jar`. */
+  targetPath: string
+  downloadPage: string | null
+  sha1: string | null
+}
+
+export interface InstallReport {
+  installed: { platform: Platform; projectId: string; name: string; fileName: string; isDependency: boolean }[]
+  blocked: BlockedFile[]
+  /** Required dependencies without a compatible version, as `platform:project id`. */
+  unresolvedDependencies: string[]
+}
+
+export interface ModpackImport {
+  instance: Instance
+  blocked: BlockedFile[]
+}
 
 // ---- events ----
 
@@ -261,7 +297,9 @@ export interface ProgressEvent {
   stage: string
   done: number
   total: number
+  /** The task ended successfully. */
   finished?: boolean
+  /** The task failed; this is the message. */
   error?: string
 }
 
@@ -278,6 +316,6 @@ export type RunState = 'stopped' | 'preparing' | 'running' | 'stopping'
 export interface InstanceRunState {
   instanceId: string
   state: RunState
-  /** Set when the game exited unsuccessfully. */
+  /** Set when the game process has exited, if the OS reported a code. */
   exitCode?: number
 }

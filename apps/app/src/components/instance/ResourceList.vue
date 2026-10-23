@@ -3,10 +3,10 @@ import { ArrowUpCircle, Plus, RefreshCw, Search, Trash2 } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as api from '../../api/commands'
-import type { LocalResource, LocalResourceKind, ResourceUpdate } from '../../api/types'
+import type { AvailableUpdate, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n/ru'
 import { useTasksStore } from '../../stores/tasks'
-import { formatBytes } from '../../utils/format'
+import { formatBytes, originPlatform } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
@@ -17,7 +17,7 @@ const tasks = useTasksStore()
 const resources = ref<LocalResource[]>([])
 const loading = ref(true)
 const filter = ref('')
-const updates = ref<Map<string, ResourceUpdate>>(new Map())
+const updates = ref<Map<string, AvailableUpdate>>(new Map())
 const checking = ref(false)
 const toDelete = ref<LocalResource | null>(null)
 
@@ -68,12 +68,10 @@ async function checkUpdates() {
 async function applyUpdate(r: LocalResource) {
   const update = updates.value.get(r.fileName)
   if (!update) return
-  const result = await tasks.guard(() => api.installVersion(props.instanceId, update.newVersion, props.kind))
-  if (result?.status === 'blocked') {
-    tasks.toast(`${t.browse.blocked}: ${result.manualUrl}`, 'error')
-    return
-  }
-  if (result && result.fileName !== r.fileName) await tasks.guard(() => api.deleteResource(props.instanceId, props.kind, r.fileName))
+  const report = await tasks.guard(() => api.installVersion(props.instanceId, update.latest, props.kind))
+  if (!report) return
+  tasks.showBlocked(report.blocked)
+  // core replaces the old file of an already installed project, so nothing is deleted here
   tasks.toast(t.instance.updated, 'ok')
   await load()
 }
@@ -88,7 +86,7 @@ function browse() {
     <div class="flex items-center gap-2">
       <div class="relative max-w-xs flex-1">
         <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />
-        <input v-model="filter" class="input pl-8" :placeholder="t.instance.filterPlaceholder" :aria-label="t.instance.filterPlaceholder" />
+        <input v-model="filter" class="input !pl-8" :placeholder="t.instance.filterPlaceholder" :aria-label="t.instance.filterPlaceholder" />
       </div>
       <span class="mr-auto text-faint">{{ resources.length }}</span>
       <button class="btn" :disabled="checking || !resources.length" @click="checkUpdates">
@@ -102,7 +100,7 @@ function browse() {
     <ul v-else class="flex flex-col gap-1.5">
       <li v-for="r in visible" :key="r.fileName" class="card flex items-center gap-3 px-3 py-2" :class="r.enabled ? '' : 'opacity-60'">
         <ToggleSwitch :model-value="r.enabled" :label="t.common.enabled" @update:model-value="toggle(r, $event)" />
-        <img v-if="r.metadata?.iconUrl" :src="r.metadata.iconUrl" alt="" class="pixelated size-9 rounded-md" />
+        <img v-if="r.metadata?.icon" :src="r.metadata.icon" alt="" class="pixelated size-9 rounded-md" />
         <span v-else class="pix flex size-9 shrink-0 items-center justify-center bg-accent/15 font-bold text-accent">
           {{ (r.metadata?.name ?? r.fileName).charAt(0).toUpperCase() }}
         </span>
@@ -111,12 +109,12 @@ function browse() {
             <span class="truncate font-semibold">{{ r.metadata?.name ?? r.fileName }}</span>
             <span v-if="r.metadata?.version" class="badge">{{ r.metadata.version }}</span>
             <span v-if="!r.origin" class="badge" :title="t.instance.unknownOrigin">?</span>
-            <span v-else class="badge badge-accent">{{ r.origin.platform === 'modrinth' ? 'Modrinth' : 'CurseForge' }}</span>
+            <span v-else class="badge badge-accent">{{ originPlatform(r.origin) === 'modrinth' ? 'Modrinth' : 'CurseForge' }}</span>
           </div>
           <div class="truncate text-[12px] text-faint">{{ r.fileName }} · {{ formatBytes(r.size) }}<template v-if="r.metadata?.authors"> · {{ r.metadata.authors.join(', ') }}</template></div>
         </div>
         <button v-if="updates.has(r.fileName)" class="btn btn-primary h-7" @click="applyUpdate(r)">
-          <ArrowUpCircle :size="14" />{{ t.instance.updateTo }} {{ updates.get(r.fileName)!.newVersion.versionNumber }}
+          <ArrowUpCircle :size="14" />{{ t.instance.updateTo }} {{ updates.get(r.fileName)!.latest.versionNumber }}
         </button>
         <button class="btn btn-ghost btn-icon text-muted hover:!text-danger" :aria-label="t.common.delete" @click="toDelete = r"><Trash2 :size="15" /></button>
       </li>

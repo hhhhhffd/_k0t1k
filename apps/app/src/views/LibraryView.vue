@@ -103,7 +103,7 @@ async function importPack() {
       <h1 class="mr-auto text-xl font-bold">{{ t.nav.library }}</h1>
       <div class="relative w-64">
         <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />
-        <input v-model="search" class="input pl-8" :placeholder="t.library.searchPlaceholder" :aria-label="t.common.search" />
+        <input v-model="search" class="input !pl-8" :placeholder="t.library.searchPlaceholder" :aria-label="t.common.search" />
       </div>
       <div class="flex gap-0.5 rounded-lg border border-line p-0.5">
         <button class="btn btn-ghost btn-icon h-7 !w-7" :class="view === 'grid' ? '!bg-hover' : ''" :title="t.library.grid" :aria-label="t.library.grid" @click="setView('grid')"><LayoutGrid :size="15" /></button>

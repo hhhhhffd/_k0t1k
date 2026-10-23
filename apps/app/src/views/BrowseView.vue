@@ -9,17 +9,18 @@ import ProjectIcon from '../components/ProjectIcon.vue'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
-import { formatCount, formatRelative, LOADER_LABELS, loaderOf, minecraftVersionOf } from '../utils/format'
+import { formatCount, LOADER_LABELS, loaderOf, minecraftVersionOf } from '../utils/format'
 
 const PAGE = 20
-const kinds: ResourceKind[] = ['mod', 'modpack', 'resourcepack', 'shader']
+const kinds = ['mod', 'modpack', 'resourcePack', 'shaderPack'] as const satisfies readonly ResourceKind[]
+type BrowseKind = (typeof kinds)[number]
 const route = useRoute()
 const store = useInstancesStore()
 const tasks = useTasksStore()
 
 const queryKind = route.query.kind
 const platform = ref<Platform>('modrinth')
-const kind = ref<ResourceKind>(kinds.includes(queryKind as ResourceKind) ? (queryKind as ResourceKind) : 'mod')
+const kind = ref<BrowseKind>(kinds.find((k) => k === queryKind) ?? 'mod')
 const query = ref('')
 const gameVersion = ref('')
 const loader = ref<LoaderId | ''>('')
@@ -29,7 +30,7 @@ const mcVersions = ref<MinecraftVersion[]>([])
 const hits = ref<SearchHit[]>([])
 const total = ref(0)
 const loading = ref(false)
-const selected = ref<SearchHit | null>(null)
+const selected = ref<{ hit: SearchHit; kind: BrowseKind } | null>(null)
 
 const instance = computed(() => store.byId(instanceId.value))
 const showLoader = computed(() => kind.value === 'mod' || kind.value === 'modpack')
@@ -60,7 +61,7 @@ async function run(append = false) {
   loading.value = false
   if (!result) return
   hits.value = append ? [...hits.value, ...result.hits] : result.hits
-  total.value = result.total
+  total.value = result.totalHits
 }
 
 let debounce: ReturnType<typeof setTimeout> | undefined
@@ -92,7 +93,7 @@ onMounted(async () => {
       <h1 class="mr-auto text-xl font-bold">{{ t.browse.title }}</h1>
       <div class="flex gap-0.5 rounded-lg border border-line p-0.5" role="group">
         <button class="btn btn-ghost h-7" :class="platform === 'modrinth' ? '!bg-accent !text-accent-fg' : ''" @click="platform = 'modrinth'">Modrinth</button>
-        <button class="btn btn-ghost h-7" :class="platform === 'curseforge' ? '!bg-accent !text-accent-fg' : ''" @click="platform = 'curseforge'">CurseForge</button>
+        <button class="btn btn-ghost h-7" :class="platform === 'curseForge' ? '!bg-accent !text-accent-fg' : ''" @click="platform = 'curseForge'">CurseForge</button>
       </div>
     </header>
 
@@ -113,7 +114,7 @@ onMounted(async () => {
     <div class="flex flex-wrap items-center gap-2">
       <div class="relative min-w-60 flex-1">
         <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />
-        <input v-model="query" class="input pl-8" :placeholder="t.browse.searchPlaceholder" :aria-label="t.common.search" />
+        <input v-model="query" class="input !pl-8" :placeholder="t.browse.searchPlaceholder" :aria-label="t.common.search" />
       </div>
       <select v-model="gameVersion" class="input w-40" :aria-label="t.browse.gameVersion">
         <option value="">{{ t.browse.anyVersion }}</option>
@@ -135,7 +136,7 @@ onMounted(async () => {
     <p class="text-[12px] text-faint">{{ t.browse.results }}: {{ total }}</p>
     <ul class="flex flex-col gap-2">
       <li v-for="hit in hits" :key="hit.projectId">
-        <button class="card flex w-full items-start gap-3 p-3 text-left transition-colors hover:border-accent/60" @click="selected = hit">
+        <button class="card flex w-full items-start gap-3 p-3 text-left transition-colors hover:border-accent/60" @click="selected = { hit, kind }">
           <ProjectIcon :hit="hit" :size="56" />
           <div class="min-w-0 flex-1">
             <div class="flex items-baseline gap-2">
@@ -150,7 +151,6 @@ onMounted(async () => {
           <div class="shrink-0 text-right text-[12px] text-muted">
             <div class="font-semibold text-fg">{{ formatCount(hit.downloads) }}</div>
             <div>{{ t.browse.downloads }}</div>
-            <div class="mt-1 text-faint">{{ formatRelative(hit.updatedAt) }}</div>
           </div>
         </button>
       </li>
@@ -161,7 +161,8 @@ onMounted(async () => {
 
     <ProjectDrawer
       v-if="selected"
-      :hit="selected"
+      :hit="selected.hit"
+      :kind="selected.kind"
       :instance-id="instanceId"
       :game-version="gameVersion || undefined"
       :loader="showLoader && loader ? loader : undefined"

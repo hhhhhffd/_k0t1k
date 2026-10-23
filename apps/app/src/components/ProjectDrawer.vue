@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { ArrowUpRight, Download, ExternalLink, ShieldAlert, X } from '@lucide/vue'
-import { openUrl } from '@tauri-apps/plugin-opener'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getProjectVersions, installVersion, isTauri } from '../api/commands'
-import type { LoaderId, ProjectVersion, SearchHit } from '../api/types'
+import { getProjectVersions, installVersion } from '../api/commands'
+import type { LoaderId, ProjectVersion, ResourceKind, SearchHit } from '../api/types'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
+import { openExternal } from '../utils/external'
 import { formatBytes, formatCount, formatDate } from '../utils/format'
 import ProjectIcon from './ProjectIcon.vue'
 
-const props = defineProps<{ hit: SearchHit; instanceId: string; gameVersion?: string; loader?: LoaderId }>()
+const props = defineProps<{ hit: SearchHit; kind: ResourceKind; instanceId: string; gameVersion?: string; loader?: LoaderId }>()
 const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
@@ -22,7 +22,7 @@ const packName = ref(props.hit.title)
 const busy = ref<string | null>(null)
 const installedIds = ref(new Set<string>())
 
-const isPack = computed(() => props.hit.kind === 'modpack')
+const isPack = computed(() => props.kind === 'modpack')
 
 onMounted(async () => {
   window.addEventListener('keydown', onKey)
@@ -35,24 +35,21 @@ function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
 }
 
-async function openManual(url: string) {
-  if (isTauri) await tasks.guard(() => openUrl(url))
-  else window.open(url, '_blank', 'noopener')
-}
-
 async function install(v: ProjectVersion) {
   busy.value = v.id
   if (isPack.value) {
     const inst = await tasks.guard(() => store.installModpack(v, packName.value.trim() || undefined))
     if (inst) tasks.toast(t.browse.installedOk(inst.name), 'ok')
-  } else if (props.hit.kind !== 'modpack') {
-    const kind = props.hit.kind
-    const outcome = await tasks.guard(() => installVersion(target.value, v, kind))
-    if (outcome?.status === 'installed') {
-      installedIds.value = new Set(installedIds.value).add(v.id)
-      tasks.toast(t.browse.installedOk(outcome.fileName), 'ok')
-    } else if (outcome?.status === 'blocked') {
-      tasks.toast(t.browse.blocked, 'error')
+  } else if (props.kind !== 'modpack' && props.kind !== 'world') {
+    const kind = props.kind
+    const report = await tasks.guard(() => installVersion(target.value, v, kind))
+    if (report) {
+      tasks.showBlocked(report.blocked)
+      const installed = report.installed.find((i) => !i.isDependency)
+      if (installed) {
+        installedIds.value = new Set(installedIds.value).add(v.id)
+        tasks.toast(t.browse.installedOk(installed.fileName), 'ok')
+      }
     }
   }
   busy.value = null
@@ -110,10 +107,10 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
             </div>
             <div class="mt-2 flex items-center gap-2">
               <span class="min-w-0 flex-1 truncate text-[12px] text-faint">
-                {{ v.files[0]?.fileName }} · {{ formatBytes(v.files[0]?.size ?? 0) }} · {{ formatDate(v.datePublished) }}
+                {{ v.files[0]?.filename }} · {{ formatBytes(v.files[0]?.size ?? 0) }} · {{ formatDate(v.published) }}
               </span>
-              <template v-if="v.files.some((f) => f.blocked)">
-                <button class="btn h-7" @click="openManual(v.files.find((f) => f.blocked)?.manualUrl ?? hit.slug)">
+              <template v-if="v.files.some((f) => f.url === null)">
+                <button class="btn h-7" @click="tasks.guard(() => openExternal(v.files.find((f) => f.url === null)?.downloadPage ?? ''))">
                   <ExternalLink :size="14" />{{ t.browse.blockedLink }}
                 </button>
               </template>
@@ -126,7 +123,7 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
                 <Download :size="14" />{{ installedIds.has(v.id) ? t.browse.installed : isPack ? t.browse.createFromPack : t.browse.install }}
               </button>
             </div>
-            <p v-if="v.files.some((f) => f.blocked)" class="mt-2 flex items-start gap-1.5 rounded-md bg-warn/10 p-2 text-[12px] text-warn">
+            <p v-if="v.files.some((f) => f.url === null)" class="mt-2 flex items-start gap-1.5 rounded-md bg-warn/10 p-2 text-[12px] text-warn">
               <ShieldAlert :size="14" class="mt-px shrink-0" />
               <span>{{ t.browse.blocked }}. {{ t.browse.blockedHint }}</span>
             </p>

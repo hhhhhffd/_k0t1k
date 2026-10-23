@@ -4,13 +4,13 @@
  * Errors: the command returns Err(String); the promise rejects with that string.
  *
  * Instances
- *   list_instances()                                         -> Instance[]
+ *   list_instances()                                         -> InstanceListing  (instances + unreadable ones)
  *   create_instance(request: CreateInstanceRequest)          -> Instance      (emits `progress` while downloading)
  *   rename_instance(instanceId, name)                        -> Instance
  *   delete_instance(instanceId)                              -> void
  *   copy_instance(instanceId, name)                          -> Instance
  *   set_instance_group(instanceId, group: string | null)     -> Instance
- *   update_instance_settings(instanceId, settings: InstanceSettings) -> Instance
+ *   update_instance_settings(instanceId, settings: InstanceSettingsUpdate) -> Instance
  *   open_instance_folder(instanceId)                         -> void
  * Launch
  *   launch_instance(instanceId, accountId?)                  -> void          (state via `instance-state`, output via `game-log`)
@@ -31,45 +31,47 @@
  *   remove_offline_account(accountId)                        -> void
  *   select_account(accountId)                                -> void
  * Content
- *   search_content(query: SearchQuery)                       -> SearchResult
+ *   search_content(query: SearchQuery)                       -> SearchPage
  *   get_project_versions(platform, projectId, filter: VersionFilter) -> ProjectVersion[]
- *   install_version(instanceId, version: ProjectVersion, kind: LocalResourceKind) -> InstallOutcome
+ *   install_version(instanceId, platform, projectId, versionId, kind: LocalResourceKind) -> InstallReport
  *   list_local_resources(instanceId, kind: LocalResourceKind) -> LocalResource[]
  *   toggle_resource(instanceId, kind, fileName, enabled)     -> void
  *   delete_resource(instanceId, kind, fileName)              -> void
- *   check_updates(instanceId, kind: LocalResourceKind)       -> ResourceUpdate[]
+ *   check_updates(instanceId, kind: LocalResourceKind)       -> AvailableUpdate[]
  *   list_worlds(instanceId)                                  -> World[]
- *   import_modpack_file(path, name?)                         -> Instance      (.mrpack / CurseForge .zip; emits `progress`)
- *   install_modpack_version(version: ProjectVersion, name?)  -> Instance      (emits `progress`)
+ *   import_modpack_file(path, name?)                         -> ModpackImport (.mrpack / CurseForge .zip; emits `progress`)
+ *   install_modpack_version(platform, projectId, versionId, name?) -> ModpackImport (emits `progress`)
  * Events (backend -> frontend, via emit)
- *   progress        ProgressEvent
+ *   progress        ProgressEvent    (a task ends with `finished` or `error`)
  *   game-log        GameLogLine
  *   instance-state  InstanceRunState
  */
 import type {
+  Account,
+  AvailableUpdate,
   CreateInstanceRequest,
   GameLogLine,
   GlobalSettings,
   Instance,
+  InstanceListing,
   InstanceRunState,
-  InstanceSettings,
-  InstallOutcome,
+  InstanceSettingsUpdate,
+  InstallReport,
   JavaInstall,
   LoaderId,
   LoaderVersion,
   LocalResource,
   LocalResourceKind,
   MinecraftVersion,
+  ModpackImport,
   Platform,
   ProgressEvent,
   ProjectVersion,
-  ResourceUpdate,
+  SearchPage,
   SearchQuery,
-  SearchResult,
   SystemInfo,
   VersionFilter,
   World,
-  Account,
 } from './types'
 
 export type Unlisten = () => void
@@ -107,7 +109,7 @@ async function subscribe<T>(event: string, cb: (payload: T) => void): Promise<Un
 }
 
 // ---- instances ----
-export const listInstances = () => call<Instance[]>('list_instances')
+export const listInstances = () => call<InstanceListing>('list_instances')
 export const createInstance = (request: CreateInstanceRequest) =>
   call<Instance>('create_instance', { request })
 export const renameInstance = (instanceId: string, name: string) =>
@@ -117,7 +119,7 @@ export const copyInstance = (instanceId: string, name: string) =>
   call<Instance>('copy_instance', { instanceId, name })
 export const setInstanceGroup = (instanceId: string, group: string | null) =>
   call<Instance>('set_instance_group', { instanceId, group })
-export const updateInstanceSettings = (instanceId: string, settings: InstanceSettings) =>
+export const updateInstanceSettings = (instanceId: string, settings: InstanceSettingsUpdate) =>
   call<Instance>('update_instance_settings', { instanceId, settings })
 export const openInstanceFolder = (instanceId: string) =>
   call<void>('open_instance_folder', { instanceId })
@@ -149,14 +151,21 @@ export const removeOfflineAccount = (accountId: string) =>
 export const selectAccount = (accountId: string) => call<void>('select_account', { accountId })
 
 // ---- content ----
-export const searchContent = (query: SearchQuery) => call<SearchResult>('search_content', { query })
+export const searchContent = (query: SearchQuery) => call<SearchPage>('search_content', { query })
 export const getProjectVersions = (platform: Platform, projectId: string, filter: VersionFilter) =>
   call<ProjectVersion[]>('get_project_versions', { platform, projectId, filter })
 export const installVersion = (
   instanceId: string,
   version: ProjectVersion,
   kind: LocalResourceKind,
-) => call<InstallOutcome>('install_version', { instanceId, version, kind })
+) =>
+  call<InstallReport>('install_version', {
+    instanceId,
+    platform: version.platform,
+    projectId: version.projectId,
+    versionId: version.id,
+    kind,
+  })
 export const listLocalResources = (instanceId: string, kind: LocalResourceKind) =>
   call<LocalResource[]>('list_local_resources', { instanceId, kind })
 export const toggleResource = (
@@ -168,12 +177,17 @@ export const toggleResource = (
 export const deleteResource = (instanceId: string, kind: LocalResourceKind, fileName: string) =>
   call<void>('delete_resource', { instanceId, kind, fileName })
 export const checkUpdates = (instanceId: string, kind: LocalResourceKind) =>
-  call<ResourceUpdate[]>('check_updates', { instanceId, kind })
+  call<AvailableUpdate[]>('check_updates', { instanceId, kind })
 export const listWorlds = (instanceId: string) => call<World[]>('list_worlds', { instanceId })
 export const importModpackFile = (path: string, name?: string) =>
-  call<Instance>('import_modpack_file', { path, name })
+  call<ModpackImport>('import_modpack_file', { path, name })
 export const installModpackVersion = (version: ProjectVersion, name?: string) =>
-  call<Instance>('install_modpack_version', { version, name })
+  call<ModpackImport>('install_modpack_version', {
+    platform: version.platform,
+    projectId: version.projectId,
+    versionId: version.id,
+    name,
+  })
 
 // ---- events ----
 export const onProgress = (cb: (e: ProgressEvent) => void) => subscribe('progress', cb)

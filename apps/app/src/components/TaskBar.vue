@@ -7,7 +7,7 @@ const tasks = useTasksStore()
 </script>
 
 <template>
-  <div v-if="tasks.tasks.length" class="anim-slide flex flex-col gap-2 border-t border-line bg-surface px-4 py-2" aria-live="polite">
+  <div v-if="tasks.tasks.length" class="anim-slide relative z-[45] flex flex-col gap-2 border-t border-line bg-surface px-4 py-2" aria-live="polite">
     <div v-for="task in tasks.tasks" :key="task.task" class="flex items-center gap-3">
       <AlertTriangle v-if="task.error" :size="15" class="text-danger" />
       <Check v-else-if="task.finished" :size="15" class="text-ok" />
