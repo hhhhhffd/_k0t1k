@@ -1,4 +1,6 @@
+#[cfg(unix)]
 use std::collections::BTreeSet;
+#[cfg(unix)]
 use std::sync::Arc;
 
 use crate::component::ComponentSpec;
