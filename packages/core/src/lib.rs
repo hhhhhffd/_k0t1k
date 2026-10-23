@@ -4,9 +4,13 @@ pub mod component;
 pub mod content;
 pub mod download;
 pub mod error;
+pub mod install;
 pub mod instance;
 pub mod java;
+pub mod launch;
+pub mod meta;
 pub mod paths;
+pub mod profile;
 pub mod progress;
 pub mod settings;
 
