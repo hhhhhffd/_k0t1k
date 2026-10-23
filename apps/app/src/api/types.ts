@@ -125,6 +125,11 @@ export interface Account {
   kind: 'offline'
 }
 
+/** What the window does while a game runs: destroy it (frees the web view's memory), hide it, or leave it. */
+export type OnGameLaunch = 'free_memory' | 'hide_to_tray' | 'keep_open'
+/** What the window's close button does: close to the tray or exit the launcher. */
+export type OnClose = 'tray' | 'exit'
+
 export interface GlobalSettings {
   java: JavaSettings
   memory: MemorySettings
@@ -135,6 +140,7 @@ export interface GlobalSettings {
   playtime: { record: boolean; show: boolean; totalSecs: number }
   /** `theme` is a built-in `ThemeId` or the id of one of `customThemes`. */
   ui: { theme: string; liteMode: boolean; customThemes: CustomTheme[] }
+  behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
   accounts: Account[]
   selectedAccountId: string | null
 }
@@ -322,6 +328,8 @@ export interface ProgressEvent {
 export type LogStream = 'stdout' | 'stderr' | 'launcher'
 
 export interface GameLogLine {
+  /** Numbers lines across all instances; the backend keeps the order, so a larger one is newer. */
+  seq: number
   stream: LogStream
   line: string
 }

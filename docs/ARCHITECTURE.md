@@ -50,6 +50,27 @@ instances/<id>/          instance.json + minecraft/ (game dir) + natives/
 cache/                   downloads cache
 ```
 
+## Window lifecycle and tray (`src-tauri/src/window.rs`, `tray.rs`)
+
+Goal: while a game runs the launcher costs ~15-30 MB and no CPU. WebView2's processes are the heavy part, so
+the main window is destroyed (not hidden) and the Rust process alone keeps running behind a tray icon.
+
+- The tray icon exists for the whole run. Left click opens the window (recreating it); the menu has "Открыть",
+  a submenu of running games with a stop item each (rebuilt on every `instance-state`, no timers) and "Выход".
+- `behavior.onGameLaunch`: `free_memory` (default) destroys the window when a game reaches `running`,
+  `hide_to_tray` hides it, `keep_open` does nothing. When the last game ends, a window released this way is
+  recreated/shown. Opening the window yourself clears the mark, so a window you closed afterwards stays closed.
+- `behavior.onClose`: `tray` (default) destroys the window on close, `exit` quits. With games running, exit
+  (and the tray's "Выход") asks in a native dialog: Да = kill games (waits until playtime is saved), Нет = leave
+  them running, Отмена = stay. Closing the last window never exits (`RunEvent::ExitRequested` with no code is
+  prevented); only `AppHandle::exit` does.
+- A recreated window restores state from the backend: `list_run_states`, `list_instances` and
+  `get_game_logs` (ring buffer of the last 5000 lines per instance, kept until the instance's next launch).
+  Log lines carry a global `seq` so lines delivered both live and by the backfill are not duplicated.
+  While no window exists the log batcher keeps recording but does not emit.
+- A second launch of the exe shows the running launcher (`tauri-plugin-single-instance`: a named mutex and a
+  hidden window on Windows, nothing on disk).
+
 ## Later (ideas already accounted for)
 
 Themes and a lightweight mode for low-end PCs, automatic JVM argument tuning, ely.by skins,

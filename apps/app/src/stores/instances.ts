@@ -7,12 +7,9 @@ import { useTasksStore } from './tasks'
 export const MAX_LOG_LINES = 5000
 const LOG_FLUSH_MS = 100
 
-/** A log line with a stable key, so trimming the head of the buffer does not re-render the rest of the list. */
-export interface LogEntry extends GameLogLine {
-  seq: number
-}
 interface LogBuffer {
-  lines: LogEntry[]
+  /** `seq` is a stable key, so trimming the head of the buffer does not re-render the rest of the list. */
+  lines: GameLogLine[]
   /** Lines pushed out by the cap since the last clear. */
   dropped: number
 }
@@ -26,7 +23,8 @@ export const useInstancesStore = defineStore('instances', () => {
   // Buffers are replaced (never mutated) once per flush, so a flood of lines costs one reactive update per flush.
   const logs = shallowReactive(new Map<string, LogBuffer>())
   const pendingLogs = new Map<string, LogBuffer>()
-  let logSeq = 0
+  // newest line seen per instance: a line can arrive both live and in the backfill of a fresh window
+  const lastSeq = new Map<string, number>()
   let flushTimer: ReturnType<typeof setTimeout> | undefined
 
   const groups = computed(() => [...new Set(instances.value.map((i) => i.group).filter((g): g is string => !!g))].sort())
@@ -88,7 +86,9 @@ export const useInstancesStore = defineStore('instances', () => {
 
   function pushLogs(batch: GameLogBatch) {
     const pending = pendingLogs.get(batch.instanceId) ?? { lines: [], dropped: 0 }
-    for (const l of batch.lines) pending.lines.push({ ...l, seq: logSeq++ })
+    const seen = lastSeq.get(batch.instanceId) ?? -1
+    for (const l of batch.lines) if (l.seq > seen) pending.lines.push(l)
+    lastSeq.set(batch.instanceId, Math.max(seen, batch.lines[batch.lines.length - 1]?.seq ?? seen))
     // while the window is hidden nothing flushes, so the pending part is capped as well
     if (pending.lines.length > MAX_LOG_LINES) {
       pending.dropped += pending.lines.length - MAX_LOG_LINES
@@ -96,6 +96,19 @@ export const useInstancesStore = defineStore('instances', () => {
     }
     pendingLogs.set(batch.instanceId, pending)
     flushTimer ??= setTimeout(() => requestAnimationFrame(flushLogs), LOG_FLUSH_MS)
+  }
+
+  /** Fills the log of a window opened while the game was already running, with what the backend kept. */
+  async function backfillLogs(id: string) {
+    const kept = await api.getGameLogs(id)
+    // live lines that arrived while the request was in flight are newer than the kept ones that overlap them
+    flushLogs()
+    const current = logs.get(id) ?? EMPTY_LOG
+    const oldest = current.lines[0]?.seq ?? Infinity
+    const merged = kept.filter((l) => l.seq < oldest).concat(current.lines)
+    const overflow = Math.max(0, merged.length - MAX_LOG_LINES)
+    lastSeq.set(id, Math.max(lastSeq.get(id) ?? -1, merged[merged.length - 1]?.seq ?? -1))
+    if (merged.length) logs.set(id, { lines: overflow ? merged.slice(overflow) : merged, dropped: current.dropped + overflow })
   }
 
   let started = false
@@ -112,6 +125,7 @@ export const useInstancesStore = defineStore('instances', () => {
     ])
     for (const s of await api.listRunStates()) runStates.set(s.instanceId, s.state)
     await refresh()
+    await Promise.all(instances.value.map((i) => backfillLogs(i.id)))
   }
 
   return {

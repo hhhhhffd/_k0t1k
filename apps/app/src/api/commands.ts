@@ -16,6 +16,7 @@
  *   launch_instance(instanceId, accountId?)                  -> void          (state via `instance-state`, output via `game-log`)
  *   kill_instance(instanceId)                                -> void
  *   list_run_states()                                        -> InstanceRunState[]
+ *   get_game_logs(instanceId)                                -> GameLogLine[]  (recent lines, up to MAX_LOG_LINES; for a window opened mid-game)
  * Versions
  *   list_minecraft_versions()                                -> MinecraftVersion[]
  *   list_loader_versions(minecraftVersion, loader: LoaderId) -> LoaderVersion[]
@@ -53,6 +54,7 @@ import type {
   AvailableUpdate,
   CreateInstanceRequest,
   GameLogBatch,
+  GameLogLine,
   GlobalSettings,
   Instance,
   InstanceListing,
@@ -131,6 +133,7 @@ export const launchInstance = (instanceId: string, accountId?: string) =>
   call<void>('launch_instance', { instanceId, accountId })
 export const killInstance = (instanceId: string) => call<void>('kill_instance', { instanceId })
 export const listRunStates = () => call<InstanceRunState[]>('list_run_states')
+export const getGameLogs = (instanceId: string) => call<GameLogLine[]>('get_game_logs', { instanceId })
 
 // ---- versions ----
 export const listMinecraftVersions = () => call<MinecraftVersion[]>('list_minecraft_versions')

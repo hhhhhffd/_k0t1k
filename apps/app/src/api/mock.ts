@@ -92,6 +92,7 @@ const defaultSettings: GlobalSettings = {
   env: {},
   playtime: { record: true, show: true, totalSecs: 0 },
   ui: { theme: 'k0t1k', liteMode: false, customThemes: [] },
+  behavior: { onGameLaunch: 'free_memory', onClose: 'tray' },
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],
   selectedAccountId: 'acc-1',
 }
@@ -271,7 +272,9 @@ const setRun = (instanceId: string, state: InstanceRunState['state'], exitCode?:
   runStates.set(instanceId, s)
   emit('instance-state', s)
 }
-const logBatch = (instanceId: string, lines: GameLogLine[]) => emit('game-log', { instanceId, lines } satisfies GameLogBatch)
+let logSeq = 0
+const logBatch = (instanceId: string, lines: Omit<GameLogLine, 'seq'>[]) =>
+  emit('game-log', { instanceId, lines: lines.map((l) => ({ ...l, seq: logSeq++ })) } satisfies GameLogBatch)
 const log = (instanceId: string, stream: GameLogLine['stream'], line: string) => logBatch(instanceId, [{ stream, line }])
 
 /** A chatty modpack: 20k lines in batches, to exercise the log cap and batching. */
@@ -364,6 +367,7 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'launch_instance': await launch(a.instanceId as string); return undefined
     case 'kill_instance': await kill(a.instanceId as string); return undefined
     case 'list_run_states': return [...runStates.values()]
+    case 'get_game_logs': return []
     case 'list_minecraft_versions': return minecraftVersions
     case 'list_loader_versions': { await sleep(250); return loaderVersions(a.minecraftVersion as string, a.loader as LoaderId) }
     case 'detect_java': await sleep(400); return javaInstalls

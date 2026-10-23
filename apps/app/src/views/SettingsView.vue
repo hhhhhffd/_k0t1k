@@ -9,6 +9,7 @@ import mascot from '../assets/mascot.png'
 import CommandFields from '../components/fields/CommandFields.vue'
 import MemoryFields from '../components/fields/MemoryFields.vue'
 import WindowFields from '../components/fields/WindowFields.vue'
+import SelectMenu from '../components/SelectMenu.vue'
 import ThemeEditor from '../components/ThemeEditor.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n/ru'
@@ -20,7 +21,7 @@ const store = useSettingsStore()
 const tasks = useTasksStore()
 const route = useRoute()
 
-const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'appearance', 'accounts', 'storage', 'about'] as const
+const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'behavior', 'appearance', 'accounts', 'storage', 'about'] as const
 type Section = (typeof sectionIds)[number]
 const hashSection = route.hash.slice(1) as Section
 const section = ref<Section>(sectionIds.includes(hashSection) ? hashSection : 'java')
@@ -37,6 +38,9 @@ const themeTiles = computed(() => [
   ...THEMES.map((th) => ({ id: th.id as string, label: th.label, base: th.id, vars: {} as Record<string, string> })),
   ...(s.value?.ui.customThemes ?? []).map((c) => ({ id: c.id, label: c.name, base: c.base, vars: themeVars(c.colors) })),
 ])
+
+const onGameLaunchOptions = Object.entries(t.settings.onGameLaunchOptions).map(([value, label]) => ({ value, label }))
+const onCloseOptions = Object.entries(t.settings.onCloseOptions).map(([value, label]) => ({ value, label }))
 
 async function rescan() {
   scanning.value = true
@@ -196,6 +200,17 @@ async function addAccount() {
           <span><span class="block font-medium">{{ t.settings.lite }}</span><span class="text-[12px] text-faint">{{ t.settings.liteHint }}</span></span>
         </section>
       </template>
+
+      <section v-else-if="section === 'behavior'" class="card flex flex-col gap-4 p-4">
+        <div class="flex items-center gap-4">
+          <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.onGameLaunch }}</span><span class="text-[12px] text-faint">{{ t.settings.onGameLaunchHint }}</span></span>
+          <SelectMenu v-model="s.behavior.onGameLaunch" class="w-52" :options="onGameLaunchOptions" :aria-label="t.settings.onGameLaunch" />
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.onClose }}</span><span class="text-[12px] text-faint">{{ t.settings.onCloseHint }}</span></span>
+          <SelectMenu v-model="s.behavior.onClose" class="w-52" :options="onCloseOptions" :aria-label="t.settings.onClose" />
+        </div>
+      </section>
 
       <template v-else-if="section === 'accounts'">
         <section class="card p-4">
