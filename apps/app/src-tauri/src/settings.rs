@@ -1,5 +1,6 @@
 //! Global settings, accounts and system information.
 
+use k0t1k_core::instance::SharedFolder;
 use k0t1k_core::launch::offline_uuid;
 use k0t1k_core::settings::{Account, AccountKind, GlobalSettings, total_memory_mib};
 use std::path::PathBuf;
@@ -72,6 +73,16 @@ pub fn get_system_info(app: AppHandle, state: State<'_, AppState>) -> SystemInfo
 #[tauri::command]
 pub fn open_data_dir(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
     app.opener().open_path(state.paths.root().display().to_string(), None::<&str>)?;
+    Ok(())
+}
+
+/// Opens `shared/<folder>`, creating it first so the button works before any instance shares it.
+#[tauri::command]
+pub async fn open_shared_folder(app: AppHandle, state: State<'_, AppState>, folder: SharedFolder) -> CommandResult<()> {
+    let dir = state.paths.shared_dir().join(folder.dir_name());
+    let created = dir.clone();
+    blocking(move || std::fs::create_dir_all(&created).map_err(|source| k0t1k_core::Error::Io { path: created, source })).await?;
+    app.opener().open_path(dir.display().to_string(), None::<&str>)?;
     Ok(())
 }
 

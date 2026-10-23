@@ -4,16 +4,17 @@ pub(crate) mod fsutil;
 mod links;
 mod manager;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub use links::{disable_shared_resourcepacks, enable_shared_resourcepacks};
+pub use links::{SharedFolder, disable_shared, enable_shared, exists_in_linked_shared_folder};
 pub use manager::{BrokenInstance, CopyOptions, InstanceList, InstanceManager, NewInstance};
 
 use crate::component::ComponentSpec;
+use crate::error::Result;
 use crate::paths::Paths;
 use crate::settings::{CommandSettings, GlobalSettings, JavaSettings, MemorySettings, WindowSettings};
 
@@ -109,20 +110,35 @@ pub struct Instance {
     pub notes: String,
     #[serde(default)]
     pub settings: InstanceSettings,
-    /// Share `resourcepacks` with every other instance that has this on.
-    #[serde(default = "default_true")]
-    pub share_resourcepacks: bool,
+    /// Game folders linked to `shared/<folder>`, shared with every other instance that links them.
+    /// Old files had `shareResourcepacks: bool`; `Instance::from_json` converts it.
+    #[serde(default)]
+    pub shared_folders: BTreeSet<SharedFolder>,
 }
 
 fn default_icon() -> String {
     "default".to_owned()
 }
 
-fn default_true() -> bool {
-    true
-}
-
 impl Instance {
+    /// Parse `instance.json`. The legacy `shareResourcepacks` flag becomes `sharedFolders`
+    /// (true: only `resourcepacks`, false: none) unless the new field is present.
+    pub fn from_json(bytes: &[u8]) -> Result<Self> {
+        let mut value: serde_json::Value = serde_json::from_slice(bytes)?;
+        if let Some(object) = value.as_object_mut() {
+            let legacy = object.remove("shareResourcepacks");
+            if !object.contains_key("sharedFolders") {
+                let folders = match legacy.and_then(|flag| flag.as_bool()) {
+                    Some(true) => vec![SharedFolder::Resourcepacks],
+                    _ => Vec::new(),
+                };
+                object.insert("sharedFolders".to_owned(), serde_json::to_value(folders)?);
+            }
+        }
+        Ok(serde_json::from_value(value)?)
+    }
+
+
     pub fn dir(&self, paths: &Paths) -> PathBuf {
         paths.instances_dir().join(&self.id)
     }
@@ -182,10 +198,28 @@ mod tests {
             r#"{"name":"A","components":[{"uid":"net.minecraft","version":"1.21.1"}],"created":"2026-01-01T00:00:00Z"}"#,
         )
         .unwrap();
-        assert!(instance.share_resourcepacks);
+        assert!(instance.shared_folders.is_empty());
         assert_eq!(instance.icon, "default");
         assert_eq!(instance.settings, InstanceSettings::default());
         assert_eq!(instance.playtime, Playtime::default());
+    }
+
+    #[test]
+    fn legacy_share_flag_migrates_and_new_field_wins() {
+        let load = |extra: &str| {
+            Instance::from_json(
+                format!(r#"{{"name":"A","components":[],"created":"2026-01-01T00:00:00Z"{extra}}}"#).as_bytes(),
+            )
+            .unwrap()
+            .shared_folders
+        };
+        assert_eq!(load(r#","shareResourcepacks":true"#), BTreeSet::from([SharedFolder::Resourcepacks]));
+        assert!(load(r#","shareResourcepacks":false"#).is_empty());
+        assert_eq!(
+            load(r#","shareResourcepacks":false,"sharedFolders":["screenshots","shaderpacks"]"#),
+            BTreeSet::from([SharedFolder::Screenshots, SharedFolder::Shaderpacks])
+        );
+        assert!(load(r#","shareResourcepacks":true,"sharedFolders":[]"#).is_empty());
     }
 
     #[test]

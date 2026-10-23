@@ -17,7 +17,7 @@ use super::{BlockedFile, Clients, Hashes, Platform, Project, ProjectVersion, Res
 use crate::component::{ComponentSpec, MINECRAFT_UID};
 use crate::download::{Checksum, download_checked};
 use crate::error::{Error, IoContext, Result};
-use crate::instance::fsutil::is_link;
+use crate::instance::exists_in_linked_shared_folder;
 use crate::progress::{ProgressEvent, ProgressFn};
 
 const PARALLEL_DOWNLOADS: usize = 16;
@@ -355,7 +355,7 @@ async fn install_mrpack(
         });
     }
 
-    run_downloads(clients, &downloads, progress).await?;
+    run_downloads(clients, &downloads, game_dir, progress).await?;
     extract_overrides(
         zip_path,
         game_dir,
@@ -535,7 +535,7 @@ async fn install_curseforge(
         });
     }
 
-    run_downloads(clients, &downloads, progress).await?;
+    run_downloads(clients, &downloads, game_dir, progress).await?;
     extract_overrides(zip_path, game_dir, &[overrides], progress).await?;
 
     let index_dir = packwiz::index_dir(game_dir, ResourceKind::Mod);
@@ -545,11 +545,18 @@ async fn install_curseforge(
     Ok(report)
 }
 
+/// Files that already exist in a linked shared folder are kept: they are the user's, shared with
+/// other instances, and a pack from the internet must not replace them.
 async fn run_downloads(
     clients: &Clients,
     downloads: &[Download],
+    game_dir: &Path,
     progress: &ProgressFn,
 ) -> Result<()> {
+    let downloads: Vec<&Download> = downloads
+        .iter()
+        .filter(|download| !exists_in_linked_shared_folder(game_dir, &download.destination))
+        .collect();
     let total = downloads.len() as u64;
     let done = Arc::new(AtomicU64::new(0));
     let report = |done: u64| {
@@ -562,7 +569,7 @@ async fn run_downloads(
     };
     report(0);
 
-    stream::iter(downloads)
+    stream::iter(downloads.iter().copied())
         .map(|download| {
             let done = done.clone();
             async move {
@@ -602,8 +609,7 @@ async fn run_downloads(
 }
 
 /// Unpacks `<folder>/...` entries for each folder in order, later folders overwriting earlier ones.
-/// Files that already exist in a linked (shared) `resourcepacks` folder are kept: it holds the
-/// user's packs, which a pack from the internet must not replace.
+/// Files that already exist in a linked shared folder are kept (see `run_downloads`).
 async fn extract_overrides(
     zip_path: &Path,
     game_dir: &Path,
@@ -620,8 +626,6 @@ async fn extract_overrides(
     let folders: Vec<String> = folders.iter().map(|folder| (*folder).to_owned()).collect();
     tokio::task::spawn_blocking(move || -> Result<()> {
         let mut archive = zip::ZipArchive::new(File::open(&zip_path).at(&zip_path)?)?;
-        let shared_packs = game_dir.join("resourcepacks");
-        let packs_are_shared = is_link(&shared_packs);
         for folder in &folders {
             let prefix = format!("{}/", folder.trim_end_matches('/'));
             for index in 0..archive.len() {
@@ -638,7 +642,7 @@ async fn extract_overrides(
                     std::fs::create_dir_all(&destination).at(&destination)?;
                     continue;
                 }
-                if packs_are_shared && destination.starts_with(&shared_packs) && destination.exists() {
+                if exists_in_linked_shared_folder(&game_dir, &destination) {
                     continue;
                 }
                 if let Some(parent) = destination.parent() {
@@ -783,30 +787,68 @@ mod tests {
     }
 
     #[cfg(unix)]
+    fn link_shared_folder(game_dir: &Path, shared: &Path, folder: &str) {
+        std::fs::create_dir_all(shared).unwrap();
+        std::fs::create_dir_all(game_dir).unwrap();
+        std::os::unix::fs::symlink(shared, game_dir.join(folder)).unwrap();
+    }
+
+    #[cfg(unix)]
     #[tokio::test]
-    async fn overrides_do_not_replace_files_in_shared_resourcepacks() {
+    async fn overrides_do_not_replace_files_in_shared_folders() {
         let dir = temp_dir("shared-packs");
-        let shared = dir.join("shared");
-        std::fs::create_dir_all(&shared).unwrap();
-        std::fs::write(shared.join("mine.zip"), "user").unwrap();
         let game_dir = dir.join("game");
-        std::fs::create_dir_all(&game_dir).unwrap();
-        std::os::unix::fs::symlink(&shared, game_dir.join("resourcepacks")).unwrap();
+        let (packs, shaders) = (dir.join("shared-r"), dir.join("shared-s"));
+        link_shared_folder(&game_dir, &packs, "resourcepacks");
+        link_shared_folder(&game_dir, &shaders, "shaderpacks");
+        std::fs::write(packs.join("mine.zip"), "user").unwrap();
+        std::fs::write(shaders.join("mine.zip"), "user").unwrap();
+        // Not linked: overwritten as usual.
+        std::fs::create_dir_all(game_dir.join("screenshots")).unwrap();
+        std::fs::write(game_dir.join("screenshots/mine.png"), "user").unwrap();
 
         let zip = write_zip(
             &dir,
             &[
                 ("overrides/resourcepacks/mine.zip", "pack"),
                 ("overrides/resourcepacks/new.zip", "pack"),
+                ("overrides/shaderpacks/mine.zip", "pack"),
+                ("overrides/shaderpacks/new.zip", "pack"),
+                ("overrides/screenshots/mine.png", "pack"),
                 ("overrides/config/a.txt", "pack"),
             ],
         );
         extract_overrides(&zip, &game_dir, &["overrides"], &no_progress())
             .await
             .unwrap();
-        assert_eq!(std::fs::read_to_string(shared.join("mine.zip")).unwrap(), "user");
-        assert_eq!(std::fs::read_to_string(shared.join("new.zip")).unwrap(), "pack");
+        for shared in [&packs, &shaders] {
+            assert_eq!(std::fs::read_to_string(shared.join("mine.zip")).unwrap(), "user");
+            assert_eq!(std::fs::read_to_string(shared.join("new.zip")).unwrap(), "pack");
+        }
+        assert_eq!(std::fs::read_to_string(game_dir.join("screenshots/mine.png")).unwrap(), "pack");
         assert_eq!(std::fs::read_to_string(game_dir.join("config/a.txt")).unwrap(), "pack");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn downloads_do_not_replace_files_in_shared_folders() {
+        let clients = Clients::new(reqwest::Client::new(), None).unwrap();
+        let dir = temp_dir("shared-downloads");
+        let game_dir = dir.join("game");
+        let shaders = dir.join("shared-s");
+        link_shared_folder(&game_dir, &shaders, "shaderpacks");
+        std::fs::write(shaders.join("mine.zip"), "user").unwrap();
+
+        // The URL is unreachable and the checksum wrong: any attempt to download would fail.
+        let download = Download {
+            relative_path: "shaderpacks/mine.zip".to_owned(),
+            destination: game_dir.join("shaderpacks/mine.zip"),
+            urls: vec!["http://127.0.0.1:1/mine.zip".to_owned()],
+            checksum: Some(Checksum::Sha512("0".repeat(128))),
+        };
+        run_downloads(&clients, &[download], &game_dir, &no_progress()).await.unwrap();
+        assert_eq!(std::fs::read_to_string(shaders.join("mine.zip")).unwrap(), "user");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

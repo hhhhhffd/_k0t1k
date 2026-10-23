@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import type { Instance, InstanceSettings } from '../../api/types'
+import { type Instance, type InstanceSettings, SHARED_FOLDERS, type SharedFolder } from '../../api/types'
 import { t } from '../../i18n/ru'
 import { useInstancesStore } from '../../stores/instances'
 import { useSettingsStore } from '../../stores/settings'
@@ -22,9 +22,14 @@ const global = computed(() => settings.settings)
 const draft = reactive({
   icon: props.instance.icon,
   notes: props.instance.notes,
-  shareResourcepacks: props.instance.shareResourcepacks,
+  sharedFolders: [...props.instance.sharedFolders],
   settings: clone(props.instance.settings) as InstanceSettings,
 })
+const isShared = (folder: SharedFolder) => draft.sharedFolders.includes(folder)
+function setShared(folder: SharedFolder, on: boolean) {
+  draft.sharedFolders = SHARED_FOLDERS.filter((f) => (f === folder ? on : isShared(f)))
+  markDirty()
+}
 const dirty = ref(false)
 const markDirty = () => (dirty.value = true)
 
@@ -55,7 +60,7 @@ async function save() {
     store.updateSettings(props.instance.id, {
       icon: draft.icon,
       notes: draft.notes,
-      shareResourcepacks: draft.shareResourcepacks,
+      sharedFolders: draft.sharedFolders,
       settings: clone(draft.settings),
     }),
   )
@@ -86,12 +91,18 @@ async function save() {
         <span class="label">{{ t.iset.notes }}</span>
         <textarea v-model="draft.notes" class="input" rows="2" />
       </label>
-      <label class="flex items-center gap-3">
-        <ToggleSwitch v-model="draft.shareResourcepacks" :label="t.iset.shareResourcepacks" @update:model-value="markDirty" />
-        <span>
-          <span class="block font-medium">{{ t.iset.shareResourcepacks }}</span>
-          <span class="text-[12px] text-faint">{{ t.iset.shareHint }}</span>
-        </span>
+    </section>
+
+    <section class="card flex flex-col gap-3 p-4">
+      <h3 class="text-[14px] font-semibold">{{ t.iset.sharedFolders }}</h3>
+      <p class="text-[12px] text-faint">{{ t.iset.sharedFoldersHint }}</p>
+      <label v-for="folder in SHARED_FOLDERS" :key="folder" class="flex items-center gap-3">
+        <ToggleSwitch
+          :model-value="isShared(folder)"
+          :label="t.sharedFolder.names[folder]"
+          @update:model-value="setShared(folder, $event)"
+        />
+        <span class="font-medium">{{ t.sharedFolder.names[folder] }}</span>
       </label>
     </section>
 

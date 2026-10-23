@@ -93,6 +93,7 @@ const defaultSettings: GlobalSettings = {
   playtime: { record: true, show: true, totalSecs: 0 },
   ui: { theme: 'k0t1k', liteMode: false, customThemes: [] },
   behavior: { onGameLaunch: 'free_memory', onClose: 'tray' },
+  sharedFoldersDefault: ['resourcepacks', 'shaderpacks'],
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],
   selectedAccountId: 'acc-1',
 }
@@ -135,7 +136,7 @@ function components(mc: string, loader?: { id: LoaderId; version: string }): Ins
 }
 const newInstance = (fields: Pick<Instance, 'id' | 'name' | 'icon' | 'components'> & Partial<Instance>): Instance => ({
   group: null, created: new Date().toISOString(), lastPlayed: null, playtime: { totalSecs: 0, lastSecs: 0 },
-  managedPack: null, notes: '', shareResourcepacks: true, settings: {}, ...fields,
+  managedPack: null, notes: '', sharedFolders: [...settings.sharedFoldersDefault], settings: {}, ...fields,
 })
 const instances: Instance[] = [
   newInstance({ id: 'inst-1', name: 'Vanilla 1.21.4', icon: 'grass', components: components('1.21.4'), created: daysAgo(90), lastPlayed: daysAgo(1),
@@ -144,7 +145,7 @@ const instances: Instance[] = [
     created: daysAgo(60), lastPlayed: daysAgo(0.1), playtime: { totalSecs: 3600 * 74, lastSecs: 7200 }, notes: 'Sodium + Lithium + Iris',
     settings: { memory: { minMib: 1024, maxMib: 6144 } } }),
   newInstance({ id: 'inst-3', name: 'Create: Above and Beyond', icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'forge', version: '1.20.1-47.3.0' }),
-    created: daysAgo(30), lastPlayed: daysAgo(6), playtime: { totalSecs: 3600 * 12, lastSecs: 1800 }, shareResourcepacks: false,
+    created: daysAgo(30), lastPlayed: daysAgo(6), playtime: { totalSecs: 3600 * 12, lastSecs: 1800 }, sharedFolders: [],
     managedPack: { platform: 'modrinth', projectId: 'create-aab', versionId: 'v-aab-1', name: 'Create: Above and Beyond', versionName: '1.4.0' } }),
   newInstance({ id: 'inst-4', name: 'PvP 1.8.9', icon: 'sword', group: 'Выживание', components: components('1.8.9', { id: 'forge', version: '1.8.9-11.15.1.2318' }),
     created: daysAgo(200), playtime: { totalSecs: 3600 * 140, lastSecs: 900 }, lastPlayed: daysAgo(30) }),
@@ -359,8 +360,8 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'set_instance_group': { const i = findInstance(a.instanceId); i.group = (a.group as string | null) || null; return clone(i) }
     case 'update_instance_settings': {
       const i = findInstance(a.instanceId)
-      const { icon, notes, shareResourcepacks, settings: groups } = clone(a.settings as InstanceSettingsUpdate)
-      Object.assign(i, { icon, notes, shareResourcepacks, settings: groups })
+      const { icon, notes, sharedFolders, settings: groups } = clone(a.settings as InstanceSettingsUpdate)
+      Object.assign(i, { icon, notes, sharedFolders, settings: groups })
       return clone(i)
     }
     case 'open_instance_folder': return undefined
@@ -378,6 +379,7 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       return { totalRamMib: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir, portable: false, exeDir: 'C:\\Program Files\\_k0t1k' } satisfies SystemInfo
     case 'set_data_dir': dataDir = (a.path as string | null) ?? '%APPDATA%\\_k0t1k'; return true
     case 'open_data_dir': return undefined
+    case 'open_shared_folder': return undefined
     case 'add_offline_account': {
       const acc: Account = { id: nextId('acc'), name: a.name as string, kind: 'offline' }
       settings.accounts.push(acc)
@@ -442,7 +444,7 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       const path = a.path as string
       const inst = newInstance({
         id: nextId('inst'), name: (a.name as string | undefined) || (path.split(/[\\/]/).pop() ?? 'Модпак').replace(/\.(mrpack|zip)$/i, ''),
-        icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'fabric', version: '0.16.10' }), shareResourcepacks: false,
+        icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'fabric', version: '0.16.10' }),
       })
       await fakeTask(`import-${inst.id}`, `Импорт ${inst.name}`, ['Чтение манифеста', 'Скачивание модов', 'Применение overrides'], 450)
       instances.push(inst)
@@ -452,7 +454,7 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       const v = projectVersions(a.platform as Platform, a.projectId as string, {})[0]!
       const inst = newInstance({
         id: nextId('inst'), name: (a.name as string | undefined) || v.name, icon: 'gem', group: 'Модпаки',
-        components: components(v.gameVersions[0] ?? '1.20.1', { id: 'fabric', version: '0.16.10' }), shareResourcepacks: false,
+        components: components(v.gameVersions[0] ?? '1.20.1', { id: 'fabric', version: '0.16.10' }),
         managedPack: { platform: v.platform === 'modrinth' ? 'modrinth' : 'curseforge', projectId: v.projectId, versionId: v.id, name: v.name, versionName: v.versionNumber },
       })
       await fakeTask(`pack-${inst.id}`, `Установка ${v.name}`, ['Скачивание пакета', 'Скачивание модов', 'Применение overrides'], 450)

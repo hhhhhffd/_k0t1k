@@ -10,7 +10,7 @@ import { formatBytes, originPlatform } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
-const props = defineProps<{ instanceId: string; kind: LocalResourceKind }>()
+const props = defineProps<{ instanceId: string; kind: LocalResourceKind; sharedNote?: string }>()
 const router = useRouter()
 const tasks = useTasksStore()
 
@@ -83,6 +83,9 @@ function browse() {
 
 <template>
   <div class="flex flex-col gap-3">
+    <p v-if="sharedNote" class="flex items-center gap-2 text-muted">
+      <span class="badge badge-accent">{{ t.sharedFolder.badge }}</span>{{ sharedNote }}
+    </p>
     <div class="flex items-center gap-2">
       <div class="relative max-w-xs flex-1">
         <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />

@@ -61,6 +61,7 @@ pub fn run() {
             settings::get_system_info,
             settings::set_data_dir,
             settings::open_data_dir,
+            settings::open_shared_folder,
             settings::add_offline_account,
             settings::remove_offline_account,
             settings::select_account,

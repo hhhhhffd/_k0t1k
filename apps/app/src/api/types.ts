@@ -63,6 +63,10 @@ export interface InstanceSettings {
   env?: Record<string, string> | null
 }
 
+/** Folders that can be shared between instances; mods, config and saves never are. */
+export const SHARED_FOLDERS = ['resourcepacks', 'shaderpacks', 'screenshots'] as const
+export type SharedFolder = (typeof SHARED_FOLDERS)[number]
+
 export interface Instance {
   id: string
   name: string
@@ -76,7 +80,8 @@ export interface Instance {
   managedPack: ManagedPack | null
   notes: string
   settings: InstanceSettings
-  shareResourcepacks: boolean
+  /** Game folders linked to the folder shared with other instances (`shared/<folder>`). */
+  sharedFolders: SharedFolder[]
 }
 
 /** An instance whose `instance.json` could not be read. */
@@ -94,7 +99,7 @@ export interface InstanceListing {
 export interface InstanceSettingsUpdate {
   icon: string
   notes: string
-  shareResourcepacks: boolean
+  sharedFolders: SharedFolder[]
   settings: InstanceSettings
 }
 
@@ -141,6 +146,8 @@ export interface GlobalSettings {
   /** `theme` is a built-in `ThemeId` or the id of one of `customThemes`. */
   ui: { theme: string; liteMode: boolean; customThemes: CustomTheme[] }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
+  /** Folders that new instances (and imported modpacks) share. */
+  sharedFoldersDefault: SharedFolder[]
   accounts: Account[]
   selectedAccountId: string | null
 }
