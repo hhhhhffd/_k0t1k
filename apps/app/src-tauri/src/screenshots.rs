@@ -103,7 +103,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scan_lists_images_newest_first_and_names_must_be_plain() {
+    fn scan_lists_only_images_and_names_must_be_plain() {
         let dir = std::env::temp_dir().join("k0t1k-screenshots-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
