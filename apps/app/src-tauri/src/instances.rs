@@ -1,6 +1,8 @@
 use k0t1k_core::component::{ComponentSpec, MINECRAFT_UID};
 use k0t1k_core::content::Loader;
-use k0t1k_core::instance::{BrokenInstance, CopyOptions, Instance, InstanceSettings, NewInstance};
+use std::collections::BTreeSet;
+
+use k0t1k_core::instance::{BrokenInstance, CopyOptions, Instance, InstanceSettings, NewInstance, SharedFolder};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -51,7 +53,7 @@ pub struct LoaderChoice {
 pub struct InstanceSettingsUpdate {
     icon: String,
     notes: String,
-    share_resourcepacks: bool,
+    shared_folders: BTreeSet<SharedFolder>,
     settings: InstanceSettings,
 }
 
@@ -130,9 +132,7 @@ pub async fn update_instance_settings(
 ) -> CommandResult<InstanceView> {
     let manager = state.instances.clone();
     let instance = blocking(move || {
-        if manager.get(&instance_id)?.share_resourcepacks != settings.share_resourcepacks {
-            manager.set_share_resourcepacks(&instance_id, settings.share_resourcepacks)?;
-        }
+        manager.set_shared_folders(&instance_id, settings.shared_folders)?;
         manager.update(&instance_id, |instance| {
             instance.icon = settings.icon;
             instance.notes = settings.notes;

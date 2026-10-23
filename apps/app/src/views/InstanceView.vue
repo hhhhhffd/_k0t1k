@@ -25,6 +25,13 @@ const loader = computed(() => (instance.value ? loaderOf(instance.value) : undef
 type Tab = 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'logs' | 'settings'
 const tab = ref<Tab>('mods')
 const tabs: Tab[] = ['mods', 'resourcepacks', 'shaders', 'worlds', 'logs', 'settings']
+const sharedFolderOfTab = { resourcepacks: 'resourcepacks', shaders: 'shaderpacks' } as const
+/** The notice shown above a resource list whose folder is linked to the shared one. */
+function sharedNote(tab: Tab) {
+  if (tab !== 'resourcepacks' && tab !== 'shaders') return undefined
+  const folder = sharedFolderOfTab[tab]
+  return instance.value?.sharedFolders.includes(folder) ? t.sharedFolder.notes[folder] : undefined
+}
 const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shaderPack' } as const
 </script>
 
@@ -67,6 +74,7 @@ const kindOfTab = { mods: 'mod', resourcepacks: 'resourcePack', shaders: 'shader
       :key="`${instance.id}-${tab}`"
       :instance-id="instance.id"
       :kind="kindOfTab[tab]"
+      :shared-note="sharedNote(tab)"
     />
     <WorldsTab v-else-if="tab === 'worlds'" :key="instance.id" :instance-id="instance.id" />
     <LogsTab v-else-if="tab === 'logs'" :instance-id="instance.id" />

@@ -28,6 +28,7 @@
  *   save_settings(settings: GlobalSettings)                  -> void
  *   get_system_info()                                        -> SystemInfo
  *   open_data_dir()                                          -> void
+ *   open_shared_folder(folder: SharedFolder)                 -> void  (creates shared/<folder> if missing)
  *   set_data_dir(path: string | null)                        -> boolean  (true = restart needed; data is not moved; null = default location)
  * Accounts (offline for now; settings.accounts mirrors the result)
  *   add_offline_account(name)                                -> Account
@@ -73,6 +74,7 @@ import type {
   ProjectVersion,
   SearchPage,
   SearchQuery,
+  SharedFolder,
   SystemInfo,
   VersionFilter,
   World,
@@ -149,6 +151,7 @@ export const getSettings = () => call<GlobalSettings>('get_settings')
 export const saveSettings = (settings: GlobalSettings) => call<void>('save_settings', { settings })
 export const getSystemInfo = () => call<SystemInfo>('get_system_info')
 export const openDataDir = () => call<void>('open_data_dir')
+export const openSharedFolder = (folder: SharedFolder) => call<void>('open_shared_folder', { folder })
 export const setDataDir = (path: string | null) => call<boolean>('set_data_dir', { path })
 
 // ---- accounts ----

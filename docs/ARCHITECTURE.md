@@ -29,8 +29,16 @@ apps/app/src           Vue 3 UI
   packwiz `.index/*.pw.toml` files, the same as Prism, so instances stay compatible with packwiz tools.
 - **Per-instance settings are `Option<T>` groups**: `None` inherits the global value (Prism's `OverrideX` gates).
 - **Shared folders**: game metadata, libraries, assets and Java runtimes are shared by every instance. Each
-  instance owns its game dir (`mods`, `config`, `saves`...). `resourcepacks` is shared by default through a
-  directory junction (Windows) or symlink to `shared/resourcepacks`.
+  instance owns its game dir (`mods`, `config`, `saves`...). `resourcepacks`, `shaderpacks` and `screenshots`
+  (`instance::SharedFolder`) can be linked to `shared/<folder>` through a directory junction (Windows) or
+  symlink. An instance stores the set as `sharedFolders` in `instance.json`; `sharedFoldersDefault` in the
+  global settings (default: resourcepacks + shaderpacks) is applied to new and imported instances. Enabling
+  moves the instance's existing files into the shared folder (clashes become `name (1).ext`, nothing is
+  overwritten); disabling leaves a real folder with a copy. Deleting or copying an instance never touches or
+  duplicates shared content, and modpack installs never overwrite existing files in a linked folder. Old files
+  with `shareResourcepacks` are converted on read (true = only resourcepacks). Named pools (different shared
+  sets for groups of instances) would go in as a pool id in the shared path (`shared/<pool>/<folder>`), with
+  the current list being the implicit default pool, so no migration would be needed.
 - **Playtime** is recorded per instance (seconds, total and last session) and globally.
 
 ## Data directory (portable)
@@ -45,7 +53,7 @@ meta/                    cached Prism meta JSON (meta/<uid>/index.json, meta/<ui
 libraries/               Maven layout; must be named "libraries" (ForgeWrapper walks up to find it)
 assets/                  indexes/, objects/, virtual/
 java/<component>/        managed Java runtimes
-shared/resourcepacks/    resource packs shared between instances
+shared/<folder>/         resourcepacks, shaderpacks, screenshots shared between instances
 instances/<id>/          instance.json + minecraft/ (game dir) + natives/
 cache/                   downloads cache
 ```

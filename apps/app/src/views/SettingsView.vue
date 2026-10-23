@@ -3,8 +3,8 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { Check, FolderOpen, RefreshCw, RotateCcw, Trash2, UserPlus } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { detectJava, getSystemInfo, isTauri, listManagedJava, openDataDir, setDataDir } from '../api/commands'
-import type { JavaInstall, SystemInfo } from '../api/types'
+import { detectJava, getSystemInfo, isTauri, listManagedJava, openDataDir, openSharedFolder, setDataDir } from '../api/commands'
+import { type JavaInstall, SHARED_FOLDERS, type SharedFolder, type SystemInfo } from '../api/types'
 import mascot from '../assets/mascot.png'
 import CommandFields from '../components/fields/CommandFields.vue'
 import MemoryFields from '../components/fields/MemoryFields.vue'
@@ -21,7 +21,7 @@ const store = useSettingsStore()
 const tasks = useTasksStore()
 const route = useRoute()
 
-const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'behavior', 'appearance', 'accounts', 'storage', 'about'] as const
+const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'behavior', 'sharedFolders', 'appearance', 'accounts', 'storage', 'about'] as const
 type Section = (typeof sectionIds)[number]
 const hashSection = route.hash.slice(1) as Section
 const section = ref<Section>(sectionIds.includes(hashSection) ? hashSection : 'java')
@@ -73,6 +73,10 @@ async function changeDataDir(reset: boolean) {
   if (needsRestart === undefined) return
   restartNeeded.value = needsRestart
   system.value = (await tasks.guard(getSystemInfo)) ?? system.value
+}
+
+function setSharedDefault(folder: SharedFolder, on: boolean) {
+  if (s.value) s.value.sharedFoldersDefault = SHARED_FOLDERS.filter((f) => (f === folder ? on : s.value!.sharedFoldersDefault.includes(f)))
 }
 
 async function addAccount() {
@@ -209,6 +213,20 @@ async function addAccount() {
         <div class="flex items-center gap-4">
           <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.onClose }}</span><span class="text-[12px] text-faint">{{ t.settings.onCloseHint }}</span></span>
           <SelectMenu v-model="s.behavior.onClose" class="w-52" :options="onCloseOptions" :aria-label="t.settings.onClose" />
+        </div>
+      </section>
+
+      <section v-else-if="section === 'sharedFolders'" class="card flex flex-col gap-3 p-4">
+        <p class="text-[12px] text-faint">{{ t.settings.sharedDefaultsHint }}</p>
+        <h3 class="text-[14px] font-semibold">{{ t.settings.sharedDefaults }}</h3>
+        <div v-for="folder in SHARED_FOLDERS" :key="folder" class="flex items-center gap-3">
+          <ToggleSwitch
+            :model-value="s.sharedFoldersDefault.includes(folder)"
+            :label="t.sharedFolder.names[folder]"
+            @update:model-value="setSharedDefault(folder, $event)"
+          />
+          <span class="min-w-0 flex-1 font-medium">{{ t.sharedFolder.names[folder] }}</span>
+          <button class="btn h-7" @click="tasks.guard(() => openSharedFolder(folder))"><FolderOpen :size="15" />{{ t.settings.open }}</button>
         </div>
       </section>
 
