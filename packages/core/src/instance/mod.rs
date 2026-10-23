@@ -1,4 +1,4 @@
-//! Instances: `instances/<id>/instance.json` plus the `minecraft/` game dir and `natives/`.
+//! Instances: `instances/<id>/instance.json` plus the `minecraft/` game dir and `sessions/<id>/` (natives of a running launch).
 
 pub(crate) mod fsutil;
 mod links;
@@ -147,8 +147,10 @@ impl Instance {
         self.dir(paths).join("minecraft")
     }
 
-    pub fn natives_dir(&self, paths: &Paths) -> PathBuf {
-        self.dir(paths).join("natives")
+    /// Per-launch files (`<session>/natives` and the JVM argfile next to it), so concurrent
+    /// launches of one instance do not touch each other's files.
+    pub fn sessions_dir(&self, paths: &Paths) -> PathBuf {
+        self.dir(paths).join("sessions")
     }
 
     pub fn effective_settings(&self, global: &GlobalSettings) -> EffectiveSettings {

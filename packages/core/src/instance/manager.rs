@@ -278,7 +278,8 @@ impl InstanceManager {
         Ok(instance)
     }
 
-    /// Add a finished play session to the instance and to the global total.
+    /// Add a finished play session to the instance and to the global total. Concurrent sessions of
+    /// one instance are recorded separately, so overlapping time is counted once per session.
     /// Does nothing when playtime recording is switched off in the global settings.
     pub fn record_session(&self, id: &str, started_at: DateTime<Utc>, ended_at: DateTime<Utc>) -> Result<Instance> {
         let _guard = self.guard();
@@ -290,7 +291,8 @@ impl InstanceManager {
         let secs = (ended_at - started_at).num_seconds().max(0) as u64;
         instance.playtime.total_secs += secs;
         instance.playtime.last_secs = secs;
-        instance.last_played = Some(started_at);
+        // Sessions may overlap, so an older one can end after a newer one.
+        instance.last_played = Some(instance.last_played.map_or(started_at, |last| last.max(started_at)));
         self.save(&instance)?;
         GlobalSettings::update(&self.paths, |settings| settings.playtime.total_secs += secs)?;
         Ok(instance)
