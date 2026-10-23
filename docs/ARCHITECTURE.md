@@ -48,6 +48,22 @@ apps/app/src           Vue 3 UI
   instance is refused while any of its sessions is live. Preparations run concurrently; `install_lock`
   serialises the installs.
 
+## Worlds, data packs, screenshots, servers
+
+- `level.dat` / `servers.dat` are read and written by a small NBT codec (`instance/nbt.rs`, with `flate2` for gzip)
+  instead of an NBT crate: files must be written back with every unknown tag preserved in order, and strings need
+  Java's modified UTF-8. Servers are edited one entry at a time (add/update/remove/move), so the favicon cache
+  and other tags the game stored survive.
+- Commands that rewrite saves or `servers.dat` fail while the instance is running (`worlds::ensure_stopped`).
+  World deletion is permanent (the UI asks for confirmation); backups are zips of the world folder in
+  `<instance>/backups/` or a chosen path. World import rejects archives with `..`/absolute/drive-letter entries.
+- A data pack belongs to a world: `saves/<world>/datapacks`. The world folder is passed as the `game_dir` of the
+  regular resource scan/toggle/delete and of `content::install_version`, so the `.disabled` and packwiz-index
+  conventions are the same as for mods.
+- Screenshots are shown through Tauri's asset protocol (`convertFileSrc`). The scope is empty in config and the
+  backend allows only the listed instance's `screenshots/` folder at runtime (the data dir is not known statically).
+- Server status is a Server List Ping over TCP in `instance/servers.rs` (5 s timeout, no SRV lookup).
+
 ## Data directory (portable)
 
 Resolved once at startup by the app (`src-tauri/src/datadir.rs`): the folder in `<exe dir>/data-dir.txt` if

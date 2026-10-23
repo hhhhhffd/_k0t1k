@@ -25,9 +25,12 @@ import type {
   ProjectVersion,
   RunSession,
   RunState,
+  Screenshot,
   SearchHit,
   SearchPage,
   SearchQuery,
+  Server,
+  ServerStatus,
   SessionId,
   SystemInfo,
   VersionFilter,
@@ -162,7 +165,7 @@ const findInstance = (id: unknown): Instance => {
 
 // ---- content catalog ----
 type Seed = [slug: string, title: string, author: string, description: string, downloads: number, categories: string[]]
-type CatalogKind = 'mod' | 'modpack' | 'resourcePack' | 'shaderPack'
+type CatalogKind = 'mod' | 'modpack' | 'resourcePack' | 'shaderPack' | 'dataPack'
 const catalog: Record<CatalogKind, Seed[]> = {
   mod: [
     ['sodium', 'Sodium', 'jellysquid3', 'Современный движок рендеринга, сильно повышающий FPS.', 98_000_000, ['optimization']],
@@ -197,6 +200,12 @@ const catalog: Record<CatalogKind, Seed[]> = {
     ['bsl', 'BSL Shaders', 'CaptTatsu', 'Реалистичное освещение и вода.', 27_000_000, ['realistic']],
     ['photon', 'Photon', 'sixthsurge', 'Современные шейдеры для Iris.', 3_000_000, ['quality']],
     ['miniature', 'Miniature Shader', 'Atomix', 'Лёгкий пиксельный стиль.', 1_800_000, ['low-end']],
+  ],
+  dataPack: [
+    ['terralith', 'Terralith', 'Stardust Labs', 'Сотни новых биомов и ландшафтов для ванильной генерации.', 8_700_000, ['worldgen']],
+    ['vanilla-tweaks', 'Vanilla Tweaks', 'Vanilla Tweaks', 'Небольшие улучшения игрового процесса.', 6_400_000, ['utility']],
+    ['incendium', 'Incendium', 'Stardust Labs', 'Переработанный Незер с новыми структурами.', 3_900_000, ['worldgen', 'adventure']],
+    ['armor-statues', 'Armor Statues', 'Rapha', 'Позы для стоек для брони.', 2_000_000, ['utility']],
   ],
 }
 
@@ -260,11 +269,99 @@ function resourcesFor(instanceId: string, kind: LocalResourceKind): LocalResourc
   return list
 }
 
-const worlds: World[] = [
-  { dirName: 'New World', lastPlayed: daysAgo(1), size: 84_000_000 },
-  { dirName: 'Creative Build', lastPlayed: daysAgo(14), size: 210_000_000 },
-  { dirName: 'Hardcore', lastPlayed: daysAgo(40), size: 52_000_000 },
-]
+// ---- worlds, screenshots, servers ----
+const worldsByInstance = new Map<string, World[]>()
+function worldsFor(instanceId: string): World[] {
+  let list = worldsByInstance.get(instanceId)
+  if (!list) {
+    list = instanceId === 'inst-5' ? [] : [
+      { dirName: 'New World', name: 'Новый мир', gameMode: 'survival', hardcore: false, versionName: '1.21.1', lastPlayed: daysAgo(1), seed: '-4172144997902289642', icon: null, size: 84_000_000 },
+      { dirName: 'Creative Build', name: 'Creative Build', gameMode: 'creative', hardcore: false, versionName: '1.20.1', lastPlayed: daysAgo(14), seed: '8675309', icon: null, size: 210_000_000 },
+      { dirName: 'Hardcore', name: 'Hardcore', gameMode: 'survival', hardcore: true, versionName: '1.19.4', lastPlayed: daysAgo(40), seed: null, icon: null, size: 52_000_000 },
+      { dirName: 'broken-save', name: 'broken-save', gameMode: null, hardcore: null, versionName: null, lastPlayed: daysAgo(90), seed: null, icon: null, size: 1_200_000 },
+    ]
+    worldsByInstance.set(instanceId, list)
+  }
+  return list
+}
+const findWorld = (instanceId: string, dirName: unknown) => {
+  const world = worldsFor(instanceId).find((w) => w.dirName === dirName)
+  if (!world) throw new Error(`world ${String(dirName)} does not exist`)
+  return world
+}
+const datapacks = new Map<string, LocalResource[]>()
+function datapacksFor(instanceId: string, world: string): LocalResource[] {
+  const key = `${instanceId}:${world}`
+  let list = datapacks.get(key)
+  if (!list) {
+    list = catalog.dataPack.slice(0, 2).map((seed, i) => {
+      const fileName = `${seed[0]}-1.${i}.zip`
+      return {
+        fileName, enabled: true, size: 300_000 + i * 2_000_000,
+        metadata: { id: seed[0], name: seed[1], version: `1.${i}`, authors: [seed[2]], description: seed[3], icon: null, loader: null },
+        origin: i === 0 ? { name: seed[1], filename: fileName, update: { modrinth: { 'mod-id': `mr-${seed[0]}`, version: `mr-${seed[0]}-v${i}` } } } : null,
+      }
+    })
+    datapacks.set(key, list)
+  }
+  return list
+}
+const uniqueName = (taken: string[], name: string) => {
+  let candidate = name
+  for (let n = 1; taken.includes(candidate); n++) candidate = `${name} (${n})`
+  return candidate
+}
+const fileNameOf = (path: unknown, fallback: string) => String(path).split(/[\\/]/).pop() || fallback
+/** The real backend refuses to edit saves and servers.dat under a running game. */
+const notRunning = (instanceId: unknown) => {
+  if ([...sessions.values()].some((s) => s.instanceId === instanceId && s.state !== 'stopped')) throw new Error('the instance is running; stop the game first')
+}
+
+const shotColors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6', '#ec4899', '#84cc16']
+const screenshotsByInstance = new Map<string, Screenshot[]>()
+function screenshotsFor(instanceId: string): Screenshot[] {
+  let list = screenshotsByInstance.get(instanceId)
+  if (!list) {
+    list = instanceId === 'inst-5' ? [] : shotColors.map((color, i) => {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${color}"/><stop offset="1" stop-color="#0f172a"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><text x="24" y="52" font-family="monospace" font-size="28" fill="#fff">screenshot ${i + 1}</text></svg>`
+      const stamp = new Date(Date.now() - i * 5_400_000)
+      const two = (n: number) => String(n).padStart(2, '0')
+      const fileName = `${stamp.getFullYear()}-${two(stamp.getMonth() + 1)}-${two(stamp.getDate())}_${two(stamp.getHours())}.${two(stamp.getMinutes())}.${two(stamp.getSeconds())}.png`
+      return { fileName, path: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`, size: 1_400_000 + i * 120_000, modified: stamp.getTime() }
+    })
+    screenshotsByInstance.set(instanceId, list)
+  }
+  return list
+}
+
+const serversByInstance = new Map<string, Server[]>()
+function serversFor(instanceId: string): Server[] {
+  let list = serversByInstance.get(instanceId)
+  if (!list) {
+    list = [
+      { name: 'Hypixel', address: 'mc.hypixel.net', resourcePack: 'prompt' },
+      { name: 'Мой сервер', address: '192.168.1.20:25566', resourcePack: 'accept' },
+      { name: 'Офлайн сервер', address: 'offline.example.com', resourcePack: 'decline' },
+    ]
+    serversByInstance.set(instanceId, list)
+  }
+  return list
+}
+const serverAt = (instanceId: unknown, index: unknown) => {
+  const server = serversFor(instanceId as string)[index as number]
+  if (!server) throw new Error(`server ${String(index)} does not exist`)
+  return server
+}
+async function pingServer(address: string): Promise<ServerStatus> {
+  await sleep(300 + (address.length % 5) * 250)
+  if (address.includes('offline')) throw new Error(`${address} did not answer within 5 s`)
+  const local = /^\d/.test(address)
+  return {
+    motd: local ? 'Приватный сервер друзей' : 'Hypixel Network [1.8-1.21]  SKYBLOCK 0.21',
+    version: local ? 'Paper 1.21.1' : 'Hypixel',
+    protocol: 767, online: local ? 3 : 41_837, max: local ? 20 : 200_000, latencyMs: local ? 4 : 63 + (address.length % 40), favicon: null,
+  }
+}
 
 let dataDir = '%APPDATA%\\_k0t1k'
 
@@ -481,7 +578,99 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
           latest: projectVersions('modrinth', r.origin!.update.modrinth!['mod-id'], {})[0]!,
         }))
     }
-    case 'list_worlds': return a.instanceId === 'inst-5' ? [] : worlds
+    case 'list_worlds': return clone(worldsFor(a.instanceId as string))
+    case 'rename_world': {
+      notRunning(a.instanceId)
+      const world = findWorld(a.instanceId as string, a.dirName)
+      world.name = (a.name as string).trim()
+      if (a.renameFolder) world.dirName = uniqueName(worldsFor(a.instanceId as string).filter((w) => w !== world).map((w) => w.dirName), world.name)
+      return world.dirName
+    }
+    case 'copy_world': {
+      notRunning(a.instanceId)
+      const list = worldsFor(a.instanceId as string)
+      const source = findWorld(a.instanceId as string, a.dirName)
+      const name = (a.name as string).trim()
+      const copy: World = { ...clone(source), name, dirName: uniqueName(list.map((w) => w.dirName), name) }
+      list.unshift(copy)
+      return copy.dirName
+    }
+    case 'delete_world': {
+      notRunning(a.instanceId)
+      const list = worldsFor(a.instanceId as string)
+      list.splice(list.indexOf(findWorld(a.instanceId as string, a.dirName)), 1)
+      return undefined
+    }
+    case 'backup_world': {
+      notRunning(a.instanceId)
+      await sleep(500)
+      return (a.destination as string | undefined) ?? `C:\\_k0t1k\\instances\\${String(a.instanceId)}\\backups\\${String(a.dirName)} 2026-01-01_12-00-00.zip`
+    }
+    case 'open_world_folder': return undefined
+    case 'import_world': {
+      notRunning(a.instanceId)
+      const list = worldsFor(a.instanceId as string)
+      const base = fileNameOf(a.path, 'World').replace(/\.zip$/i, '')
+      const world: World = { dirName: uniqueName(list.map((w) => w.dirName), base), name: base, gameMode: 'survival', hardcore: false, versionName: '1.21.1', lastPlayed: new Date().toISOString(), seed: '12345', icon: null, size: 9_000_000 }
+      list.unshift(world)
+      return world.dirName
+    }
+    case 'list_datapacks': return clone(datapacksFor(a.instanceId as string, a.world as string))
+    case 'toggle_datapack': {
+      notRunning(a.instanceId)
+      const pack = datapacksFor(a.instanceId as string, a.world as string).find((x) => x.fileName === a.fileName)
+      if (pack) pack.enabled = a.enabled as boolean
+      return undefined
+    }
+    case 'delete_datapack': {
+      notRunning(a.instanceId)
+      const list = datapacksFor(a.instanceId as string, a.world as string)
+      const idx = list.findIndex((x) => x.fileName === a.fileName)
+      if (idx >= 0) list.splice(idx, 1)
+      return undefined
+    }
+    case 'add_datapack': {
+      notRunning(a.instanceId)
+      const list = datapacksFor(a.instanceId as string, a.world as string)
+      const fileName = uniqueName(list.map((x) => x.fileName), fileNameOf(a.path, 'pack.zip'))
+      list.unshift({ fileName, enabled: true, size: 120_000, metadata: null, origin: null })
+      return fileName
+    }
+    case 'install_datapack': {
+      notRunning(a.instanceId)
+      const v = projectVersions(a.platform as Platform, a.projectId as string, {}).find((x) => x.id === a.versionId)
+      if (!v) throw new Error('У версии нет файлов')
+      const fileName = v.files[0]!.filename.replace(/\.jar$/, '.zip')
+      await fakeTask(`datapack-${v.id}`, `Установка ${v.name}`, ['Скачивание', 'Проверка хеша'], 450)
+      datapacksFor(a.instanceId as string, a.world as string).unshift({
+        fileName, enabled: true, size: v.files[0]!.size,
+        metadata: { id: v.projectId, name: v.name, version: v.versionNumber, authors: [], description: null, icon: null, loader: null },
+        origin: { name: v.name, filename: fileName, update: { modrinth: { 'mod-id': v.projectId, version: v.id } } },
+      })
+      return { installed: [{ platform: v.platform, projectId: v.projectId, name: v.name, fileName, isDependency: false }], blocked: [], unresolvedDependencies: [] } satisfies InstallReport
+    }
+    case 'list_screenshots': return clone(screenshotsFor(a.instanceId as string))
+    case 'open_screenshot':
+    case 'open_screenshots_folder': return undefined
+    case 'delete_screenshot': {
+      const list = screenshotsFor(a.instanceId as string)
+      const idx = list.findIndex((x) => x.fileName === a.fileName)
+      if (idx >= 0) list.splice(idx, 1)
+      return undefined
+    }
+    case 'list_servers': return clone(serversFor(a.instanceId as string))
+    case 'add_server': notRunning(a.instanceId); serversFor(a.instanceId as string).push(clone(a.server as Server)); return undefined
+    case 'update_server': notRunning(a.instanceId); Object.assign(serverAt(a.instanceId, a.index), clone(a.server as Server)); return undefined
+    case 'remove_server': notRunning(a.instanceId); serversFor(a.instanceId as string).splice(a.index as number, 1); return undefined
+    case 'move_server': {
+      notRunning(a.instanceId)
+      const list = serversFor(a.instanceId as string)
+      const [moved] = list.splice(a.from as number, 1)
+      if (!moved) throw new Error(`server ${String(a.from)} does not exist`)
+      list.splice(a.to as number, 0, moved)
+      return undefined
+    }
+    case 'ping_server': return pingServer(a.address as string)
     case 'import_modpack_file': {
       const path = a.path as string
       const inst = newInstance({

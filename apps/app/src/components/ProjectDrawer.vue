@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowUpRight, Download, ExternalLink, ShieldAlert, TriangleAlert, X } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getProjectVersions, installVersion } from '../api/commands'
+import { getProjectVersions, installDatapack, installVersion, listWorlds } from '../api/commands'
 import type { LoaderId, ProjectVersion, ResourceKind, SearchHit, VersionFilter } from '../api/types'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
@@ -12,7 +12,7 @@ import ProjectIcon from './ProjectIcon.vue'
 import SelectMenu from './SelectMenu.vue'
 import ToggleSwitch from './ToggleSwitch.vue'
 
-const props = defineProps<{ hit: SearchHit; kind: ResourceKind; instanceId: string; gameVersion?: string; loader?: LoaderId }>()
+const props = defineProps<{ hit: SearchHit; kind: ResourceKind; instanceId: string; world?: string; gameVersion?: string; loader?: LoaderId }>()
 const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
@@ -25,6 +25,10 @@ const busy = ref<string | null>(null)
 const installedIds = ref(new Set<string>())
 
 const isPack = computed(() => props.kind === 'modpack')
+// A data pack lives in one world of the target instance, so that world is chosen too.
+const isDatapack = computed(() => props.kind === 'dataPack')
+const worldOptions = ref<{ value: string; label: string }[]>([])
+const targetWorld = ref(props.world ?? '')
 const showAll = ref(false)
 const targetOptions = computed(() => store.instances.map((i) => ({ value: i.id, label: i.name })))
 
@@ -62,6 +66,15 @@ onMounted(() => {
 })
 // the modpack filter is fixed for the drawer's lifetime, so only the target and the toggle matter
 watch([target, showAll], () => void loadVersions())
+
+async function loadWorlds() {
+  if (!isDatapack.value) return
+  const list = (await tasks.guard(() => listWorlds(target.value))) ?? []
+  worldOptions.value = list.map((w) => ({ value: w.dirName, label: w.name === w.dirName ? w.name : `${w.name} (${w.dirName})` }))
+  if (!worldOptions.value.some((w) => w.value === targetWorld.value)) targetWorld.value = worldOptions.value[0]?.value ?? ''
+}
+onMounted(loadWorlds)
+watch(target, loadWorlds)
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
@@ -74,7 +87,9 @@ async function install(v: ProjectVersion) {
     if (inst) tasks.toast(t.browse.installedOk(inst.name), 'ok')
   } else if (props.kind !== 'modpack' && props.kind !== 'world') {
     const kind = props.kind
-    const report = await tasks.guard(() => installVersion(target.value, v, kind))
+    const report = await tasks.guard(() =>
+      kind === 'dataPack' ? installDatapack(target.value, targetWorld.value, v) : installVersion(target.value, v, kind),
+    )
     if (report) {
       tasks.showBlocked(report.blocked)
       const installed = report.installed.find((i) => !i.isDependency)
@@ -119,6 +134,11 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
           <SelectMenu v-model="target" :options="targetOptions" :disabled="!store.instances.length" :aria-label="t.browse.target" />
           <span v-if="!store.instances.length" class="text-warn">{{ t.browse.noInstance }}</span>
         </div>
+        <div v-if="isDatapack" class="flex flex-col gap-1">
+          <span class="label">{{ t.browse.targetWorld }}</span>
+          <SelectMenu v-model="targetWorld" :options="worldOptions" :disabled="!worldOptions.length" :aria-label="t.browse.targetWorld" />
+          <span v-if="!worldOptions.length" class="text-warn">{{ t.browse.noWorlds }}</span>
+        </div>
       </div>
 
       <div class="min-h-0 flex-1 overflow-y-auto p-4">
@@ -159,7 +179,7 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
               <button
                 v-else
                 class="btn btn-primary h-7"
-                :disabled="busy !== null || (!isPack && !target)"
+                :disabled="busy !== null || (!isPack && !target) || (isDatapack && !targetWorld)"
                 @click="install(v)"
               >
                 <Download :size="14" />{{ installedIds.has(v.id) ? t.browse.installed : isPack ? t.browse.createFromPack : t.browse.install }}

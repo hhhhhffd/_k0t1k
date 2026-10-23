@@ -3,6 +3,9 @@
 pub(crate) mod fsutil;
 mod links;
 mod manager;
+mod nbt;
+pub mod servers;
+pub mod worlds;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;

@@ -287,10 +287,53 @@ export interface AvailableUpdate {
   latest: ProjectVersion
 }
 
+export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator'
+
+/** A world of `saves/`; details come from `level.dat` and are null when the file lacks them or cannot be read. */
 export interface World {
+  /** Folder name under `saves/`. */
   dirName: string
-  size: number
+  /** `LevelName`; the folder name for an unreadable world. */
+  name: string
+  gameMode: GameMode | null
+  hardcore: boolean | null
+  versionName: string | null
   lastPlayed: string | null
+  /** Decimal string: a 64-bit seed does not fit a JS number. */
+  seed: string | null
+  /** `data:image/png;base64,...` of `icon.png`. */
+  icon: string | null
+  size: number
+}
+
+export interface Screenshot {
+  fileName: string
+  /** Absolute path; pass it to `fileUrl` to get a URL an <img> can load. */
+  path: string
+  size: number
+  /** Milliseconds since the Unix epoch. */
+  modified: number
+}
+
+/** `acceptTextures` of `servers.dat`: `prompt` means the tag is absent and the game asks. */
+export type ResourcePackPolicy = 'prompt' | 'accept' | 'decline'
+
+export interface Server {
+  name: string
+  address: string
+  resourcePack: ResourcePackPolicy
+}
+
+export interface ServerStatus {
+  /** Plain text, formatting codes removed. */
+  motd: string
+  version: string
+  protocol: number
+  online: number
+  max: number
+  latencyMs: number
+  /** `data:image/png;base64,...` as the server sent it. */
+  favicon: string | null
 }
 
 /** A file the author forbids third parties to download; the user fetches it and drops it into `targetPath`. */

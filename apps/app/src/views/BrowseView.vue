@@ -13,7 +13,7 @@ import { useTasksStore } from '../stores/tasks'
 import { formatCount, LOADER_LABELS, loaderOf, minecraftVersionOf } from '../utils/format'
 
 const PAGE = 20
-const kinds = ['mod', 'modpack', 'resourcePack', 'shaderPack'] as const satisfies readonly ResourceKind[]
+const kinds = ['mod', 'modpack', 'resourcePack', 'shaderPack', 'dataPack'] as const satisfies readonly ResourceKind[]
 type BrowseKind = (typeof kinds)[number]
 const route = useRoute()
 const store = useInstancesStore()
@@ -25,6 +25,7 @@ const kind = ref<BrowseKind>(kinds.find((k) => k === queryKind) ?? 'mod')
 const query = ref('')
 const gameVersion = ref('')
 const loader = ref<LoaderId | ''>('')
+const world = typeof route.query.world === 'string' ? route.query.world : undefined
 const instanceId = ref(typeof route.query.instance === 'string' ? route.query.instance : '')
 const mcVersions = ref<MinecraftVersion[]>([])
 
@@ -167,6 +168,7 @@ onMounted(async () => {
       :hit="selected.hit"
       :kind="selected.kind"
       :instance-id="instanceId"
+      :world="world"
       :game-version="gameVersion || undefined"
       :loader="showLoader && loader ? loader : undefined"
       @close="selected = null"
