@@ -5,5 +5,6 @@ pub mod download;
 pub mod error;
 pub mod paths;
 pub mod progress;
+pub mod settings;
 
 pub use error::{Error, Result};
