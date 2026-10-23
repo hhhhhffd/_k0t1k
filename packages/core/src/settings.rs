@@ -126,8 +126,29 @@ pub struct GlobalSettings {
     pub env: BTreeMap<String, String>,
     pub playtime: PlaytimeSettings,
     pub ui: UiSettings,
-    pub last_offline_name: Option<String>,
-    pub offline_accounts: Vec<String>,
+    pub accounts: Vec<Account>,
+    pub selected_account_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AccountKind {
+    Offline,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Account {
+    pub id: String,
+    pub name: String,
+    pub kind: AccountKind,
+}
+
+impl GlobalSettings {
+    pub fn selected_account(&self) -> Option<&Account> {
+        let id = self.selected_account_id.as_deref()?;
+        self.accounts.iter().find(|account| account.id == id)
+    }
 }
 
 impl GlobalSettings {
@@ -254,7 +275,12 @@ mod tests {
         assert_eq!(GlobalSettings::load(&paths).unwrap(), GlobalSettings::default());
 
         let updated = GlobalSettings::update(&paths, |s| {
-            s.last_offline_name = Some("Steve".to_owned());
+            s.accounts.push(Account {
+                id: "a1".to_owned(),
+                name: "Steve".to_owned(),
+                kind: AccountKind::Offline,
+            });
+            s.selected_account_id = Some("a1".to_owned());
             s.env.insert("A".to_owned(), "1".to_owned());
         })
         .unwrap();

@@ -8,7 +8,9 @@ use crate::error::Error;
 
 /// A parsed `java.version`: `1.8.0_392`, `17.0.15`, `21.0.7+6`, `25-ea`.
 /// Build metadata (`+6`) is dropped; it does not take part in comparison.
+/// Serialised as its display string, which is what the UI shows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(into = "String", try_from = "String")]
 pub struct JavaVersion {
     pub major: u32,
     pub minor: u32,
@@ -42,6 +44,20 @@ impl FromStr for JavaVersion {
             security,
             prerelease,
         })
+    }
+}
+
+impl From<JavaVersion> for String {
+    fn from(version: JavaVersion) -> Self {
+        version.to_string()
+    }
+}
+
+impl TryFrom<String> for JavaVersion {
+    type Error = Error;
+
+    fn try_from(text: String) -> Result<Self, Error> {
+        text.parse()
     }
 }
 
