@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ArrowUpRight, Download, ExternalLink, ShieldAlert, X } from '@lucide/vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ArrowUpRight, Download, ExternalLink, ShieldAlert, TriangleAlert, X } from '@lucide/vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getProjectVersions, installVersion } from '../api/commands'
-import type { LoaderId, ProjectVersion, ResourceKind, SearchHit } from '../api/types'
+import type { LoaderId, ProjectVersion, ResourceKind, SearchHit, VersionFilter } from '../api/types'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
 import { openExternal } from '../utils/external'
-import { formatBytes, formatCount, formatDate } from '../utils/format'
+import { formatBytes, formatCount, formatDate, LOADER_LABELS, loaderOf, minecraftVersionOf } from '../utils/format'
 import ProjectIcon from './ProjectIcon.vue'
+import SelectMenu from './SelectMenu.vue'
+import ToggleSwitch from './ToggleSwitch.vue'
 
 const props = defineProps<{ hit: SearchHit; kind: ResourceKind; instanceId: string; gameVersion?: string; loader?: LoaderId }>()
 const emit = defineEmits<{ close: [] }>()
@@ -23,13 +25,43 @@ const busy = ref<string | null>(null)
 const installedIds = ref(new Set<string>())
 
 const isPack = computed(() => props.kind === 'modpack')
+const showAll = ref(false)
+const targetOptions = computed(() => store.instances.map((i) => ({ value: i.id, label: i.name })))
 
-onMounted(async () => {
-  window.addEventListener('keydown', onKey)
-  versions.value =
-    (await tasks.guard(() => getProjectVersions(props.hit.platform, props.hit.projectId, { gameVersion: props.gameVersion, loader: props.loader }))) ?? []
-  loading.value = false
+/** What a version must match to be installable into the target instance (a modpack creates its own instance). */
+const requirement = computed<VersionFilter>(() => {
+  if (isPack.value) return { gameVersion: props.gameVersion, loader: props.loader }
+  const inst = store.byId(target.value)
+  if (!inst) return {}
+  // resource packs and shaders do not depend on a loader
+  return { gameVersion: minecraftVersionOf(inst), loader: props.kind === 'mod' ? loaderOf(inst)?.id : undefined }
 })
+
+function mismatch(v: ProjectVersion): string | null {
+  const { gameVersion, loader } = requirement.value
+  const reasons: string[] = []
+  if (gameVersion && !v.gameVersions.includes(gameVersion)) reasons.push(gameVersion)
+  if (loader && !v.loaders.includes(loader)) reasons.push(LOADER_LABELS[loader])
+  return reasons.length ? reasons.join(', ') : null
+}
+
+let loadSeq = 0
+async function loadVersions() {
+  const seq = ++loadSeq
+  loading.value = true
+  const filter = showAll.value ? {} : requirement.value
+  const result = (await tasks.guard(() => getProjectVersions(props.hit.platform, props.hit.projectId, filter))) ?? []
+  if (seq !== loadSeq) return // the target or the toggle changed while loading
+  versions.value = result
+  loading.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  void loadVersions()
+})
+// the modpack filter is fixed for the drawer's lifetime, so only the target and the toggle matter
+watch([target, showAll], () => void loadVersions())
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
@@ -82,23 +114,33 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
           <span class="label">{{ t.browse.packName }}</span>
           <input v-model="packName" class="input" />
         </label>
-        <label v-else class="flex flex-col gap-1">
+        <div v-else class="flex flex-col gap-1">
           <span class="label">{{ t.browse.target }}</span>
-          <select v-model="target" class="input" :disabled="!store.instances.length">
-            <option v-for="i in store.instances" :key="i.id" :value="i.id">{{ i.name }}</option>
-          </select>
+          <SelectMenu v-model="target" :options="targetOptions" :disabled="!store.instances.length" :aria-label="t.browse.target" />
           <span v-if="!store.instances.length" class="text-warn">{{ t.browse.noInstance }}</span>
-        </label>
+        </div>
       </div>
 
       <div class="min-h-0 flex-1 overflow-y-auto p-4">
-        <h3 class="section-title mb-2">{{ t.browse.versions }}</h3>
+        <div class="mb-2 flex items-center gap-3">
+          <h3 class="section-title mr-auto">{{ t.browse.versions }}</h3>
+          <label v-if="requirement.gameVersion || requirement.loader" class="flex items-center gap-2 text-muted">
+            <ToggleSwitch v-model="showAll" :label="t.browse.showAllVersions" />
+            {{ t.browse.showAllVersions }}
+          </label>
+        </div>
+        <p v-if="!showAll && (requirement.gameVersion || requirement.loader)" class="mb-2 text-[12px] text-faint">
+          {{ t.browse.filteredFor([requirement.gameVersion, requirement.loader ? LOADER_LABELS[requirement.loader] : ''].filter(Boolean).join(' · ')) }}
+        </p>
         <p v-if="loading" class="text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!versions.length" class="text-faint">{{ t.browse.noVersions }}</p>
         <ul v-else class="flex flex-col gap-2">
           <li v-for="v in versions" :key="v.id" class="card bg-raised p-3">
             <div class="flex items-center gap-2">
               <span class="min-w-0 flex-1 truncate font-semibold">{{ v.name }}</span>
+              <span v-if="mismatch(v)" class="badge border-danger/50 bg-danger/15 text-danger" :title="t.browse.incompatibleHint">
+                <TriangleAlert :size="12" />{{ t.browse.incompatible(mismatch(v) as string) }}
+              </span>
               <span class="badge" :class="releaseClass[v.releaseType]">{{ releaseLabel[v.releaseType] }}</span>
             </div>
             <div class="mt-1 flex flex-wrap gap-1">

@@ -6,6 +6,7 @@ import { listMinecraftVersions, searchContent } from '../api/commands'
 import type { LoaderId, MinecraftVersion, Platform, ResourceKind, SearchHit } from '../api/types'
 import ProjectDrawer from '../components/ProjectDrawer.vue'
 import ProjectIcon from '../components/ProjectIcon.vue'
+import SelectMenu from '../components/SelectMenu.vue'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
@@ -33,6 +34,14 @@ const loading = ref(false)
 const selected = ref<{ hit: SearchHit; kind: BrowseKind } | null>(null)
 
 const instance = computed(() => store.byId(instanceId.value))
+const versionOptions = computed(() => [
+  { value: '', label: t.browse.anyVersion },
+  ...mcVersions.value.map((v) => ({ value: v.version, label: v.version })),
+])
+const loaderOptions = [
+  { value: '', label: t.browse.anyLoader },
+  ...(Object.entries(LOADER_LABELS) as [LoaderId, string][]).map(([value, label]) => ({ value, label })),
+]
 const showLoader = computed(() => kind.value === 'mod' || kind.value === 'modpack')
 
 function applyInstanceFilters() {
@@ -116,14 +125,8 @@ onMounted(async () => {
         <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />
         <input v-model="query" class="input !pl-8" :placeholder="t.browse.searchPlaceholder" :aria-label="t.common.search" />
       </div>
-      <select v-model="gameVersion" class="input w-40" :aria-label="t.browse.gameVersion">
-        <option value="">{{ t.browse.anyVersion }}</option>
-        <option v-for="v in mcVersions" :key="v.version" :value="v.version">{{ v.version }}</option>
-      </select>
-      <select v-if="showLoader" v-model="loader" class="input w-36" :aria-label="t.browse.loader">
-        <option value="">{{ t.browse.anyLoader }}</option>
-        <option v-for="(label, id) in LOADER_LABELS" :key="id" :value="id">{{ label }}</option>
-      </select>
+      <SelectMenu v-model="gameVersion" class="w-44" searchable :options="versionOptions" :aria-label="t.browse.gameVersion" />
+      <SelectMenu v-if="showLoader" v-model="loader" class="w-36" :options="loaderOptions" :aria-label="t.browse.loader" />
     </div>
 
     <div v-if="instance" class="flex items-center gap-2">

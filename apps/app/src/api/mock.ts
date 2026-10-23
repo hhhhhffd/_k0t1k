@@ -208,7 +208,6 @@ function searchContent(q: SearchQuery): SearchPage {
 
 function projectVersions(platform: Platform, projectId: string, filter: VersionFilter): ProjectVersion[] {
   const slug = projectId.replace(/^(mr|cf)-/, '')
-  const loaders: LoaderId[] = filter.loader ? [filter.loader] : ['fabric', 'quilt']
   const versions: ProjectVersion[] = [
     ['1.4.2', ['1.21.4', '1.21.3'], 'release'], ['1.4.1', ['1.21.1'], 'release'], ['1.4.0-beta.2', ['1.21'], 'beta'],
     ['1.3.9', ['1.20.1', '1.20.4'], 'release'], ['1.3.0-alpha.1', ['1.19.4'], 'alpha'],
@@ -218,7 +217,7 @@ function projectVersions(platform: Platform, projectId: string, filter: VersionF
     const filename = `${slug}-${num as string}.jar`
     return {
       platform, id: `${projectId}-v${i}`, projectId, name: `${slug} ${num as string}`, versionNumber: num as string,
-      releaseType: releaseType as ProjectVersion['releaseType'], gameVersions: gv as string[], loaders, published: daysAgo(10 + i * 45),
+      releaseType: releaseType as ProjectVersion['releaseType'], gameVersions: gv as string[], loaders: (i === 1 ? ['forge'] : ['fabric', 'quilt']) as LoaderId[], published: daysAgo(10 + i * 45),
       dependencies: [],
       files: [{
         url: blocked ? null : `https://cdn.example/${filename}`,
@@ -227,7 +226,9 @@ function projectVersions(platform: Platform, projectId: string, filter: VersionF
       }],
     }
   })
-  return filter.gameVersion ? versions.filter((v) => v.gameVersions.includes(filter.gameVersion as string)) : versions
+  return versions.filter(
+    (v) => (!filter.gameVersion || v.gameVersions.includes(filter.gameVersion)) && (!filter.loader || v.loaders.includes(filter.loader)),
+  )
 }
 
 // ---- local resources ----

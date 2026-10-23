@@ -123,9 +123,28 @@ textarea,
 ::selection {
   background: color-mix(in srgb, var(--c-accent) 40%, transparent);
 }
+/* themed scrollbars: standard properties for current WebView2, ::-webkit-scrollbar as a fallback for older engines */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--c-line) transparent;
+  scrollbar-color: color-mix(in srgb, var(--c-faint) 55%, var(--c-line)) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--c-faint) 55%, var(--c-line));
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--c-faint);
+  background-clip: content-box;
 }
 :focus-visible {
   outline: 2px solid var(--c-accent);
