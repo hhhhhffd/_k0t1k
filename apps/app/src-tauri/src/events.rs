@@ -1,4 +1,4 @@
-//! Events sent to the UI: `progress`, `game-log` and `instance-state`.
+//! Events sent to the UI: `progress`, `game-log` (batched) and `instance-state`.
 
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use k0t1k_core::progress::{ProgressEvent, ProgressFn};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::mpsc;
 
 use crate::error::CommandResult;
 
@@ -24,12 +25,20 @@ struct ProgressPayload {
     error: Option<String>,
 }
 
+/// Game output can reach tens of thousands of lines in a couple of minutes, so lines are sent in batches.
+const LOG_INTERVAL: Duration = Duration::from_millis(100);
+
+#[derive(Clone, Serialize)]
+struct LogLine {
+    stream: &'static str,
+    line: String,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct GameLogPayload<'a> {
-    instance_id: &'a str,
-    stream: &'a str,
-    line: &'a str,
+struct GameLogPayload {
+    instance_id: String,
+    lines: Vec<LogLine>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -86,6 +95,13 @@ pub fn progress_step(app: &AppHandle, task: &str, title: &str, stage: &str, done
     emit(app, "progress", payload(task, title, stage, done, total));
 }
 
+/// Ends the task row of an operation that was stopped on purpose.
+pub fn cancelled(app: &AppHandle, task: &str, title: &str) {
+    let mut end = payload(task, title, "Отменено", 1, 1);
+    end.finished = true;
+    emit(app, "progress", end);
+}
+
 /// Runs `work` and ends the task row with `finished`, or with `error` when it fails.
 pub async fn tracked<T>(app: &AppHandle, task: &str, title: &str, work: impl Future<Output = CommandResult<T>>) -> CommandResult<T> {
     let result = work.await;
@@ -101,8 +117,38 @@ pub async fn tracked<T>(app: &AppHandle, task: &str, title: &str, work: impl Fut
     result
 }
 
-pub fn game_log(app: &AppHandle, instance_id: &str, stream: &str, line: &str) {
-    emit(app, "game-log", GameLogPayload { instance_id, stream, line });
+/// Log of one launch session. Lines sent through it reach the UI as `game-log` events carrying
+/// arrays of lines, at most one event per [`LOG_INTERVAL`]. Clones share the same queue; the
+/// sender task ends, after sending what is left, when every clone is dropped.
+#[derive(Clone)]
+pub struct GameLog {
+    lines: mpsc::UnboundedSender<LogLine>,
+}
+
+impl GameLog {
+    pub fn new(app: &AppHandle, instance_id: &str) -> Self {
+        let (lines, mut queue) = mpsc::unbounded_channel();
+        let app = app.clone();
+        let instance_id = instance_id.to_owned();
+        tauri::async_runtime::spawn(async move {
+            while let Some(first) = queue.recv().await {
+                let mut batch = vec![first];
+                tokio::time::sleep(LOG_INTERVAL).await;
+                while let Ok(line) = queue.try_recv() {
+                    batch.push(line);
+                }
+                emit(&app, "game-log", GameLogPayload { instance_id: instance_id.clone(), lines: batch });
+            }
+        });
+        Self { lines }
+    }
+
+    /// `stream` is `stdout`, `stderr` or `launcher` (the launcher's own messages).
+    pub fn line(&self, stream: &'static str, line: &str) {
+        if self.lines.send(LogLine { stream, line: line.to_owned() }).is_err() {
+            tracing::warn!("game log is closed, dropping: {line}");
+        }
+    }
 }
 
 pub fn instance_state(app: &AppHandle, instance_id: &str, state: RunState, exit_code: Option<i32>) {

@@ -11,6 +11,7 @@ use k0t1k_core::instance::{EffectiveSettings, Instance};
 use k0t1k_core::java::ensure_java;
 use k0t1k_core::launch::{Account, LaunchCommand, LaunchOptions, LogFn, LogStream, WindowSize, build_command, spawn_game};
 use k0t1k_core::profile::LaunchProfile;
+use k0t1k_core::progress::ProgressFn;
 use k0t1k_core::profile::library::RuntimeContext;
 use k0t1k_core::settings::GlobalSettings;
 use tauri::{AppHandle, State};
@@ -18,7 +19,7 @@ use tokio::process::Command;
 use tokio::sync::watch;
 
 use crate::error::{AppError, CommandResult, blocking};
-use crate::events::{self, InstanceStatePayload, RunState, progress_fn, tracked};
+use crate::events::{self, GameLog, InstanceStatePayload, RunState, progress_fn, tracked};
 use crate::state::AppState;
 use crate::{cmdline, game};
 
@@ -79,6 +80,7 @@ struct SessionGuard {
     app: AppHandle,
     state: AppState,
     id: String,
+    log: GameLog,
     ended: bool,
 }
 
@@ -86,7 +88,7 @@ impl SessionGuard {
     /// Forgets the running game and tells the UI it stopped; playtime must be saved before this.
     fn end(&mut self, message: &str, exit_code: Option<i32>) {
         self.ended = true;
-        events::game_log(&self.app, &self.id, "launcher", message);
+        self.log.line("launcher", message);
         self.state.running().remove(&self.id);
         events::instance_state(&self.app, &self.id, RunState::Stopped, exit_code);
     }
@@ -117,12 +119,14 @@ async fn run_session(
     let task = format!("launch:{id}");
     let title = format!("Запуск: {}", instance.name);
     let post_exit = settings.commands.post_exit.clone();
-    let mut session = SessionGuard { app: app.clone(), state: state.clone(), id: id.clone(), ended: false };
+    let progress = progress_fn(&app, &task, &title);
+    let log = GameLog::new(&app, &id);
+    let mut session = SessionGuard { app: app.clone(), state: state.clone(), id: id.clone(), log: log.clone(), ended: false };
 
     // Dropping `prepare` on a kill also stops its downloads and kills a running pre-launch hook.
     let preparation = async {
         tokio::select! {
-            prepared = prepare(&app, &state, &instance, &settings, account, &task, &title) => prepared,
+            prepared = prepare(&state, &log, &instance, &settings, account, &task, &progress) => prepared,
             () = wait_killed(&mut kill_requests) => Err(AppError::new("запуск отменён")),
         }
     };
@@ -136,13 +140,13 @@ async fn run_session(
     }
 
     let on_log: LogFn = {
-        let (app, id) = (app.clone(), id.clone());
+        let log = log.clone();
         Arc::new(move |line| {
             let stream = match line.stream {
                 LogStream::Stdout => "stdout",
                 LogStream::Stderr => "stderr",
             };
-            events::game_log(&app, &id, stream, &line.line);
+            log.line(stream, &line.line);
         })
     };
     let handle = match spawn_game(&command, on_log) {
@@ -171,7 +175,7 @@ async fn run_session(
     let exit_code = match handle.wait().await {
         Ok(code) => code,
         Err(error) => {
-            events::game_log(&app, &id, "launcher", &format!("Не удалось дождаться завершения игры: {error}"));
+            log.line("launcher", &format!("Не удалось дождаться завершения игры: {error}"));
             None
         }
     };
@@ -185,7 +189,7 @@ async fn run_session(
             blocking(move || manager.record_session(&id, started_at, ended_at).map(|_| ())).await
         };
         if let Err(error) = recorded {
-            events::game_log(&app, &id, "launcher", &format!("Не удалось сохранить время игры: {error}"));
+            log.line("launcher", &format!("Не удалось сохранить время игры: {error}"));
         }
     }
     // Windows reports a killed process as exit code 1, so the code alone cannot tell a kill apart.
@@ -202,23 +206,21 @@ async fn run_session(
     if !post_exit.is_empty() {
         let game_dir = instance.game_dir(&state.paths);
         if let Err(error) = run_hook("post-exit", &post_exit, &game_dir).await {
-            events::game_log(&app, &id, "launcher", &error.to_string());
+            log.line("launcher", &error.to_string());
         }
     }
 }
 
 async fn prepare(
-    app: &AppHandle,
     state: &AppState,
+    log: &GameLog,
     instance: &Instance,
     settings: &EffectiveSettings,
     account: Account,
     task: &str,
-    title: &str,
+    progress: &ProgressFn,
 ) -> CommandResult<LaunchCommand> {
     let paths = &state.paths;
-    let id = &instance.id;
-    let progress = progress_fn(app, task, title);
 
     let (components, online) = game::resolve(paths, instance.components.clone()).await?;
     // Only the Java requirements are needed from this profile; natives depend on the chosen Java.
@@ -230,7 +232,7 @@ async fn prepare(
         &preliminary.compatible_java_majors,
         preliminary.compatible_java_name.as_deref(),
         &settings.java,
-        &progress,
+        progress,
     )
     .await?;
     if !preliminary.is_java_compatible(java.major) {
@@ -238,14 +240,14 @@ async fn prepare(
             "Предупреждение: Java {} может не подходить этой версии игры (нужна одна из {:?})",
             java.major, preliminary.compatible_java_majors
         );
-        events::game_log(app, id, "launcher", &warning);
+        log.line("launcher", &warning);
     }
 
     let profile = LaunchProfile::build(&components, RuntimeContext::host(&java.arch))?;
     let assets = if online {
-        install_game(&state.http, paths, &profile, task, &progress).await?
+        install_game(&state.http, paths, &profile, task, progress).await?
     } else {
-        events::game_log(app, id, "launcher", "Нет сети: используются уже загруженные файлы игры");
+        log.line("launcher", "Нет сети: используются уже загруженные файлы игры");
         check_installed(paths, &profile).await?
     };
     drop(installing);
@@ -280,7 +282,7 @@ async fn prepare(
         wrapper: cmdline::split(&settings.commands.wrapper)?,
     };
     let command = build_command(paths, &profile, &assets, &options).await?;
-    events::game_log(app, id, "launcher", &format!("Команда запуска: {}", command.display_redacted()));
+    log.line("launcher", &format!("Команда запуска: {}", command.display_redacted()));
     Ok(command)
 }
 
