@@ -93,7 +93,7 @@ const { dragging } = useFileDrop(async (paths) => {
       <PlayButton :instance-id="instance.id" large />
     </header>
 
-    <div class="flex gap-1 overflow-x-auto border-b border-line" role="tablist">
+    <div class="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line [scrollbar-width:none]" role="tablist">
       <button
         v-for="name in tabs"
         :key="name"
