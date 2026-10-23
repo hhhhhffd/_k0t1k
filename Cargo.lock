@@ -2100,6 +2100,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
+ "dirs",
  "k0t1k-core",
  "reqwest",
  "serde",
@@ -2109,6 +2110,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tempfile",
  "tokio",
  "tracing",
  "windows",

@@ -297,19 +297,39 @@ pub fn temporary_root() -> PathBuf {
     std::env::temp_dir().join(format!("{ONBOARDING_ROOT_PREFIX}{}", std::process::id()))
 }
 
-/// Removes onboarding roots of earlier runs (they are left behind when WebView2 still held its files at exit).
+/// Removes onboarding roots of earlier runs in the background. Right after a relocation the previous
+/// process's WebView2 helpers still hold their files for a few seconds, so this retries for ~30 s.
 /// Called once the single-instance check has passed, so no other onboarding run is alive.
 pub fn sweep_stale_roots(current: &Path) {
-    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    const ATTEMPTS: u32 = 20;
+    let current = current.to_path_buf();
+    std::thread::spawn(move || {
+        for attempt in 1..=ATTEMPTS {
+            if remove_stale_roots(&current, attempt == ATTEMPTS) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+        }
+    });
+}
+
+/// One sweep pass; returns whether no stale root is left. Failures are only logged on the last pass.
+fn remove_stale_roots(current: &Path, log_failures: bool) -> bool {
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return true };
+    let mut clean = true;
     for entry in entries.flatten() {
         let path = entry.path();
         if entry.file_name().to_string_lossy().starts_with(ONBOARDING_ROOT_PREFIX)
             && path != current
             && let Err(error) = std::fs::remove_dir_all(&path)
         {
-            tracing::warn!("cannot remove the old onboarding folder {}: {error}", path.display());
+            clean = false;
+            if log_failures {
+                tracing::warn!("cannot remove the old onboarding folder {}: {error}", path.display());
+            }
         }
     }
+    clean
 }
 
 /// Best effort at exit; WebView2 may still hold files, in which case the next start sweeps them.
