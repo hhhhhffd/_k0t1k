@@ -154,6 +154,35 @@ impl Default for UiSettings {
     }
 }
 
+/// What the launcher window does while a game runs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OnGameLaunch {
+    /// Destroy the window, so the web view's processes exit; it is recreated when the game ends.
+    #[default]
+    FreeMemory,
+    /// Hide the window; it is shown again when the game ends.
+    HideToTray,
+    KeepOpen,
+}
+
+/// What closing the launcher window does.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OnClose {
+    /// Destroy the window and keep running in the tray.
+    #[default]
+    Tray,
+    Exit,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BehaviorSettings {
+    pub on_game_launch: OnGameLaunch,
+    pub on_close: OnClose,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GlobalSettings {
@@ -165,6 +194,7 @@ pub struct GlobalSettings {
     pub env: BTreeMap<String, String>,
     pub playtime: PlaytimeSettings,
     pub ui: UiSettings,
+    pub behavior: BehaviorSettings,
     pub accounts: Vec<Account>,
     pub selected_account_id: Option<String>,
 }
@@ -286,6 +316,17 @@ mod tests {
         assert!(!settings.window.maximized);
         assert_eq!(settings.ui.theme, "k0t1k");
         assert!(settings.playtime.record && settings.playtime.show);
+        assert_eq!(settings.behavior.on_game_launch, OnGameLaunch::FreeMemory);
+        assert_eq!(settings.behavior.on_close, OnClose::Tray);
+    }
+
+    #[test]
+    fn behavior_uses_snake_case_values() {
+        let settings: GlobalSettings =
+            serde_json::from_str(r#"{"behavior":{"onGameLaunch":"hide_to_tray","onClose":"exit"}}"#).unwrap();
+        assert_eq!(settings.behavior, BehaviorSettings { on_game_launch: OnGameLaunch::HideToTray, on_close: OnClose::Exit });
+        let json = serde_json::to_value(&settings).unwrap();
+        assert_eq!(json["behavior"]["onGameLaunch"], "hide_to_tray");
     }
 
     fn theme(id: &str, colors: &[(&str, &str)]) -> CustomTheme {
