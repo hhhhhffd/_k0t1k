@@ -3,13 +3,14 @@
 //! Every group has serde defaults, so older or hand-edited files keep loading when fields are added.
 //! Instances override whole groups through `Option<T>` (see `instance::InstanceSettings`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, IoContext, Result};
+use crate::instance::SharedFolder;
 use crate::paths::Paths;
 
 /// Serialises read-modify-write cycles of the settings file within this process.
@@ -183,7 +184,7 @@ pub struct BehaviorSettings {
     pub on_close: OnClose,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GlobalSettings {
     pub java: JavaSettings,
@@ -195,8 +196,29 @@ pub struct GlobalSettings {
     pub playtime: PlaytimeSettings,
     pub ui: UiSettings,
     pub behavior: BehaviorSettings,
+    /// Folders that new instances (including imported modpacks) share with other instances.
+    pub shared_folders_default: BTreeSet<SharedFolder>,
     pub accounts: Vec<Account>,
     pub selected_account_id: Option<String>,
+}
+
+impl Default for GlobalSettings {
+    fn default() -> Self {
+        Self {
+            java: JavaSettings::default(),
+            memory: MemorySettings::default(),
+            jvm_args: String::new(),
+            window: WindowSettings::default(),
+            commands: CommandSettings::default(),
+            env: BTreeMap::new(),
+            playtime: PlaytimeSettings::default(),
+            ui: UiSettings::default(),
+            behavior: BehaviorSettings::default(),
+            shared_folders_default: BTreeSet::from([SharedFolder::Resourcepacks, SharedFolder::Shaderpacks]),
+            accounts: Vec::new(),
+            selected_account_id: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -318,6 +340,20 @@ mod tests {
         assert!(settings.playtime.record && settings.playtime.show);
         assert_eq!(settings.behavior.on_game_launch, OnGameLaunch::FreeMemory);
         assert_eq!(settings.behavior.on_close, OnClose::Tray);
+    }
+
+    #[test]
+    fn shared_folders_default_and_file_format() {
+        let defaults = GlobalSettings::default().shared_folders_default;
+        assert_eq!(defaults, BTreeSet::from([SharedFolder::Resourcepacks, SharedFolder::Shaderpacks]));
+
+        let partial: GlobalSettings = serde_json::from_str(r#"{"jvmArgs":"x"}"#).unwrap();
+        assert_eq!(partial.shared_folders_default, defaults);
+        let none: GlobalSettings = serde_json::from_str(r#"{"sharedFoldersDefault":[]}"#).unwrap();
+        assert!(none.shared_folders_default.is_empty());
+        let json = serde_json::to_value(&partial).unwrap();
+        assert_eq!(json["sharedFoldersDefault"], serde_json::json!(["resourcepacks", "shaderpacks"]));
+        assert!(serde_json::from_str::<GlobalSettings>(r#"{"sharedFoldersDefault":["mods"]}"#).is_err());
     }
 
     #[test]

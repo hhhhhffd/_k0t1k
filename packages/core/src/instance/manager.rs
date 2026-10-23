@@ -5,8 +5,8 @@ use std::sync::{Mutex, MutexGuard};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use super::fsutil::{copy_dir, is_link, remove_link};
-use super::links::{disable_shared_resourcepacks, enable_shared_resourcepacks};
+use super::fsutil::{copy_dir, is_link};
+use super::links::{SharedFolder, detach_all, disable_shared, enable_shared};
 use super::{INSTANCE_FILE, Instance, InstanceSettings, ManagedPack, Playtime};
 use crate::component::ComponentSpec;
 use crate::error::{Error, IoContext, Result};
@@ -142,13 +142,15 @@ impl InstanceManager {
     pub fn get(&self, id: &str) -> Result<Instance> {
         let file = self.instance_dir(id)?.join(INSTANCE_FILE);
         let bytes = std::fs::read(&file).at(&file)?;
-        let mut instance: Instance = serde_json::from_slice(&bytes)?;
+        let mut instance = Instance::from_json(&bytes)?;
         instance.id = id.to_owned();
         Ok(instance)
     }
 
+    /// Creates an instance sharing the folders chosen in the global settings (`sharedFoldersDefault`).
     pub fn create(&self, new: NewInstance) -> Result<Instance> {
         let _guard = self.guard();
+        let shared_folders = GlobalSettings::load(&self.paths)?.shared_folders_default;
         self.stage(|staging| {
             let instance = Instance {
                 id: String::new(),
@@ -162,11 +164,13 @@ impl InstanceManager {
                 managed_pack: new.managed_pack,
                 notes: String::new(),
                 settings: InstanceSettings::default(),
-                share_resourcepacks: true,
+                shared_folders,
             };
             let game_dir = staging.join("minecraft");
             std::fs::create_dir_all(&game_dir).at(&game_dir)?;
-            enable_shared_resourcepacks(&self.paths, &game_dir)?;
+            for folder in &instance.shared_folders {
+                enable_shared(&self.paths, &game_dir, *folder)?;
+            }
             Ok(instance)
         })
     }
@@ -190,11 +194,8 @@ impl InstanceManager {
     pub fn delete(&self, id: &str) -> Result<()> {
         let _guard = self.guard();
         let dir = self.instance_dir(id)?;
-        let resourcepacks = dir.join("minecraft").join("resourcepacks");
-        // Detach the shared folder explicitly so deletion can never reach shared packs.
-        if is_link(&resourcepacks) {
-            remove_link(&resourcepacks)?;
-        }
+        // Detach shared folders explicitly so deletion can never reach shared content.
+        detach_all(&dir.join("minecraft"))?;
         std::fs::remove_dir_all(&dir).at(&dir)
     }
 
@@ -203,8 +204,12 @@ impl InstanceManager {
         let source = self.get(id)?;
         let source_game_dir = source.game_dir(&self.paths);
         let excluded = options.excluded_entries();
-        // A shared folder is re-linked for the copy instead of being duplicated.
-        let source_shares_packs = is_link(&source_game_dir.join("resourcepacks"));
+        // Shared folders are re-linked for the copy instead of being duplicated.
+        let linked: Vec<&str> = SharedFolder::ALL
+            .iter()
+            .map(|folder| folder.dir_name())
+            .filter(|name| is_link(&source_game_dir.join(name)))
+            .collect();
 
         self.stage(|staging| {
             let game_dir = staging.join("minecraft");
@@ -214,7 +219,7 @@ impl InstanceManager {
                 let is_top_level = parts.next().is_none();
                 is_top_level
                     && top_level.is_some_and(|name| {
-                        excluded.contains(&name.as_str()) || (source_shares_packs && name == "resourcepacks")
+                        excluded.contains(&name.as_str()) || linked.contains(&name.as_str())
                     })
             })?;
 
@@ -225,8 +230,8 @@ impl InstanceManager {
                 instance.playtime = Playtime::default();
                 instance.last_played = None;
             }
-            if instance.share_resourcepacks {
-                enable_shared_resourcepacks(&self.paths, &game_dir)?;
+            for folder in &instance.shared_folders {
+                enable_shared(&self.paths, &game_dir, *folder)?;
             }
             Ok(instance)
         })
@@ -249,18 +254,27 @@ impl InstanceManager {
         self.update(id, |instance| instance.group = group)
     }
 
-    /// Turn the shared `resourcepacks` folder on or off for one instance.
-    pub fn set_share_resourcepacks(&self, id: &str, share: bool) -> Result<Instance> {
+    /// Set which folders the instance shares: newly chosen ones are linked (existing local content
+    /// moves into the shared folder), dropped ones become real folders holding a copy.
+    pub fn set_shared_folders(&self, id: &str, folders: BTreeSet<SharedFolder>) -> Result<Instance> {
         let _guard = self.guard();
         let mut instance = self.get(id)?;
         let game_dir = instance.game_dir(&self.paths);
-        if share {
-            enable_shared_resourcepacks(&self.paths, &game_dir)?;
-        } else {
-            disable_shared_resourcepacks(&self.paths, &game_dir)?;
+        for folder in SharedFolder::ALL {
+            let wanted = folders.contains(&folder);
+            if instance.shared_folders.contains(&folder) == wanted {
+                continue;
+            }
+            if wanted {
+                enable_shared(&self.paths, &game_dir, folder)?;
+                instance.shared_folders.insert(folder);
+            } else {
+                disable_shared(&self.paths, &game_dir, folder)?;
+                instance.shared_folders.remove(&folder);
+            }
+            // Saved per folder, so a failure on a later one keeps the file in line with the disk.
+            self.save(&instance)?;
         }
-        instance.share_resourcepacks = share;
-        self.save(&instance)?;
         Ok(instance)
     }
 
@@ -315,13 +329,8 @@ impl InstanceManager {
         })();
 
         if committed.is_err() {
-            let resourcepacks = staging.join("minecraft").join("resourcepacks");
-            let cleaned = if is_link(&resourcepacks) {
-                remove_link(&resourcepacks)
-            } else {
-                Ok(())
-            }
-            .and_then(|()| std::fs::remove_dir_all(&staging).at(&staging));
+            let cleaned = detach_all(&staging.join("minecraft"))
+                .and_then(|()| std::fs::remove_dir_all(&staging).at(&staging));
             if let Err(error) = cleaned {
                 tracing::warn!("could not remove instance staging dir: {error}");
             }
@@ -552,35 +561,91 @@ mod tests {
         }
 
         #[test]
-        fn shared_resourcepacks_are_relinked_in_copies_and_survive_delete() {
+        fn new_instances_share_the_default_folders() {
+            let (_dir, manager) = manager();
+            let paths = manager.paths();
+            let first = manager.create(new_instance("A")).unwrap();
+            let game = first.game_dir(paths);
+            assert!(is_link(&game.join("resourcepacks")) && is_link(&game.join("shaderpacks")));
+            assert!(!is_link(&game.join("screenshots")));
+
+            GlobalSettings::update(paths, |s| s.shared_folders_default = BTreeSet::from([SharedFolder::Screenshots]))
+                .unwrap();
+            let second = manager.create(new_instance("B")).unwrap();
+            assert_eq!(second.shared_folders, BTreeSet::from([SharedFolder::Screenshots]));
+            assert!(is_link(&second.game_dir(paths).join("screenshots")));
+            assert!(!second.game_dir(paths).join("resourcepacks").exists());
+        }
+
+        #[test]
+        fn shared_folders_are_relinked_in_copies_and_survive_delete() {
             let (_dir, manager) = manager();
             let paths = manager.paths();
             let source = manager.create(new_instance("Source")).unwrap();
+            manager
+                .set_shared_folders("Source", SharedFolder::ALL.into_iter().collect())
+                .unwrap();
             write(paths.shared_dir().join("resourcepacks/p.zip"), "pack");
+            write(source.game_dir(paths).join("screenshots/s.png"), "shot");
             let source_packs = source.game_dir(paths).join("resourcepacks");
-            assert!(is_link(&source_packs));
             assert_eq!(std::fs::read(source_packs.join("p.zip")).unwrap(), b"pack");
 
             let copy = manager.copy("Source", "Copy", &CopyOptions::default()).unwrap();
-            assert!(is_link(&copy.game_dir(paths).join("resourcepacks")));
+            assert_eq!(copy.shared_folders.len(), 3);
+            for folder in SharedFolder::ALL {
+                assert!(is_link(&copy.game_dir(paths).join(folder.dir_name())), "{folder:?}");
+            }
+            assert!(copy.game_dir(paths).join("screenshots/s.png").is_file());
 
             manager.delete("Source").unwrap();
             manager.delete("Copy").unwrap();
             assert!(paths.shared_dir().join("resourcepacks/p.zip").is_file());
+            assert!(paths.shared_dir().join("screenshots/s.png").is_file());
         }
 
         #[test]
-        fn toggling_sharing_updates_flag_and_link() {
+        fn set_shared_folders_applies_the_difference() {
             let (_dir, manager) = manager();
+            let paths = manager.paths();
             let instance = manager.create(new_instance("A")).unwrap();
-            let packs = instance.game_dir(manager.paths()).join("resourcepacks");
+            let game = instance.game_dir(paths);
+            write(paths.shared_dir().join("shaderpacks/s.zip"), "shader");
+            write(game.join("screenshots/a.png"), "mine");
+            write(paths.shared_dir().join("screenshots/a.png"), "other");
 
-            let off = manager.set_share_resourcepacks("A", false).unwrap();
-            assert!(!off.share_resourcepacks && !is_link(&packs) && packs.is_dir());
-            assert!(!manager.get("A").unwrap().share_resourcepacks);
+            let updated = manager
+                .set_shared_folders("A", BTreeSet::from([SharedFolder::Resourcepacks, SharedFolder::Screenshots]))
+                .unwrap();
+            assert_eq!(updated, manager.get("A").unwrap());
+            assert!(is_link(&game.join("resourcepacks")) && is_link(&game.join("screenshots")));
+            // Local content moved into the shared folder; the clash was renamed, nothing overwritten.
+            assert_eq!(std::fs::read(paths.shared_dir().join("screenshots/a.png")).unwrap(), b"other");
+            assert_eq!(std::fs::read(paths.shared_dir().join("screenshots/a (1).png")).unwrap(), b"mine");
+            // Dropped folder is a real folder with a copy; the shared one stays intact.
+            assert!(!is_link(&game.join("shaderpacks")));
+            assert!(game.join("shaderpacks/s.zip").is_file());
+            assert!(paths.shared_dir().join("shaderpacks/s.zip").is_file());
 
-            let on = manager.set_share_resourcepacks("A", true).unwrap();
-            assert!(on.share_resourcepacks && is_link(&packs));
+            let none = manager.set_shared_folders("A", BTreeSet::new()).unwrap();
+            assert!(none.shared_folders.is_empty());
+            assert!(manager.get("A").unwrap().shared_folders.is_empty());
+            assert!(!is_link(&game.join("resourcepacks")) && game.join("resourcepacks").is_dir());
+        }
+
+        #[test]
+        fn legacy_instance_file_keeps_its_meaning() {
+            let (_dir, manager) = manager();
+            let paths = manager.paths();
+            let instance = manager.create(new_instance("A")).unwrap();
+            let file = instance.dir(paths).join(INSTANCE_FILE);
+            let mut json: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+            json.as_object_mut().unwrap().remove("sharedFolders");
+            json["shareResourcepacks"] = true.into();
+            std::fs::write(&file, serde_json::to_vec(&json).unwrap()).unwrap();
+            assert_eq!(
+                manager.get("A").unwrap().shared_folders,
+                BTreeSet::from([SharedFolder::Resourcepacks])
+            );
         }
     }
 }
