@@ -218,9 +218,11 @@ impl RemovalPlan {
             deletions.push(format!("rmdir \"{}\" 2>nul", folder.display()));
         }
         let pass = deletions.join(" & ");
-        Ok(format!(
-            "ping -n 4 127.0.0.1 >nul & {pass} & ping -n 4 127.0.0.1 >nul & {pass}"
-        ))
+        // WebView2 helpers of the exiting launcher hold their profile files for a while, so the whole
+        // pass is repeated for about half a minute; passes after a successful one are no-ops.
+        const PASSES: usize = 6;
+        let passes = vec![pass; PASSES].join(" & ping -n 6 127.0.0.1 >nul & ");
+        Ok(format!("ping -n 4 127.0.0.1 >nul & {passes}"))
     }
 }
 
@@ -455,7 +457,7 @@ mod tests {
         assert!(!script.contains("notes.txt"));
         assert_eq!(
             script.matches("rmdir \"").count(),
-            2,
+            6,
             "the folder itself is removed non-recursively, once per pass"
         );
 
