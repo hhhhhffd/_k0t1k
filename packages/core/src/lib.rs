@@ -10,6 +10,7 @@ pub mod java;
 pub mod launch;
 pub mod meta;
 pub mod paths;
+pub mod placement;
 pub mod profile;
 pub mod progress;
 pub mod settings;

@@ -81,6 +81,27 @@ instances/<id>/          instance.json + minecraft/ (game dir) + sessions/<sessi
 cache/                   downloads cache
 ```
 
+### First run, install and uninstall (`onboarding.rs`, `core::placement`)
+
+On Windows, when the exe's folder is Desktop, Downloads or Documents (Known Folder API, so OneDrive-redirected
+folders count) or inside `%TEMP%` (started from a zip), and no `data-dir.txt` or stored "keep here" choice
+(`settings.onboarding.keepPortableAt == exe dir`) exists, the launcher starts on a temporary root
+`%TEMP%\_k0t1k-onboarding-<pid>` (`DataDirSource::Onboarding`, WebView2 profile included), shows only the onboarding
+screen, has no tray and exits when the window closes. Nothing is written next to the exe. Stale onboarding roots are
+swept at the next start.
+
+- `relocate`: copies the exe to the target (`%LOCALAPPDATA%\Programs\_k0t1k`, or `<chosen>\_k0t1k` when the chosen
+  folder is not empty) as `.part` + rename, starts it with `--wait-for <pid> --finish-relocation <old exe>
+  [--desktop-shortcut] [--start-menu-shortcut]` and exits. The new process waits for the pid *before* the
+  single-instance plugin exists (the mutex dies with the old process), moves our known entries
+  (`placement::OWNED_NAMES`) from the old folder, deletes the old exe (retries), creates `.lnk` files through
+  `IShellLinkW` and records them in `settings.onboarding.createdShortcuts`. Problems are returned once by
+  `get_relocation_report` and shown in a dialog. A failure before the spawn leaves the old exe working.
+- `keep_portable_here(remember)`: stores the choice (or only passes `--portable-here` for one run) and restarts.
+- Uninstall (Settings, Storage): `RemovalPlan` refuses a drive root or any folder that is or contains the profile,
+  Desktop, Downloads, Documents or temp; it deletes only the launcher's own entries (so foreign files survive) and the
+  shortcuts, through a detached `cmd /c` that waits, deletes twice and removes the then-empty folders.
+
 ## Window lifecycle and tray (`src-tauri/src/window.rs`, `tray.rs`)
 
 Goal: while a game runs the launcher costs ~15-30 MB and no CPU. WebView2's processes are the heavy part, so

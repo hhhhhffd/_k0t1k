@@ -26,6 +26,7 @@ import type {
   LocalResourceKind,
   MinecraftVersion,
   ModpackImport,
+  OnboardingInfo,
   Platform,
   ProgressEvent,
   ProjectVersion,
@@ -39,6 +40,7 @@ import type {
   ServerStatus,
   SessionId,
   SystemInfo,
+  UninstallPlan,
   VersionFilter,
   World,
 } from './types'
@@ -105,6 +107,7 @@ const defaultSettings: GlobalSettings = {
   playtime: { record: true, show: true, totalSecs: 0 },
   ui: { theme: 'k0t1k', liteMode: false, customThemes: [] },
   behavior: { onGameLaunch: 'free_memory', onClose: 'tray' },
+  onboarding: { keepPortableAt: null, createdShortcuts: [] },
   sharedFoldersDefault: ['resourcepacks', 'shaderpacks'],
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],
   selectedAccountId: 'acc-1',
@@ -549,6 +552,16 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       return { totalRamMib: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir, portable: false, exeDir: 'C:\\Program Files\\_k0t1k' } satisfies SystemInfo
     case 'set_data_dir': dataDir = (a.path as string | null) ?? '%APPDATA%\\_k0t1k'; return true
     case 'open_data_dir': return undefined
+    // `?onboarding` in the URL previews the first-run screen (`?onboarding=temp` for the zip variant)
+    case 'get_onboarding': {
+      const reason = new URLSearchParams(location.search).get('onboarding')
+      return reason === null ? null : ({ reason: reason === 'temp' ? 'temp' : 'folder', exeDir: 'C:\\Users\\user\\Desktop', defaultTarget: 'C:\\Users\\user\\AppData\\Local\\Programs\\_k0t1k' } satisfies OnboardingInfo)
+    }
+    case 'relocate': case 'keep_portable_here': await sleep(600); return undefined
+    case 'get_relocation_report': return null
+    case 'create_shortcuts': return ['C:\\Users\\user\\Desktop\\_k0t1k.lnk']
+    case 'get_uninstall_plan': return { folders: [dataDir], shortcuts: ['C:\\Users\\user\\Desktop\\_k0t1k.lnk'] } satisfies UninstallPlan
+    case 'uninstall': return undefined
     case 'open_shared_folder': return undefined
     case 'add_offline_account': {
       const acc: Account = { id: nextId('acc'), name: a.name as string, kind: 'offline' }

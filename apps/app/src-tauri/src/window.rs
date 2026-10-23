@@ -18,6 +18,7 @@ use k0t1k_core::settings::{GlobalSettings, OnClose, OnGameLaunch};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
 
+use crate::datadir::DataDirSource;
 use crate::state::{AppState, SessionId};
 use crate::{launch, tray};
 
@@ -126,6 +127,11 @@ pub fn on_game_stopped(app: &AppHandle) {
 /// The window's close button or an OS close request.
 pub fn request_close(app: &AppHandle) {
     background(app, |app| {
+        // The onboarding screen has no tray icon to come back from.
+        if app.state::<AppState>().location.source == DataDirSource::Onboarding {
+            app.exit(0);
+            return;
+        }
         let on_close = match GlobalSettings::load(&app.state::<AppState>().paths) {
             Ok(settings) => settings.behavior.on_close,
             Err(error) => {

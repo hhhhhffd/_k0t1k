@@ -184,6 +184,17 @@ pub struct BehaviorSettings {
     pub on_close: OnClose,
 }
 
+/// Decisions made when the launcher was first started (see `placement`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct OnboardingSettings {
+    /// The user chose to keep the launcher in this (otherwise cluttered) folder; moving the
+    /// executable elsewhere asks again.
+    pub keep_portable_at: Option<PathBuf>,
+    /// Shortcuts the launcher created, removed again by an uninstall.
+    pub created_shortcuts: Vec<PathBuf>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GlobalSettings {
@@ -196,6 +207,7 @@ pub struct GlobalSettings {
     pub playtime: PlaytimeSettings,
     pub ui: UiSettings,
     pub behavior: BehaviorSettings,
+    pub onboarding: OnboardingSettings,
     /// Folders that new instances (including imported modpacks) share with other instances.
     pub shared_folders_default: BTreeSet<SharedFolder>,
     pub accounts: Vec<Account>,
@@ -214,6 +226,7 @@ impl Default for GlobalSettings {
             playtime: PlaytimeSettings::default(),
             ui: UiSettings::default(),
             behavior: BehaviorSettings::default(),
+            onboarding: OnboardingSettings::default(),
             shared_folders_default: BTreeSet::from([SharedFolder::Resourcepacks, SharedFolder::Shaderpacks]),
             accounts: Vec::new(),
             selected_account_id: None,

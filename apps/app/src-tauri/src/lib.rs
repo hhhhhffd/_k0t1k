@@ -7,6 +7,8 @@ mod game;
 mod instances;
 mod java;
 mod launch;
+mod onboarding;
+mod platform;
 mod screenshots;
 mod servers;
 mod settings;
@@ -20,7 +22,19 @@ mod worlds;
 use tauri::{Manager, RunEvent, WindowEvent};
 
 pub fn run() {
+    // Before anything else: after a restart the previous process must be gone, or the single-instance
+    // plugin below would hand control to it.
+    let mut report = None;
+    let mut portable_here = false;
+    match onboarding::StartupArgs::parse(std::env::args_os().skip(1)) {
+        Ok(args) => {
+            portable_here = args.portable_here;
+            report = onboarding::run_startup_tasks(&args);
+        }
+        Err(error) => tracing::error!("ignoring the command line: {error}"),
+    }
     tauri::Builder::default()
+        .manage(onboarding::PendingReport::new(report))
         // Registered first, as the plugin requires. A second launch shows the running launcher; it
         // keeps its state in a named mutex and a hidden window (Windows) or the session bus (Linux).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| window::open(app)))
@@ -34,13 +48,18 @@ pub fn run() {
                 window::request_close(window.app_handle());
             }
         })
-        .setup(|app| {
-            let state = datadir::resolve().and_then(state::AppState::new).map_err(|error| error.to_string())?;
+        .setup(move |app| {
+            let state = datadir::resolve(portable_here).and_then(state::AppState::new).map_err(|error| error.to_string())?;
             let webview_dir = state.location.webview_dir();
             std::fs::create_dir_all(&webview_dir)?;
+            onboarding::sweep_stale_roots(state.paths.root());
+            record_created_shortcuts(app.handle(), &state);
+            let onboarding = state.location.source == datadir::DataDirSource::Onboarding;
             app.manage(state);
             window::create(app.handle())?;
-            tray::create(app.handle())?;
+            if !onboarding {
+                tray::create(app.handle())?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -66,6 +85,13 @@ pub fn run() {
             settings::get_system_info,
             settings::set_data_dir,
             settings::open_data_dir,
+            onboarding::get_onboarding,
+            onboarding::get_relocation_report,
+            onboarding::relocate,
+            onboarding::keep_portable_here,
+            onboarding::create_shortcuts,
+            onboarding::get_uninstall_plan,
+            onboarding::uninstall,
             settings::open_shared_folder,
             settings::add_offline_account,
             settings::remove_offline_account,
@@ -111,11 +137,22 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the _k0t1k application")
-        .run(|_app, event| {
+        .run(|app, event| match event {
             // No window left is not a reason to exit: the launcher lives in the tray. Explicit
             // exits (`AppHandle::exit`) carry an exit code and are let through.
-            if let RunEvent::ExitRequested { api, code: None, .. } = event {
-                api.prevent_exit();
-            }
+            RunEvent::ExitRequested { api, code: None, .. } => api.prevent_exit(),
+            RunEvent::Exit => onboarding::remove_own_temporary_root(app),
+            _ => {}
         });
+}
+
+/// Shortcuts made by the previous process during an install are recorded in the settings of the new
+/// data root, which is only known now; a failure to record them is shown with the rest of the report.
+fn record_created_shortcuts(app: &tauri::AppHandle, state: &state::AppState) {
+    let pending = app.state::<onboarding::PendingReport>();
+    if let Some(report) = pending.report().as_mut()
+        && let Err(error) = onboarding::record_shortcuts(&state.paths, &report.created_shortcuts)
+    {
+        report.problems.push(format!("cannot remember the created shortcuts: {error}"));
+    }
 }
