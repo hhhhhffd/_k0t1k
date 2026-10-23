@@ -23,6 +23,11 @@ pub use types::{
 
 const META_URL: &str = "https://meta.prismlauncher.org/v1/";
 
+/// Release time of Minecraft 1.6.1. Older versions use the legacy launch path (applet-based
+/// launchers, `legacyLaunch`/`alphaLaunch` traits in Prism meta) that this launcher cannot start.
+/// The version index carries no traits, so the release time is the cheapest correct signal.
+const FIRST_LAUNCHABLE_RELEASE: &str = "2013-06-25T00:00:00Z";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Loader {
     Fabric,
@@ -169,6 +174,14 @@ impl MetaClient {
         Ok(self.version_list(MINECRAFT_UID).await?.versions)
     }
 
+    /// Minecraft versions this launcher can start (1.6 and newer), newest first.
+    pub async fn launchable_minecraft_versions(&self) -> Result<Vec<VersionEntry>> {
+        let first: chrono::DateTime<chrono::Utc> = FIRST_LAUNCHABLE_RELEASE.parse().expect("valid constant");
+        let mut versions = self.minecraft_versions().await?;
+        versions.retain(|entry| entry.release_time >= first);
+        Ok(versions)
+    }
+
     /// Loader versions usable with `mc_version`, best default first: recommended, then releases
     /// newest first, then the rest. Forge and NeoForge are pinned to one Minecraft version through
     /// `requires`; Fabric and Quilt work with every version.
@@ -211,6 +224,23 @@ mod tests {
         let list = format!(r#"{{"uid":"{uid}","versions":[{}]}}"#, entries.join(","));
         write_cached(&paths.meta_dir().join(uid).join("index.json"), list.as_bytes()).await.unwrap();
         (root, MetaClient::new(&paths, true))
+    }
+
+    #[tokio::test]
+    async fn pre_1_6_versions_are_not_launchable() {
+        let (_root, client) = client_with_list(
+            "net.minecraft",
+            &[
+                entry("1.21.4", Some("release"), false, "2024-12-03T00:00:00+00:00", None),
+                entry("1.6.1", Some("release"), false, "2013-06-25T00:00:00+00:00", None),
+                entry("1.5.2", Some("release"), false, "2013-04-25T00:00:00+00:00", None),
+                entry("b1.7.3", Some("old_beta"), false, "2011-07-08T00:00:00+00:00", None),
+            ],
+        )
+        .await;
+        let versions: Vec<_> =
+            client.launchable_minecraft_versions().await.unwrap().into_iter().map(|entry| entry.version).collect();
+        assert_eq!(versions, ["1.21.4", "1.6.1"]);
     }
 
     #[tokio::test]
