@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 
 use crate::error::CommandResult;
-use crate::state::AppState;
+use crate::state::{AppState, SessionId};
 use crate::{tray, window};
 
 /// Core reports every downloaded file; the UI does not need more than a few updates per second.
@@ -40,7 +40,7 @@ pub struct LogLine {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GameLogPayload {
-    instance_id: String,
+    session_id: SessionId,
     lines: Vec<LogLine>,
 }
 
@@ -56,7 +56,9 @@ pub enum RunState {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceStatePayload {
+    pub session_id: SessionId,
     pub instance_id: String,
+    pub number: u32,
     pub state: RunState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
@@ -120,23 +122,21 @@ pub async fn tracked<T>(app: &AppHandle, task: &str, title: &str, work: impl Fut
     result
 }
 
-/// Log of one launch session. Lines sent through it are kept in the instance's ring buffer (see
-/// `AppState::record_log`) and reach the UI as `game-log` events carrying arrays of lines, at most one
+/// Log of one launch session. Lines sent through it are kept in the session's ring buffer (see
+/// `AppState::record_log`) and reach the UI as `game-log` events carrying the session id and arrays of lines, at most one
 /// event per [`LOG_INTERVAL`]. Clones share the same queue; the sender task ends, after sending what
 /// is left, when every clone is dropped. With nothing queued it sleeps on the channel, not on a timer.
 #[derive(Clone)]
 pub struct GameLog {
     state: AppState,
-    instance_id: String,
+    session_id: SessionId,
     lines: mpsc::UnboundedSender<LogLine>,
 }
 
 impl GameLog {
-    pub fn new(app: &AppHandle, state: &AppState, instance_id: &str) -> Self {
-        state.reset_log(instance_id);
+    pub fn new(app: &AppHandle, state: &AppState, session_id: SessionId) -> Self {
         let (lines, mut queue) = mpsc::unbounded_channel();
         let app = app.clone();
-        let id = instance_id.to_owned();
         tauri::async_runtime::spawn(async move {
             while let Some(first) = queue.recv().await {
                 let mut batch = vec![first];
@@ -146,23 +146,24 @@ impl GameLog {
                 }
                 // The lines are in the ring buffer; a window that opens later fetches them from there.
                 if app.get_webview_window(window::MAIN).is_some() {
-                    emit(&app, "game-log", GameLogPayload { instance_id: id.clone(), lines: batch });
+                    emit(&app, "game-log", GameLogPayload { session_id, lines: batch });
                 }
             }
         });
-        Self { state: state.clone(), instance_id: instance_id.to_owned(), lines }
+        Self { state: state.clone(), session_id, lines }
     }
 
     /// `stream` is `stdout`, `stderr` or `launcher` (the launcher's own messages).
     pub fn line(&self, stream: &'static str, line: &str) {
-        let entry = self.state.record_log(&self.instance_id, stream, line);
+        let entry = self.state.record_log(self.session_id, stream, line);
         if self.lines.send(entry).is_err() {
             tracing::warn!("game log is closed, dropping: {line}");
         }
     }
 }
 
-pub fn instance_state(app: &AppHandle, instance_id: &str, state: RunState, exit_code: Option<i32>) {
-    emit(app, "instance-state", InstanceStatePayload { instance_id: instance_id.to_owned(), state, exit_code });
+/// `number` is the session's number within its instance (see `RunEntry::number`).
+pub fn instance_state(app: &AppHandle, session_id: SessionId, instance_id: &str, number: u32, state: RunState, exit_code: Option<i32>) {
+    emit(app, "instance-state", InstanceStatePayload { session_id, instance_id: instance_id.to_owned(), number, state, exit_code });
     tray::refresh(app);
 }

@@ -2,10 +2,12 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use chrono::{DateTime, Utc};
 use k0t1k_core::content::{Clients, curseforge};
 use k0t1k_core::instance::InstanceManager;
 use k0t1k_core::launch::GameHandle;
 use k0t1k_core::paths::Paths;
+use serde::Serialize;
 use tauri::async_runtime::JoinHandle;
 use tokio::sync::watch;
 
@@ -16,12 +18,22 @@ use crate::events::{LogLine, RunState};
 /// Baked in by build.rs from the environment or `.env`; absent in builds without a key.
 const CURSEFORGE_API_KEY: Option<&str> = option_env!("K0T1K_CURSEFORGE_API_KEY");
 
-/// Lines of one instance's log kept for a window that is opened later; matches the UI's own cap.
+/// Lines of one session's log kept for a window that is opened later; matches the UI's own cap.
 pub const MAX_LOG_LINES: usize = 5000;
 
-/// A game that is being prepared, running or being stopped.
+/// Finished sessions of one instance whose logs are kept (until the app exits) for the Logs tab.
+pub const KEPT_FINISHED_SESSIONS: usize = 3;
+
+/// Identifies one launch of an instance; numbers go up for the whole app run, so ids are never reused.
+pub type SessionId = u64;
+
+/// A game that is being prepared, running or being stopped. One entry per launch: an instance may
+/// have any number of them at once.
 pub struct RunEntry {
+    pub instance_id: String,
     pub name: String,
+    /// 1 for the first launch of the instance in this app run, 2 for the next, ...
+    pub number: u32,
     pub state: RunState,
     pub handle: Option<GameHandle>,
     /// Becomes `true` when a kill is requested; preparation waits on it to abort promptly.
@@ -32,6 +44,33 @@ impl RunEntry {
     pub fn kill_requested(&self) -> bool {
         *self.cancel.borrow()
     }
+}
+
+/// Log and identity of a session, kept after the game exits (see [`KEPT_FINISHED_SESSIONS`]).
+struct SessionLog {
+    instance_id: String,
+    number: u32,
+    started_at: DateTime<Utc>,
+    finished: bool,
+    lines: VecDeque<LogLine>,
+}
+
+#[derive(Default)]
+struct SessionLogs {
+    sessions: HashMap<SessionId, SessionLog>,
+    /// Launches so far per instance in this app run.
+    launches: HashMap<String, u32>,
+}
+
+/// What the UI needs to know about a session; `state` is `stopped` for a finished one whose log is kept.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionInfo {
+    pub session_id: SessionId,
+    pub instance_id: String,
+    pub number: u32,
+    pub state: RunState,
+    pub started_at: DateTime<Utc>,
 }
 
 /// A background install of an instance's game files.
@@ -48,12 +87,12 @@ pub struct AppState {
     pub http: reqwest::Client,
     pub instances: Arc<InstanceManager>,
     pub clients: Arc<Clients>,
-    running: Arc<Mutex<HashMap<String, RunEntry>>>,
+    running: Arc<Mutex<HashMap<SessionId, RunEntry>>>,
+    next_session: Arc<AtomicU64>,
     /// Background game installs by instance id, so deleting the instance can stop its download.
     game_installs: Arc<Mutex<HashMap<String, GameInstall>>>,
-    /// Recent log lines per instance. A session's log stays after the game exits, until the next launch.
-    game_logs: Arc<Mutex<HashMap<String, VecDeque<LogLine>>>>,
-    /// Numbers log lines across all instances, so the UI can tell which lines it already has.
+    game_logs: Arc<Mutex<SessionLogs>>,
+    /// Numbers log lines across all sessions, so the UI can tell which lines it already has.
     log_seq: Arc<AtomicU64>,
     /// Set while the main window is gone or hidden only because a game started (see `window`).
     pub window_released: Arc<AtomicBool>,
@@ -74,6 +113,7 @@ impl AppState {
             location,
             http,
             running: Arc::default(),
+            next_session: Arc::new(AtomicU64::new(1)),
             game_installs: Arc::default(),
             game_logs: Arc::default(),
             log_seq: Arc::default(),
@@ -89,7 +129,7 @@ impl AppState {
             .ok_or_else(|| AppError::new("CurseForge unavailable: this build has no CurseForge API key"))
     }
 
-    pub fn running(&self) -> MutexGuard<'_, HashMap<String, RunEntry>> {
+    pub fn running(&self) -> MutexGuard<'_, HashMap<SessionId, RunEntry>> {
         self.running.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
@@ -98,49 +138,100 @@ impl AppState {
     }
 
     pub fn is_running(&self, instance_id: &str) -> bool {
-        self.running().contains_key(instance_id)
+        self.running().values().any(|entry| entry.instance_id == instance_id)
     }
 
-    pub fn kill_requested(&self, instance_id: &str) -> bool {
-        self.running().get(instance_id).is_some_and(RunEntry::kill_requested)
+    pub fn kill_requested(&self, session_id: SessionId) -> bool {
+        self.running().get(&session_id).is_some_and(RunEntry::kill_requested)
     }
 
-    /// Marks the instance as being prepared; fails when it is already running.
-    /// The receiver turns `true` when a kill is requested.
-    pub fn reserve(&self, instance_id: &str, name: &str) -> CommandResult<watch::Receiver<bool>> {
-        let mut running = self.running();
-        if running.contains_key(instance_id) {
-            return Err(AppError::new("the instance is already running"));
-        }
-        let (cancel, killed) = watch::channel(false);
-        running.insert(instance_id.to_owned(), RunEntry { name: name.to_owned(), state: RunState::Preparing, handle: None, cancel });
-        Ok(killed)
-    }
-}
-
-impl AppState {
-    /// Forgets the log of the previous session of the instance.
-    pub fn reset_log(&self, instance_id: &str) {
-        self.logs().remove(instance_id);
-    }
-
-    /// Numbers the line and keeps it in the instance's ring buffer.
-    pub fn record_log(&self, instance_id: &str, stream: &'static str, line: &str) -> LogLine {
-        let entry = LogLine { seq: self.log_seq.fetch_add(1, Ordering::Relaxed), stream, line: line.to_owned() };
+    /// Starts a new session of the instance in the `Preparing` state; other sessions of the same
+    /// instance may be running. The receiver turns `true` when a kill is requested.
+    pub fn reserve(&self, instance_id: &str, name: &str) -> (SessionId, watch::Receiver<bool>) {
+        let session_id = self.next_session.fetch_add(1, Ordering::Relaxed);
+        let started_at = Utc::now();
         let mut logs = self.logs();
-        let buffer = logs.entry(instance_id.to_owned()).or_default();
-        if buffer.len() == MAX_LOG_LINES {
-            buffer.pop_front();
+        let launches = logs.launches.entry(instance_id.to_owned()).or_default();
+        *launches += 1;
+        let number = *launches;
+        logs.sessions.insert(
+            session_id,
+            SessionLog { instance_id: instance_id.to_owned(), number, started_at, finished: false, lines: VecDeque::new() },
+        );
+        drop(logs);
+        let (cancel, killed) = watch::channel(false);
+        self.running().insert(
+            session_id,
+            RunEntry {
+                instance_id: instance_id.to_owned(),
+                name: name.to_owned(),
+                number,
+                state: RunState::Preparing,
+                handle: None,
+                cancel,
+            },
+        );
+        (session_id, killed)
+    }
+
+    /// Running sessions followed by finished ones whose log is kept.
+    pub fn sessions(&self) -> Vec<SessionInfo> {
+        let running = self.running();
+        let logs = self.logs();
+        let mut sessions: Vec<SessionInfo> = logs
+            .sessions
+            .iter()
+            .map(|(&session_id, log)| SessionInfo {
+                session_id,
+                instance_id: log.instance_id.clone(),
+                number: log.number,
+                state: running.get(&session_id).map_or(RunState::Stopped, |entry| entry.state),
+                started_at: log.started_at,
+            })
+            .collect();
+        sessions.sort_by_key(|session| session.session_id);
+        sessions
+    }
+
+    /// Number of the session within its instance; `None` once the session is gone.
+    pub fn session_number(&self, session_id: SessionId) -> Option<u32> {
+        self.logs().sessions.get(&session_id).map(|log| log.number)
+    }
+
+    /// Marks the session's log as finished and drops the oldest finished logs of its instance.
+    pub fn finish_log(&self, session_id: SessionId) {
+        let mut logs = self.logs();
+        let Some(log) = logs.sessions.get_mut(&session_id) else {
+            return;
+        };
+        log.finished = true;
+        let instance_id = log.instance_id.clone();
+        let mut finished: Vec<SessionId> =
+            logs.sessions.iter().filter(|(_, log)| log.finished && log.instance_id == instance_id).map(|(&id, _)| id).collect();
+        finished.sort_unstable();
+        let excess = finished.len().saturating_sub(KEPT_FINISHED_SESSIONS);
+        for id in &finished[..excess] {
+            logs.sessions.remove(id);
         }
-        buffer.push_back(entry.clone());
+    }
+
+    /// Numbers the line and keeps it in the session's ring buffer.
+    pub fn record_log(&self, session_id: SessionId, stream: &'static str, line: &str) -> LogLine {
+        let entry = LogLine { seq: self.log_seq.fetch_add(1, Ordering::Relaxed), stream, line: line.to_owned() };
+        if let Some(log) = self.logs().sessions.get_mut(&session_id) {
+            if log.lines.len() == MAX_LOG_LINES {
+                log.lines.pop_front();
+            }
+            log.lines.push_back(entry.clone());
+        }
         entry
     }
 
-    pub fn log_lines(&self, instance_id: &str) -> Vec<LogLine> {
-        self.logs().get(instance_id).map(|buffer| buffer.iter().cloned().collect()).unwrap_or_default()
+    pub fn log_lines(&self, session_id: SessionId) -> Vec<LogLine> {
+        self.logs().sessions.get(&session_id).map(|log| log.lines.iter().cloned().collect()).unwrap_or_default()
     }
 
-    fn logs(&self) -> MutexGuard<'_, HashMap<String, VecDeque<LogLine>>> {
+    fn logs(&self) -> MutexGuard<'_, SessionLogs> {
         self.game_logs.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
@@ -151,23 +242,43 @@ mod tests {
     use crate::datadir::DataDirSource;
 
     #[test]
-    fn log_buffer_keeps_the_newest_lines_and_resets_per_launch() {
+    fn logs_are_kept_per_session_and_only_the_newest_finished_ones() {
         let root = std::env::temp_dir().join("k0t1k-state-test");
         let location = DataLocation { root: root.clone(), exe_dir: root, source: DataDirSource::Custom };
         let state = AppState::new(location).unwrap();
 
+        let (a, _) = state.reserve("inst", "Inst");
+        let (b, _) = state.reserve("inst", "Inst");
+        let (other, _) = state.reserve("other", "Other");
+        assert_eq!((state.session_number(a), state.session_number(b), state.session_number(other)), (Some(1), Some(2), Some(1)));
+        assert!(state.is_running("inst"));
+
         for n in 0..MAX_LOG_LINES + 3 {
-            state.record_log("a", "stdout", &n.to_string());
+            state.record_log(a, "stdout", &n.to_string());
         }
-        state.record_log("b", "stderr", "other");
-        let lines = state.log_lines("a");
+        state.record_log(b, "stderr", "other");
+        let lines = state.log_lines(a);
         assert_eq!(lines.len(), MAX_LOG_LINES);
         assert_eq!(lines[0].line, "3");
         assert!(lines.windows(2).all(|pair| pair[0].seq < pair[1].seq));
-        assert_eq!(state.log_lines("b").len(), 1);
+        assert_eq!(state.log_lines(b).len(), 1);
 
-        state.reset_log("a");
-        assert!(state.log_lines("a").is_empty());
-        assert_eq!(state.log_lines("b").len(), 1);
+        // Finished sessions keep their logs, but only the newest few per instance.
+        let mut ended = vec![a, b];
+        for _ in 0..KEPT_FINISHED_SESSIONS {
+            ended.push(state.reserve("inst", "Inst").0);
+        }
+        for id in &ended {
+            state.running().remove(id);
+            state.finish_log(*id);
+        }
+        assert!(state.log_lines(a).is_empty());
+        assert!(state.session_number(b).is_none());
+        assert!(state.session_number(ended[2]).is_some());
+        assert!(state.is_running("other"));
+        assert!(!state.is_running("inst"));
+        let infos = state.sessions();
+        assert_eq!(infos.iter().filter(|info| info.state == RunState::Stopped).count(), KEPT_FINISHED_SESSIONS);
+        assert!(infos.iter().any(|info| info.session_id == other && info.state == RunState::Preparing));
     }
 }

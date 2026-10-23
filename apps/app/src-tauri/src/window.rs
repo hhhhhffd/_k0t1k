@@ -4,9 +4,9 @@
 //! Rules:
 //! - Closing the window (title bar button, Alt+F4) follows `behavior.on_close`: `tray` destroys the
 //!   window and keeps the launcher in the tray, `exit` quits (asking first when a game is running).
-//! - When a game starts, `behavior.on_game_launch` destroys (`free_memory`) or hides (`hide_to_tray`)
+//! - When a game starts (any session of any instance), `behavior.on_game_launch` destroys (`free_memory`) or hides (`hide_to_tray`)
 //!   the window, if there is one, and marks it as released for the game.
-//! - When the last game ends, a released window is created or shown again. Opening the window yourself
+//! - When the last session of all instances ends, a released window is created or shown again. Opening the window yourself
 //!   (tray click, second launch) clears the mark, so a window you closed afterwards stays closed.
 //! - The app exits only on an explicit request (`exit`); closing the last window never exits it.
 
@@ -18,8 +18,8 @@ use k0t1k_core::settings::{GlobalSettings, OnClose, OnGameLaunch};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
 
-use crate::launch;
-use crate::state::AppState;
+use crate::state::{AppState, SessionId};
+use crate::{launch, tray};
 
 pub const MAIN: &str = "main";
 
@@ -147,7 +147,7 @@ pub fn request_exit(app: &AppHandle) {
 
 /// Exits, after asking what to do with running games. Runs on a blocking thread: the dialog blocks.
 fn ask_and_exit(app: &AppHandle) {
-    let names: Vec<String> = app.state::<AppState>().running().values().map(|entry| entry.name.clone()).collect();
+    let names: Vec<String> = tray::session_labels(&app.state::<AppState>()).into_iter().map(|(_, label)| label).collect();
     if names.is_empty() {
         app.exit(0);
         return;
@@ -169,13 +169,13 @@ fn ask_and_exit(app: &AppHandle) {
     }
 }
 
-/// Kills every game and waits until its session has ended, so the playtime is saved before exiting.
+/// Kills every session and waits until its session has ended, so the playtime is saved before exiting.
 fn kill_games(app: &AppHandle) {
     let state = app.state::<AppState>();
-    let ids: Vec<String> = state.running().keys().cloned().collect();
+    let ids: Vec<SessionId> = state.running().keys().copied().collect();
     for id in ids {
-        if let Err(error) = launch::kill(app, &state, &id) {
-            tracing::warn!("cannot stop {id}: {error}");
+        if let Err(error) = launch::kill(app, &state, id) {
+            tracing::warn!("cannot stop session {id}: {error}");
         }
     }
     let ended = tauri::async_runtime::block_on(tokio::time::timeout(KILL_WAIT, async {

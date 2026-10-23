@@ -49,6 +49,7 @@ pub fn run() {
             instances::update_instance_settings,
             instances::open_instance_folder,
             launch::launch_instance,
+            launch::kill_session,
             launch::kill_instance,
             launch::list_run_states,
             launch::get_game_logs,

@@ -7,7 +7,7 @@ use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
-use crate::state::AppState;
+use crate::state::{AppState, SessionId};
 use crate::{launch, window};
 
 const TRAY_ID: &str = "main";
@@ -18,11 +18,12 @@ const STOP_PREFIX: &str = "stop:";
 /// Makes the menu follow the latest snapshot even when several refreshes overlap.
 static REFRESH: Mutex<()> = Mutex::new(());
 
-fn build_menu(app: &AppHandle, running: &[(String, String)]) -> tauri::Result<Menu<tauri::Wry>> {
+/// `(session id, menu label)` of every live session.
+fn build_menu(app: &AppHandle, running: &[(SessionId, String)]) -> tauri::Result<Menu<tauri::Wry>> {
     let open = MenuItem::with_id(app, OPEN, "Открыть _k0t1k", true, None::<&str>)?;
     let stops = running
         .iter()
-        .map(|(id, name)| MenuItem::with_id(app, format!("{STOP_PREFIX}{id}"), format!("Остановить: {name}"), true, None::<&str>))
+        .map(|(id, label)| MenuItem::with_id(app, format!("{STOP_PREFIX}{id}"), format!("Остановить: {label}"), true, None::<&str>))
         .collect::<tauri::Result<Vec<_>>>()?;
     let stop_items: Vec<&dyn IsMenuItem<tauri::Wry>> = stops.iter().map(|item| item as _).collect();
     let games = Submenu::with_items(app, "Запущенные игры", !stops.is_empty(), &stop_items)?;
@@ -42,10 +43,10 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             OPEN => window::open(app),
             EXIT => window::request_exit(app),
             id => {
-                if let Some(instance_id) = id.strip_prefix(STOP_PREFIX)
-                    && let Err(error) = launch::kill(app, &app.state::<AppState>(), instance_id)
+                if let Some(session_id) = id.strip_prefix(STOP_PREFIX).and_then(|id| id.parse::<SessionId>().ok())
+                    && let Err(error) = launch::kill(app, &app.state::<AppState>(), session_id)
                 {
-                    tracing::warn!("cannot stop {instance_id}: {error}");
+                    tracing::warn!("cannot stop session {session_id}: {error}");
                 }
             }
         })
@@ -58,6 +59,22 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Live sessions with their labels, sorted by name: "<name>", or "<name> #<number>" for an instance's
+/// later launches and whenever it has several sessions.
+pub fn session_labels(state: &AppState) -> Vec<(SessionId, String)> {
+    let running = state.running();
+    let mut sessions: Vec<(SessionId, String)> = running
+        .iter()
+        .map(|(&id, entry)| {
+            let several = running.values().filter(|other| other.instance_id == entry.instance_id).count() > 1;
+            let label = if several || entry.number > 1 { format!("{} #{}", entry.name, entry.number) } else { entry.name.clone() };
+            (id, label)
+        })
+        .collect();
+    sessions.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+    sessions
+}
+
 /// Rebuilds the menu from the running games. Called on every state change, and only then. It runs
 /// on a blocking thread, after the caller released the lock on the running games.
 pub fn refresh(app: &AppHandle) {
@@ -67,9 +84,7 @@ pub fn refresh(app: &AppHandle) {
         let Some(tray) = app.tray_by_id(TRAY_ID) else {
             return;
         };
-        let mut running: Vec<(String, String)> =
-            app.state::<AppState>().running().iter().map(|(id, entry)| (id.clone(), entry.name.clone())).collect();
-        running.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+        let running = session_labels(&app.state::<AppState>());
         if let Err(error) = build_menu(&app, &running).and_then(|menu| tray.set_menu(Some(menu))) {
             tracing::error!("cannot update the tray menu: {error}");
         }
