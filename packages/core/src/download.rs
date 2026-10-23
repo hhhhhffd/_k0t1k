@@ -130,27 +130,44 @@ pub async fn download_checked(
         source,
     };
     let response = client.get(url).send().await.map_err(http)?;
-    let mut body = response.error_for_status().map_err(http)?.bytes_stream();
+    let body = response.error_for_status().map_err(http)?.bytes_stream();
 
+    // Unique per download: the same file may be fetched by several installs at once.
     let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".part");
+    tmp.push(format!(".{}.part", uuid::Uuid::new_v4().simple()));
     let tmp = PathBuf::from(tmp);
-    let mut file = tokio::fs::File::create(&tmp).await.at(&tmp)?;
+    let written = write_body(body, &tmp, checksum, url).await;
+    if let Err(error) = written {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return Err(error);
+    }
+    place_file(&tmp, path, checksum).await
+}
+
+async fn write_body<B: AsRef<[u8]>>(
+    mut body: impl futures::Stream<Item = reqwest::Result<B>> + Unpin,
+    tmp: &Path,
+    checksum: Option<&Checksum>,
+    url: &str,
+) -> Result<()> {
+    let http = |source| Error::Http {
+        url: url.to_owned(),
+        source,
+    };
+    let mut file = tokio::fs::File::create(tmp).await.at(tmp)?;
     let mut hasher = checksum.map(Checksum::hasher);
     while let Some(chunk) = body.next().await {
         let chunk = chunk.map_err(http)?;
         if let Some(hasher) = &mut hasher {
-            hasher.update(&chunk);
+            hasher.update(chunk.as_ref());
         }
-        file.write_all(&chunk).await.at(&tmp)?;
+        file.write_all(chunk.as_ref()).await.at(tmp)?;
     }
-    file.flush().await.at(&tmp)?;
-    drop(file);
+    file.flush().await.at(tmp)?;
 
     if let (Some(checksum), Some(hasher)) = (checksum, hasher) {
         let actual = hasher.finish();
         if actual != checksum.expected() {
-            let _ = tokio::fs::remove_file(&tmp).await;
             return Err(Error::HashMismatch {
                 url: url.to_owned(),
                 expected: checksum.expected().to_owned(),
@@ -158,8 +175,24 @@ pub async fn download_checked(
             });
         }
     }
+    Ok(())
+}
 
-    tokio::fs::rename(&tmp, path).await.at(path)
+/// Moves the finished temp file into place. When the rename fails because a concurrent download
+/// already put the file there (Windows cannot replace a file that is open), the existing file is
+/// accepted if it matches `checksum`.
+async fn place_file(tmp: &Path, path: &Path, checksum: Option<&Checksum>) -> Result<()> {
+    let renamed = tokio::fs::rename(tmp, path).await;
+    let Err(error) = renamed else {
+        return Ok(());
+    };
+    let _ = tokio::fs::remove_file(tmp).await;
+    if let Some(checksum) = checksum
+        && file_matches(path, checksum).await.unwrap_or(false)
+    {
+        return Ok(());
+    }
+    Err(error).at(path)
 }
 
 /// Download many files in parallel, reporting progress per finished file.
@@ -195,4 +228,43 @@ pub async fn download_all(
         .buffer_unordered(PARALLEL_DOWNLOADS)
         .try_collect::<()>()
         .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sha1_of(data: &[u8]) -> Checksum {
+        Checksum::Sha1(hex::encode(Sha1::digest(data)))
+    }
+
+    #[tokio::test]
+    async fn write_body_verifies_checksum() {
+        let dir = tempfile::tempdir().unwrap();
+        let tmp = dir.path().join("a.part");
+        let chunks = || stream::iter([Ok::<_, reqwest::Error>(b"he".to_vec()), Ok(b"llo".to_vec())]);
+
+        write_body(chunks(), &tmp, Some(&sha1_of(b"hello")), "u").await.unwrap();
+        assert_eq!(std::fs::read(&tmp).unwrap(), b"hello");
+        let error = write_body(chunks(), &tmp, Some(&sha1_of(b"other")), "u").await.unwrap_err();
+        assert!(matches!(error, Error::HashMismatch { .. }));
+    }
+
+    #[tokio::test]
+    async fn place_file_replaces_or_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let tmp = dir.path().join("a.part");
+        // A directory cannot be replaced by a file, which stands in for a failing rename.
+        let target = dir.path().join("a");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(&tmp, b"hello").unwrap();
+        assert!(place_file(&tmp, &target, Some(&sha1_of(b"hello"))).await.is_err());
+        assert!(!tmp.exists());
+
+        // A normal rename replaces the existing file.
+        std::fs::remove_dir(&target).unwrap();
+        std::fs::write(&target, b"hello").unwrap();
+        std::fs::write(&tmp, b"hello").unwrap();
+        place_file(&tmp, &target, Some(&sha1_of(b"hello"))).await.unwrap();
+    }
 }

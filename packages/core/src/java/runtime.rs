@@ -88,7 +88,8 @@ pub fn managed_java_path(paths: &Paths, component: &str) -> Option<PathBuf> {
     executables_in(&paths.java_dir().join(component)).into_iter().next()
 }
 
-/// Install `component` for the current platform, replacing a previous copy.
+/// Install `component` for the current platform unless it is already installed: an installed
+/// runtime may be in use by a running game, so it is never replaced.
 /// Files are downloaded into `java/.tmp/<id>` and moved into place only when everything is complete,
 /// so an interrupted install never looks valid. Returns the game executable.
 pub async fn install_runtime(
@@ -97,6 +98,9 @@ pub async fn install_runtime(
     component: &str,
     progress: &ProgressFn,
 ) -> Result<PathBuf> {
+    if let Some(installed) = managed_java_path(paths, component) {
+        return Ok(installed);
+    }
     let platform = mojang_platform()?;
     let mut index: RuntimeIndex = get_json(client, RUNTIME_INDEX_URL).await?;
     let entry = index
@@ -118,6 +122,7 @@ pub async fn install_runtime(
 
     let destination = java_dir.join(component);
     let moved = (|| {
+        // Only an incomplete copy can be here: a complete one returned early above.
         if destination.exists() {
             std::fs::remove_dir_all(&destination).at(&destination)?;
         }
