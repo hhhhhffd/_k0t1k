@@ -21,16 +21,15 @@ pub fn fingerprint(data: &[u8]) -> u32 {
     // The reference implementation keeps the length as u32, so it wraps for inputs over 4 GiB.
     let mut hash = 1 ^ kept.len() as u32;
 
-    let mut chunks = kept.chunks_exact(4);
-    for chunk in &mut chunks {
-        let mut k = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+    let (chunks, tail) = kept.as_chunks::<4>();
+    for &chunk in chunks {
+        let mut k = u32::from_le_bytes(chunk);
         k = k.wrapping_mul(M);
         k ^= k >> R;
         k = k.wrapping_mul(M);
         hash = hash.wrapping_mul(M) ^ k;
     }
 
-    let tail = chunks.remainder();
     if !tail.is_empty() {
         for (i, &byte) in tail.iter().enumerate() {
             hash ^= u32::from(byte) << (8 * i);
