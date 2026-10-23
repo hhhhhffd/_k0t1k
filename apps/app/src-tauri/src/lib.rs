@@ -7,11 +7,14 @@ mod game;
 mod instances;
 mod java;
 mod launch;
+mod screenshots;
+mod servers;
 mod settings;
 mod state;
 mod tray;
 mod versions;
 mod window;
+mod worlds;
 
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -72,9 +75,30 @@ pub fn run() {
             content::toggle_resource,
             content::delete_resource,
             content::check_updates,
-            content::list_worlds,
             content::import_modpack_file,
             content::install_modpack_version,
+            worlds::list_worlds,
+            worlds::rename_world,
+            worlds::copy_world,
+            worlds::delete_world,
+            worlds::backup_world,
+            worlds::open_world_folder,
+            worlds::import_world,
+            worlds::list_datapacks,
+            worlds::toggle_datapack,
+            worlds::delete_datapack,
+            worlds::add_datapack,
+            worlds::install_datapack,
+            screenshots::list_screenshots,
+            screenshots::open_screenshot,
+            screenshots::delete_screenshot,
+            screenshots::open_screenshots_folder,
+            servers::list_servers,
+            servers::add_server,
+            servers::update_server,
+            servers::remove_server,
+            servers::move_server,
+            servers::ping_server,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the _k0t1k application")

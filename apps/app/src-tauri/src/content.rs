@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use chrono::{DateTime, Utc};
 use k0t1k_core::component::MINECRAFT_UID;
 use k0t1k_core::content::packwiz::PwMod;
 use k0t1k_core::content::{
@@ -12,7 +11,6 @@ use k0t1k_core::content::{
     ProjectVersion, ResourceKind, SearchPage, SearchQuery, SearchSort, inspect_modpack, install_modpack,
 };
 use k0t1k_core::download::{Checksum, download_checked};
-use k0t1k_core::error::IoContext;
 use k0t1k_core::instance::{Instance, ManagedPack, ManagedPlatform, NewInstance};
 use k0t1k_core::settings::MemorySettings;
 use serde::{Deserialize, Serialize};
@@ -87,14 +85,6 @@ impl From<LocalResource> for LocalResourceView {
     }
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorldView {
-    dir_name: String,
-    size: u64,
-    last_played: Option<DateTime<Utc>>,
-}
-
 /// The new instance and the files the author forbids to download; the UI shows their manual links.
 #[derive(Serialize)]
 pub struct ModpackImport {
@@ -102,13 +92,13 @@ pub struct ModpackImport {
     blocked: Vec<BlockedFile>,
 }
 
-async fn instance_of(state: &AppState, instance_id: &str) -> CommandResult<Instance> {
+pub(crate) async fn instance_of(state: &AppState, instance_id: &str) -> CommandResult<Instance> {
     let manager = state.instances.clone();
     let id = instance_id.to_owned();
     blocking(move || manager.get(&id)).await
 }
 
-fn install_context(state: &AppState, instance: &Instance) -> CommandResult<InstallContext> {
+pub(crate) fn install_context(state: &AppState, instance: &Instance) -> CommandResult<InstallContext> {
     let game_version = instance
         .components
         .iter()
@@ -128,7 +118,7 @@ fn install_context(state: &AppState, instance: &Instance) -> CommandResult<Insta
     Ok(InstallContext { game_dir: instance.game_dir(&state.paths), game_version, loaders })
 }
 
-async fn fetch_version(state: &AppState, platform: Platform, project_id: &str, version_id: &str) -> CommandResult<ProjectVersion> {
+pub(crate) async fn fetch_version(state: &AppState, platform: Platform, project_id: &str, version_id: &str) -> CommandResult<ProjectVersion> {
     Ok(match platform {
         Platform::Modrinth => state.clients.modrinth.version(version_id).await?,
         Platform::CurseForge => state.curseforge()?.version(project_id, version_id).await?,
@@ -232,48 +222,6 @@ pub async fn check_updates(state: State<'_, AppState>, instance_id: String, kind
     let ctx = install_context(&state, &instance)?;
     let clients = state.clients.clone();
     run_unsend(move || async move { core_content::check_updates(&clients, &ctx, kind).await }).await
-}
-
-fn dir_size(path: &Path) -> k0t1k_core::Result<u64> {
-    let mut size = 0;
-    for entry in std::fs::read_dir(path).at(path)? {
-        let entry = entry.at(path)?;
-        let file_type = entry.file_type().at(entry.path())?;
-        size += if file_type.is_dir() { dir_size(&entry.path())? } else { entry.metadata().at(entry.path())?.len() };
-    }
-    Ok(size)
-}
-
-fn scan_worlds(game_dir: &Path) -> k0t1k_core::Result<Vec<WorldView>> {
-    let saves = game_dir.join(ResourceKind::World.folder());
-    let entries = match std::fs::read_dir(&saves) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error).at(&saves),
-    };
-    let mut worlds = Vec::new();
-    for entry in entries {
-        let entry = entry.at(&saves)?;
-        let path = entry.path();
-        if !entry.file_type().at(&path)?.is_dir() {
-            continue;
-        }
-        let level = path.join("level.dat");
-        let last_played = match std::fs::metadata(&level) {
-            Ok(metadata) => Some(DateTime::from(metadata.modified().at(&level)?)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(error).at(&level),
-        };
-        worlds.push(WorldView { dir_name: entry.file_name().to_string_lossy().into_owned(), size: dir_size(&path)?, last_played });
-    }
-    worlds.sort_by(|a, b| b.last_played.cmp(&a.last_played).then_with(|| a.dir_name.cmp(&b.dir_name)));
-    Ok(worlds)
-}
-
-#[tauri::command]
-pub async fn list_worlds(state: State<'_, AppState>, instance_id: String) -> CommandResult<Vec<WorldView>> {
-    let game_dir = instance_of(&state, &instance_id).await?.game_dir(&state.paths);
-    blocking(move || scan_worlds(&game_dir)).await
 }
 
 #[tauri::command]
