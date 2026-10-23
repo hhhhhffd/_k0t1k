@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 
 use futures::{StreamExt, TryStreamExt, stream};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::modrinth::HashAlgorithm;
 use super::packwiz::{self, PwMod};
@@ -58,7 +58,7 @@ pub struct InstalledResource {
 
 /// A file the author does not allow third parties to download; the user has to fetch it from
 /// `download_page` and drop it into `target_path`.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockedFile {
     pub platform: Platform,

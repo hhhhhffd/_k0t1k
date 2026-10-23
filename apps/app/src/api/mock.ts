@@ -2,8 +2,14 @@
 // It implements the same commands/events as the Rust side so the UI can be developed in a browser.
 import type {
   Account,
+  AddFilesReport,
   AvailableUpdate,
   BlockedFile,
+  BlockedScan,
+  DragDropEvent,
+  ExportEntry,
+  ExportRequest,
+  PackExportReport,
   CreateInstanceRequest,
   GameLogBatch,
   GameLogLine,
@@ -152,7 +158,7 @@ const instances: Instance[] = [
     settings: { memory: { minMib: 1024, maxMib: 6144 } } }),
   newInstance({ id: 'inst-3', name: 'Create: Above and Beyond', icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'forge', version: '1.20.1-47.3.0' }),
     created: daysAgo(30), lastPlayed: daysAgo(6), playtime: { totalSecs: 3600 * 12, lastSecs: 1800 }, sharedFolders: [],
-    managedPack: { platform: 'modrinth', projectId: 'create-aab', versionId: 'v-aab-1', name: 'Create: Above and Beyond', versionName: '1.4.0' } }),
+    managedPack: { platform: 'modrinth', projectId: 'create-aab', versionId: 'create-aab-v1', name: 'Create: Above and Beyond', versionName: '1.4.1' } }),
   newInstance({ id: 'inst-4', name: 'PvP 1.8.9', icon: 'sword', group: 'Выживание', components: components('1.8.9', { id: 'forge', version: '1.8.9-11.15.1.2318' }),
     created: daysAgo(200), playtime: { totalSecs: 3600 * 140, lastSecs: 900 }, lastPlayed: daysAgo(30) }),
   newInstance({ id: 'inst-5', name: 'Снапшоты', icon: 'ghost', components: components('25w06a'), created: daysAgo(5) }),
@@ -471,6 +477,31 @@ async function killInstance(instanceId: string) {
   await Promise.all(liveSessions.map((s) => killSession(s.sessionId)))
 }
 
+// ---- transfer ----
+const blockedPolls = new Map<string, number>()
+const exportTree: Record<string, [name: string, size: number | null][]> = {
+  '': [['mods', null], ['config', null], ['resourcepacks', null], ['saves', null], ['logs', null], ['crash-reports', null], ['options.txt', 1_200], ['servers.dat', 480]],
+  config: [['sodium-options.json', 900], ['iris.properties', 300], ['create-common.toml', 18_000]],
+  saves: [['New World', null], ['Creative Build', null]],
+  logs: [['latest.log', 240_000], ['2026-01-01-1.log.gz', 31_000]],
+  'crash-reports': [['crash-2026-01-01.txt', 12_000]],
+  resourcepacks: [['faithful-32x.zip', 18_000_000]],
+}
+function exportEntries(inst: Instance, dir: string): ExportEntry[] {
+  const rows = dir === 'mods' ? resourcesFor(inst.id, 'mod').map((r): [string, number | null] => [r.fileName, r.size]) : (exportTree[dir] ?? [])
+  const excluded = ['logs', 'crash-reports']
+  return rows
+    .map(([name, size]): ExportEntry => {
+      const path = dir ? `${dir}/${name}` : name
+      return {
+        name, path, size, isDir: size === null,
+        linked: !dir && inst.sharedFolders.includes(name as Instance['sharedFolders'][number]),
+        defaultExcluded: excluded.includes(path),
+      }
+    })
+    .sort((x, y) => Number(y.isDir) - Number(x.isDir) || x.name.localeCompare(y.name))
+}
+
 // ---- command table ----
 async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
   await sleep(60)
@@ -546,7 +577,11 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
         return { installed: [], blocked: [blocked], unresolvedDependencies: [] } satisfies InstallReport
       }
       await fakeTask(`install-${v.id}`, `Установка ${v.name}`, ['Скачивание', 'Проверка хеша'], 450)
-      resourcesFor(a.instanceId as string, a.kind as LocalResourceKind).unshift({
+      const installed = resourcesFor(a.instanceId as string, a.kind as LocalResourceKind)
+      // like core: a newer version of an installed project replaces its old file
+      const previous = installed.findIndex((r) => r.origin?.update.modrinth?.['mod-id'] === v.projectId)
+      if (previous >= 0) installed.splice(previous, 1)
+      installed.unshift({
         fileName: file.filename, enabled: true, size: file.size,
         metadata: { id: v.projectId, name: v.name, version: v.versionNumber, authors: [], description: null, icon: null, loader: null },
         origin: { name: v.name, filename: file.filename, update: { modrinth: { 'mod-id': v.projectId, version: v.id } } },
@@ -571,8 +606,8 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'check_updates': {
       await sleep(700)
       return resourcesFor(a.instanceId as string, a.kind as LocalResourceKind)
-        .filter((r) => r.origin?.update.modrinth)
-        .slice(0, 2)
+        .filter((r) => r.origin?.update.modrinth && !r.origin['x-prismlauncher-lock-update'])
+        .slice(0, 3)
         .map((r): AvailableUpdate => ({
           fileName: r.fileName, name: r.metadata?.name ?? r.fileName, currentVersion: r.metadata?.version ?? '',
           latest: projectVersions('modrinth', r.origin!.update.modrinth!['mod-id'], {})[0]!,
@@ -696,12 +731,66 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
         : []
       return clone({ instance: inst, blocked } satisfies ModpackImport)
     }
+    case 'update_modpack': {
+      const inst = findInstance(a.instanceId)
+      const pack = inst.managedPack
+      if (!pack) throw new Error('Инстанс установлен не из модпака')
+      const platform: Platform = pack.platform === 'modrinth' ? 'modrinth' : 'curseForge'
+      const v = projectVersions(platform, pack.projectId, {}).find((x) => x.id === a.versionId)
+      if (!v) throw new Error('Версия модпака не найдена')
+      await fakeTask(`pack-update-${inst.id}`, `Обновление ${inst.name}`, ['Скачивание пакета', 'Резервная копия mods', 'Обновление файлов', 'Применение overrides'], 450)
+      inst.managedPack = { ...pack, versionId: v.id, versionName: v.versionNumber }
+      return clone({ instance: inst, blocked: [] } satisfies ModpackImport)
+    }
+    case 'list_export_entries': return exportEntries(findInstance(a.instanceId), a.dir as string)
+    case 'export_instance': {
+      const inst = findInstance(a.instanceId)
+      const request = a.request as ExportRequest
+      await fakeTask(`export-${inst.id}`, `Экспорт ${inst.name}`, ['Хеширование файлов', 'Поиск на платформе', 'Упаковка'], 450)
+      return request.format === 'instance' ? null : ({ listed: 12, overrides: 5 } satisfies PackExportReport)
+    }
+    case 'add_local_files_to_instance': {
+      findInstance(a.instanceId)
+      const report: AddFilesReport = { added: [], skipped: [] }
+      for (const path of a.paths as string[]) {
+        const fileName = path.split(/[\\/]/).pop() ?? path
+        const extension = fileName.split('.').pop()?.toLowerCase()
+        const kind = (a.kind as LocalResourceKind | null) ?? (extension === 'jar' ? 'mod' : extension === 'zip' ? 'resourcePack' : null)
+        if (!kind || (extension !== 'jar' && extension !== 'zip')) {
+          report.skipped.push({ path, reason: a.kind ? 'unsupportedType' : 'unknownType' })
+          continue
+        }
+        resourcesFor(a.instanceId as string, kind).unshift({
+          fileName, enabled: true, size: 900_000,
+          metadata: { id: fileName, name: fileName.replace(/\.[^.]+$/, ''), version: null, authors: [], description: null, icon: null, loader: null },
+          origin: null,
+        })
+        report.added.push({ fileName, kind })
+      }
+      return report
+    }
+    case 'scan_blocked_files': {
+      // the file "shows up in Downloads" on the third poll
+      const polls = (blockedPolls.get(a.instanceId as string) ?? 0) + 1
+      blockedPolls.set(a.instanceId as string, polls)
+      const paths = (a.files as BlockedFile[]).map((f) => f.targetPath)
+      return (polls >= 3 ? { found: paths, missing: [] } : { found: paths.slice(0, polls - 1), missing: paths.slice(polls - 1) }) satisfies BlockedScan
+    }
+    case 'get_downloads_dir': return 'C:\\Users\\Player\\Downloads'
+    case 'set_update_lock': {
+      const r = resourcesFor(a.instanceId as string, a.kind as LocalResourceKind).find((x) => x.fileName === a.fileName)
+      if (!r?.origin) throw new Error('У файла нет метаданных')
+      r.origin['x-prismlauncher-lock-update'] = a.locked as boolean
+      return undefined
+    }
     default: throw new Error(`mock: неизвестная команда ${cmd}`)
   }
 }
 
 export const mockBackend = {
   invoke,
+  /** Drag & drop has no real paths in a browser; tests can `emit('drag-drop', ...)` through this listener. */
+  dragDrop: async (cb: (event: DragDropEvent) => void) => mockBackend.listen('drag-drop', (payload) => cb(payload as DragDropEvent)),
   listen: async (event: string, cb: (payload: unknown) => void) => {
     let set = listeners.get(event)
     if (!set) listeners.set(event, (set = new Set()))

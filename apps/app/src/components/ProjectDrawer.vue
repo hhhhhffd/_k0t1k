@@ -91,7 +91,7 @@ async function install(v: ProjectVersion) {
       kind === 'dataPack' ? installDatapack(target.value, targetWorld.value, v) : installVersion(target.value, v, kind),
     )
     if (report) {
-      tasks.showBlocked(report.blocked)
+      tasks.showBlocked(report.blocked, target.value)
       const installed = report.installed.find((i) => !i.isDependency)
       if (installed) {
         installedIds.value = new Set(installedIds.value).add(v.id)

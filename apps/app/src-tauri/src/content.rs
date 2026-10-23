@@ -8,7 +8,8 @@ use k0t1k_core::component::MINECRAFT_UID;
 use k0t1k_core::content::packwiz::PwMod;
 use k0t1k_core::content::{
     self as core_content, AvailableUpdate, BlockedFile, InstallContext, InstallReport, LocalResource, Loader, Platform,
-    ProjectVersion, ResourceKind, SearchPage, SearchQuery, SearchSort, inspect_modpack, install_modpack,
+    ModpackSource, PackState, ProjectVersion, ResourceKind, SearchPage, SearchQuery, SearchSort, inspect_modpack, install_modpack,
+    update_modpack as update_installed_modpack,
 };
 use k0t1k_core::download::{Checksum, download_checked};
 use k0t1k_core::instance::{Instance, ManagedPack, ManagedPlatform, NewInstance};
@@ -268,6 +269,55 @@ pub async fn install_modpack_version(
     tracked(&app, &task, &title, work).await
 }
 
+/// Updates an instance installed from a modpack to another version of that pack, in place: files the
+/// old version brought and the new one dropped are removed, the user's own files stay, and the mods
+/// folder is backed up first and restored if the update fails.
+#[tauri::command]
+pub async fn update_modpack(app: AppHandle, state: State<'_, AppState>, instance_id: String, version_id: String) -> CommandResult<ModpackImport> {
+    let state = state.inner().clone();
+    if state.is_running(&instance_id) {
+        return Err(AppError::new("the instance is running; stop it before updating its modpack"));
+    }
+    let instance = instance_of(&state, &instance_id).await?;
+    let managed = instance.managed_pack.clone().ok_or_else(|| AppError::new("the instance was not installed from a modpack"))?;
+    let platform = match managed.platform {
+        ManagedPlatform::Modrinth => Platform::Modrinth,
+        ManagedPlatform::CurseForge => Platform::CurseForge,
+    };
+    let version = fetch_version(&state, platform, &managed.project_id, &version_id).await?;
+    let task = format!("modpack-update:{instance_id}");
+    let title = format!("Обновление модпака: {}", instance.name);
+
+    let work = async {
+        progress_step(&app, &task, &title, "Скачивание пакета", 0, 1);
+        let zip_path = download_pack(&state, &version).await?;
+        progress_step(&app, &task, &title, "Скачивание пакета", 1, 1);
+        let inspected = zip_path.clone();
+        let manifest = blocking(move || inspect_modpack(&inspected)).await?;
+        // Resolving also checks that the new version's Minecraft and loader exist, before any file changes.
+        let (components, _) = game::resolve(&state.paths, manifest.components.clone()).await?;
+
+        let (instance_dir, game_dir) = (instance.dir(&state.paths), instance.game_dir(&state.paths));
+        let (clients, pack, progress) = (state.clients.clone(), manifest.clone(), progress_fn(&app, &task, &title));
+        let report =
+            run_unsend(move || async move { update_installed_modpack(&pack, &zip_path, &instance_dir, &game_dir, &clients, &progress).await })
+                .await?;
+
+        let manager = state.instances.clone();
+        let new_components = manifest.components.clone();
+        let instance = blocking(move || {
+            manager.update(&instance_id, |instance| {
+                instance.components = new_components;
+                instance.managed_pack = Some(ManagedPack { version_id, version_name: version.name, ..managed });
+            })
+        })
+        .await?;
+        game::spawn_game_install(app.clone(), state.clone(), instance.clone(), components);
+        Ok(ModpackImport { instance: instance.into(), blocked: report.blocked })
+    };
+    tracked(&app, &task, &title, work).await
+}
+
 /// Downloads the pack file of `version` into the cache; a file that already matches its hash is reused.
 async fn download_pack(state: &AppState, version: &ProjectVersion) -> CommandResult<PathBuf> {
     let file = version.install_file().ok_or_else(|| AppError::new("the modpack version has no files"))?;
@@ -308,24 +358,38 @@ async fn create_from_pack(
     // Resolving also checks that the pack's Minecraft and loader versions exist.
     let (components, _) = game::resolve(&state.paths, manifest.components.clone()).await?;
 
+    // An instance zip brings its own notes, icon, settings and the pack it was installed from.
+    let from_zip = match &manifest.source {
+        ModpackSource::Instance(source) => Some(source.clone()),
+        _ => None,
+    };
     let new = NewInstance {
         name: name.map(|name| name.trim().to_owned()).filter(|name| !name.is_empty()).unwrap_or_else(|| manifest.name.clone()),
         icon: None,
         group: None,
         components: manifest.components.clone(),
-        managed_pack,
+        managed_pack: managed_pack.or_else(|| from_zip.as_ref().and_then(|source| source.managed_pack.clone())),
     };
     let manager = state.instances.clone();
     let recommended_ram = manifest.recommended_ram_mb;
     let instance = blocking(move || {
         let instance = manager.create(new)?;
-        let Some(max_mib) = recommended_ram else {
+        if recommended_ram.is_none() && from_zip.is_none() {
             return Ok(instance);
-        };
+        }
         manager
             .update(&instance.id, |instance| {
-                let min_mib = MemorySettings::default().min_mib.min(max_mib);
-                instance.settings.memory = Some(MemorySettings { min_mib, max_mib });
+                if let Some(max_mib) = recommended_ram {
+                    let min_mib = MemorySettings::default().min_mib.min(max_mib);
+                    instance.settings.memory = Some(MemorySettings { min_mib, max_mib });
+                }
+                if let Some(source) = from_zip {
+                    instance.notes = source.notes;
+                    instance.settings = source.settings;
+                    if let Some(icon) = source.icon {
+                        instance.icon = icon;
+                    }
+                }
             })
             .map_err(|error| match manager.delete(&instance.id) {
                 Ok(()) => error,
@@ -335,9 +399,17 @@ async fn create_from_pack(
     .await?;
 
     let game_dir = instance.game_dir(&state.paths);
+    let instance_dir = instance.dir(&state.paths);
     let clients = state.clients.clone();
     let pack = manifest.clone();
-    let installed = run_unsend(move || async move { install_modpack(&pack, &zip_path, &game_dir, &clients, &progress).await }).await;
+    let installed = run_unsend(move || async move {
+        let report = install_modpack(&pack, &zip_path, &game_dir, &clients, &progress).await?;
+        if report.state != PackState::default() {
+            report.state.save(&instance_dir)?;
+        }
+        Ok(report)
+    })
+    .await;
     let report = match installed {
         Ok(report) => report,
         Err(error) => {

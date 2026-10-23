@@ -291,6 +291,19 @@ pub fn list(index_dir: &Path) -> Result<Vec<IndexEntry>> {
     Ok(found)
 }
 
+/// Sets or clears the update lock (`x-prismlauncher-lock-update`) of the index entry for `file_name`
+/// (the file's name without `.disabled`). Fails when the file has no index entry.
+pub fn set_lock_update(index_dir: &Path, file_name: &str, locked: bool) -> Result<()> {
+    let mut entry = list(index_dir)?
+        .into_iter()
+        .find(|entry| entry.data.filename == file_name)
+        .ok_or_else(|| Error::Other(format!("{file_name} has no metadata, so its updates cannot be locked")))?;
+    entry.data.lock_update = locked;
+    let text = toml::to_string(&entry.data)
+        .map_err(|error| Error::Other(format!("cannot serialize packwiz index: {error}")))?;
+    std::fs::write(&entry.path, text).at(&entry.path)
+}
+
 pub fn find_by_project(
     index_dir: &Path,
     platform: Platform,
@@ -379,6 +392,18 @@ version = "OihdIimA"
         );
         assert!(write(&dir, "../evil", &data).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn update_lock_is_toggled_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = PwMod { name: "Sodium".into(), filename: "sodium.jar".into(), ..PwMod::default() };
+        let path = write(dir.path(), "sodium", &data).unwrap();
+        set_lock_update(dir.path(), "sodium.jar", true).unwrap();
+        assert!(read(&path).unwrap().lock_update);
+        set_lock_update(dir.path(), "sodium.jar", false).unwrap();
+        assert_eq!(read(&path).unwrap(), data);
+        assert!(set_lock_update(dir.path(), "other.jar", true).is_err());
     }
 
     #[test]

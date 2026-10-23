@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { isTauri, openInstanceFolder } from '../api/commands'
+import DropOverlay from '../components/DropOverlay.vue'
 import type { Instance } from '../api/types'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import ContextMenu from '../components/ContextMenu.vue'
@@ -15,6 +16,7 @@ import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
 import mascot from '../assets/mascot.png'
+import { baseName, useFileDrop } from '../utils/useFileDrop'
 
 const store = useInstancesStore()
 const tasks = useTasksStore()
@@ -91,10 +93,22 @@ async function confirmDelete() {
 
 async function importPack() {
   const path = isTauri
-    ? await open({ multiple: false, filters: [{ name: t.create.importFilter, extensions: ['mrpack', 'zip'] }] })
+    ? await open({ multiple: false, filters: [{ name: t.transfer.importFilter, extensions: ['mrpack', 'zip'] }] })
     : 'C:\\Downloads\\Example Pack.mrpack'
   if (typeof path === 'string') void tasks.guard(() => store.importModpack(path))
 }
+
+// Dropped modpacks and instance zips are imported one after another.
+const { dragging } = useFileDrop(async (paths) => {
+  for (const path of paths) {
+    if (!/\.(mrpack|zip)$/i.test(path)) {
+      tasks.toast(t.transfer.dropImportSkipped(baseName(path)), 'error')
+      continue
+    }
+    const imported = await tasks.guard(() => store.importModpack(path))
+    if (imported) tasks.toast(t.transfer.importedOk(imported.name), 'ok')
+  }
+})
 </script>
 
 <template>
@@ -148,6 +162,7 @@ async function importPack() {
     </section>
 
     <CreateInstanceDialog v-if="showCreate" @close="showCreate = false" />
+    <DropOverlay v-if="dragging" :text="t.transfer.dropImport" />
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menuItems" @close="menu = null" />
     <PromptDialog
       v-if="dialog && dialog.kind !== 'delete'"

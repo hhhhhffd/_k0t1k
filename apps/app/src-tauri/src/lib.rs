@@ -11,6 +11,7 @@ mod screenshots;
 mod servers;
 mod settings;
 mod state;
+mod transfer;
 mod tray;
 mod versions;
 mod window;
@@ -100,6 +101,13 @@ pub fn run() {
             servers::remove_server,
             servers::move_server,
             servers::ping_server,
+            content::update_modpack,
+            transfer::list_export_entries,
+            transfer::export_instance,
+            transfer::add_local_files_to_instance,
+            transfer::scan_blocked_files,
+            transfer::get_downloads_dir,
+            transfer::set_update_lock,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the _k0t1k application")

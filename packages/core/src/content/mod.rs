@@ -1,13 +1,18 @@
 //! Mods and other content from Modrinth and CurseForge: search, install, update, local resources
 //! and modpack import. The packwiz `.pw.toml` index keeps the origin of every installed file.
 
+mod blocked;
 pub mod curseforge;
+mod dropped;
+mod export;
 mod install;
 mod local;
 mod modpack;
 pub mod modrinth;
 pub mod murmur2;
+pub mod pack_state;
 pub mod packwiz;
+mod update;
 
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +34,9 @@ pub(crate) async fn send_json<T: serde::de::DeserializeOwned>(
     response.json().await.map_err(http)
 }
 
+pub use blocked::{BlockedScan, HashCache, collect_blocked};
+pub use dropped::{AddFilesReport, SkipReason, add_local_files, identify_file};
+pub use export::{PackExportReport, PackExportRequest, export_curseforge, export_mrpack};
 pub use install::{
     AvailableUpdate, BlockedFile, InstallContext, InstallReport, InstalledResource, check_updates,
     install_version,
@@ -36,10 +44,13 @@ pub use install::{
 pub use local::{
     LocalResource, ResourceMetadata, delete_resource, parse_mod_jar, scan_resources, set_enabled,
 };
+pub(crate) use modpack::safe_join;
 pub use modpack::{
     ModpackFormat, ModpackInstallReport, ModpackManifest, ModpackSource, inspect_modpack,
     install_modpack,
 };
+pub use pack_state::PackState;
+pub use update::update_modpack;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
