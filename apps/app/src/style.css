@@ -1,1 +1,306 @@
 @import 'tailwindcss';
+
+/* ---- design tokens: every theme only redefines these variables ---- */
+:root,
+[data-theme='k0t1k'] {
+  color-scheme: dark;
+  --c-base: #0b0910;
+  --c-surface: #13101c;
+  --c-raised: #1b1728;
+  --c-hover: #251f37;
+  --c-line: #2b2542;
+  --c-fg: #ece8f6;
+  --c-muted: #a199ba;
+  --c-faint: #6d6588;
+  --c-accent: #a259f7;
+  --c-accent-fg: #ffffff;
+  --c-ok: #4ade80;
+  --c-warn: #fbbf24;
+  --c-danger: #f87171;
+  --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.55);
+  --glow: 0 0 24px rgb(162 89 247 / 0.28);
+}
+[data-theme='light'] {
+  color-scheme: light;
+  --c-base: #f1eff7;
+  --c-surface: #ffffff;
+  --c-raised: #f8f6fc;
+  --c-hover: #ebe7f4;
+  --c-line: #d9d3e8;
+  --c-fg: #1c1730;
+  --c-muted: #5d5676;
+  --c-faint: #8a839f;
+  --c-accent: #7c3aed;
+  --c-accent-fg: #ffffff;
+  --c-ok: #15803d;
+  --c-warn: #b45309;
+  --c-danger: #dc2626;
+  --shadow-pop: 0 12px 32px rgb(40 20 80 / 0.18);
+  --glow: 0 0 20px rgb(124 58 237 / 0.18);
+}
+[data-theme='amoled'] {
+  color-scheme: dark;
+  --c-base: #000000;
+  --c-surface: #070609;
+  --c-raised: #0e0c14;
+  --c-hover: #19152a;
+  --c-line: #211c33;
+  --c-fg: #f1eefa;
+  --c-muted: #a39bbd;
+  --c-faint: #6a6286;
+  --c-accent: #b678ff;
+  --c-accent-fg: #0a0014;
+  --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.8);
+  --glow: 0 0 24px rgb(182 120 255 / 0.25);
+}
+[data-theme='mint'] {
+  color-scheme: dark;
+  --c-base: #0a1210;
+  --c-surface: #101b18;
+  --c-raised: #172420;
+  --c-hover: #20322c;
+  --c-line: #26392f;
+  --c-fg: #e6f4ef;
+  --c-muted: #8fb0a4;
+  --c-faint: #5f7f73;
+  --c-accent: #34d399;
+  --c-accent-fg: #04140e;
+  --glow: 0 0 24px rgb(52 211 153 / 0.22);
+}
+
+@theme inline {
+  --color-base: var(--c-base);
+  --color-surface: var(--c-surface);
+  --color-raised: var(--c-raised);
+  --color-hover: var(--c-hover);
+  --color-line: var(--c-line);
+  --color-fg: var(--c-fg);
+  --color-muted: var(--c-muted);
+  --color-faint: var(--c-faint);
+  --color-accent: var(--c-accent);
+  --color-accent-fg: var(--c-accent-fg);
+  --color-ok: var(--c-ok);
+  --color-warn: var(--c-warn);
+  --color-danger: var(--c-danger);
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', Inter, system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+
+/* ---- lite mode: no blur, shadows, animation or transitions for weak PCs ---- */
+:root[data-lite='true'] {
+  --shadow-pop: none;
+  --glow: none;
+}
+:root[data-lite='true'] *,
+:root[data-lite='true'] *::before,
+:root[data-lite='true'] *::after {
+  transition: none !important;
+  animation: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  scroll-behavior: auto !important;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--c-base);
+  color: var(--c-fg);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  overflow: hidden;
+  user-select: none;
+}
+input,
+textarea,
+.selectable {
+  user-select: text;
+}
+::selection {
+  background: color-mix(in srgb, var(--c-accent) 40%, transparent);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-line) transparent;
+}
+:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+.pixelated {
+  image-rendering: pixelated;
+}
+
+/* stepped "pixel" corners used on primary actions and the mascot plate */
+.pix {
+  clip-path: polygon(
+    0 4px, 2px 4px, 2px 2px, 4px 2px, 4px 0,
+    calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%,
+    4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px)
+  );
+}
+.dot-grid {
+  background-image: radial-gradient(color-mix(in srgb, var(--c-accent) 18%, transparent) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* ---- shared controls (in a layer so Tailwind utilities can override them) ---- */
+@layer components {
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--c-line);
+  background: var(--c-raised);
+  color: var(--c-fg);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--c-hover);
+  border-color: color-mix(in srgb, var(--c-accent) 45%, var(--c-line));
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-accent-fg);
+}
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-accent) 86%, white);
+  border-color: transparent;
+}
+.btn-danger {
+  background: color-mix(in srgb, var(--c-danger) 16%, transparent);
+  border-color: color-mix(in srgb, var(--c-danger) 45%, transparent);
+  color: var(--c-danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-danger) 28%, transparent);
+  border-color: var(--c-danger);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn-icon {
+  width: 32px;
+  padding: 0;
+}
+.btn-lg {
+  height: 40px;
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.input {
+  height: 32px;
+  width: 100%;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--c-line);
+  background: var(--c-base);
+  color: var(--c-fg);
+  transition: border-color 0.12s;
+}
+textarea.input {
+  height: auto;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.input:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--c-accent) 40%, var(--c-line));
+}
+.input:focus {
+  outline: none;
+  border-color: var(--c-accent);
+}
+.input:disabled {
+  opacity: 0.45;
+}
+.input::placeholder {
+  color: var(--c-faint);
+}
+
+.card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--c-raised);
+  border: 1px solid var(--c-line);
+  color: var(--c-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.badge-accent {
+  background: color-mix(in srgb, var(--c-accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--c-accent) 40%, transparent);
+  color: var(--c-accent);
+}
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-muted);
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-faint);
+}
+
+input[type='range'] {
+  accent-color: var(--c-accent);
+  width: 100%;
+}
+
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+@keyframes slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+}
+@keyframes bob {
+  50% { transform: translateY(-3px); }
+}
+.anim-pop { animation: pop-in 0.16s ease-out; }
+.anim-fade { animation: fade-in 0.16s ease-out; }
+.anim-slide { animation: slide-in 0.2s ease-out; }
+.anim-bob { animation: bob 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
