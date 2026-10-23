@@ -1,23 +1,26 @@
 <script setup lang="ts">
-import { Check, RefreshCw, Trash2, UserPlus } from '@lucide/vue'
+import { open } from '@tauri-apps/plugin-dialog'
+import { Check, FolderOpen, RefreshCw, RotateCcw, Trash2, UserPlus } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { detectJava, getSystemInfo, listManagedJava } from '../api/commands'
+import { detectJava, getSystemInfo, isTauri, listManagedJava, openDataDir, setDataDir } from '../api/commands'
 import type { JavaInstall, SystemInfo } from '../api/types'
 import mascot from '../assets/mascot.png'
 import CommandFields from '../components/fields/CommandFields.vue'
 import MemoryFields from '../components/fields/MemoryFields.vue'
 import WindowFields from '../components/fields/WindowFields.vue'
+import ThemeEditor from '../components/ThemeEditor.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n/ru'
-import { THEMES, useSettingsStore } from '../stores/settings'
+import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
+import { THEMES, themeVars } from '../utils/theme'
 
 const store = useSettingsStore()
 const tasks = useTasksStore()
 const route = useRoute()
 
-const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'appearance', 'accounts', 'about'] as const
+const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'appearance', 'accounts', 'storage', 'about'] as const
 type Section = (typeof sectionIds)[number]
 const hashSection = route.hash.slice(1) as Section
 const section = ref<Section>(sectionIds.includes(hashSection) ? hashSection : 'java')
@@ -27,8 +30,13 @@ const detected = ref<JavaInstall[]>([])
 const managed = ref<JavaInstall[]>([])
 const scanning = ref(false)
 const newName = ref('')
+const restartNeeded = ref(false)
 
 const s = computed(() => store.settings)
+const themeTiles = computed(() => [
+  ...THEMES.map((th) => ({ id: th.id as string, label: th.label, base: th.id, vars: {} as Record<string, string> })),
+  ...(s.value?.ui.customThemes ?? []).map((c) => ({ id: c.id, label: c.name, base: c.base, vars: themeVars(c.colors) })),
+])
 
 async function rescan() {
   scanning.value = true
@@ -52,6 +60,16 @@ watch(
     timer = setTimeout(() => void tasks.guard(store.save), 400)
   },
 )
+
+async function changeDataDir(reset: boolean) {
+  // Outside Tauri there is no native dialog; the mock accepts a fake path.
+  const picked = reset ? null : isTauri ? await open({ directory: true, multiple: false, title: t.settings.pickDataDir }) : 'D:\\k0t1k-data'
+  if (!reset && typeof picked !== 'string') return
+  const needsRestart = await tasks.guard(() => setDataDir(picked))
+  if (needsRestart === undefined) return
+  restartNeeded.value = needsRestart
+  system.value = (await tasks.guard(getSystemInfo)) ?? system.value
+}
 
 async function addAccount() {
   const name = newName.value.trim()
@@ -141,13 +159,13 @@ async function addAccount() {
           <h3 class="section-title mb-3">{{ t.settings.theme }}</h3>
           <div class="grid grid-cols-2 gap-3">
             <button
-              v-for="th in THEMES"
+              v-for="th in themeTiles"
               :key="th.id"
-              :data-theme="th.id"
+              :data-theme="th.base"
               class="overflow-hidden rounded-xl border-2 text-left transition-colors"
               :class="s.ui.theme === th.id ? 'border-accent' : 'border-line hover:border-faint'"
               :aria-pressed="s.ui.theme === th.id"
-              style="background: var(--c-base); color: var(--c-fg)"
+              :style="{ ...th.vars, background: 'var(--c-base)', color: 'var(--c-fg)' }"
               @click="store.setUi({ theme: th.id })"
             >
               <div class="flex h-20">
@@ -172,6 +190,7 @@ async function addAccount() {
             </button>
           </div>
         </section>
+        <ThemeEditor />
         <section class="card flex items-center gap-3 p-4">
           <ToggleSwitch :model-value="s.ui.liteMode" :label="t.settings.lite" @update:model-value="store.setUi({ liteMode: $event })" />
           <span><span class="block font-medium">{{ t.settings.lite }}</span><span class="text-[12px] text-faint">{{ t.settings.liteHint }}</span></span>
@@ -195,6 +214,28 @@ async function addAccount() {
           </form>
         </section>
         <p class="rounded-lg border border-dashed border-line px-4 py-3 text-muted">{{ t.settings.msSoon }}</p>
+      </template>
+
+      <template v-else-if="section === 'storage'">
+        <section v-if="system" class="card flex flex-col gap-3 p-4">
+          <dl class="grid grid-cols-[130px_1fr] items-baseline gap-y-2">
+            <dt class="text-faint">{{ t.settings.dataDir }}</dt>
+            <dd class="selectable font-mono text-[12px] break-all">{{ system.dataDir }}</dd>
+            <dt class="text-faint">{{ t.settings.mode }}</dt>
+            <dd>
+              <span class="badge" :class="system.portable ? 'badge-accent' : ''">{{ system.portable ? t.settings.portable : t.settings.installed }}</span>
+              <span class="ml-2 text-[12px] text-faint">{{ system.portable ? t.settings.portableHint : t.settings.installedHint }}</span>
+            </dd>
+            <dt class="text-faint">{{ t.settings.exeDir }}</dt>
+            <dd class="selectable font-mono text-[12px] break-all">{{ system.exeDir }}</dd>
+          </dl>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn" @click="tasks.guard(openDataDir)"><FolderOpen :size="15" />{{ t.settings.openFolder }}</button>
+            <button class="btn" @click="changeDataDir(false)">{{ t.settings.changeDataDir }}</button>
+            <button class="btn btn-ghost" @click="changeDataDir(true)"><RotateCcw :size="15" />{{ t.settings.resetDataDir }}</button>
+          </div>
+        </section>
+        <p v-if="restartNeeded" class="rounded-lg border border-warn/50 bg-warn/10 px-4 py-3 text-warn" role="status">{{ t.settings.restartNotice }}</p>
       </template>
 
       <section v-else class="card flex items-start gap-4 p-4">

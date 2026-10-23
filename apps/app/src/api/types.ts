@@ -108,6 +108,17 @@ export interface CreateInstanceRequest {
 
 export type ThemeId = 'k0t1k' | 'light' | 'amoled' | 'mint'
 
+/**
+ * A user-made theme: a built-in `base` plus CSS variable overrides. Color keys are variable names without the
+ * leading `--` (`[a-z0-9-]`), values are CSS colors; the backend rejects values outside `^[#a-zA-Z0-9(),.%\s-]{1,64}$`.
+ */
+export interface CustomTheme {
+  id: string
+  name: string
+  base: ThemeId
+  colors: Record<string, string>
+}
+
 export interface Account {
   id: string
   name: string
@@ -122,7 +133,8 @@ export interface GlobalSettings {
   commands: CommandSettings
   env: Record<string, string>
   playtime: { record: boolean; show: boolean; totalSecs: number }
-  ui: { theme: ThemeId; liteMode: boolean }
+  /** `theme` is a built-in `ThemeId` or the id of one of `customThemes`. */
+  ui: { theme: string; liteMode: boolean; customThemes: CustomTheme[] }
   accounts: Account[]
   selectedAccountId: string | null
 }
@@ -145,6 +157,10 @@ export interface SystemInfo {
   os: string
   appVersion: string
   dataDir: string
+  /** The app keeps its data next to the executable. */
+  portable: boolean
+  /** Folder of the executable. */
+  exeDir: string
 }
 
 /** An entry of a Prism meta version list. `type` is `release`/`snapshot`/`old_beta`/`old_alpha` for Minecraft. */
@@ -306,9 +322,14 @@ export interface ProgressEvent {
 export type LogStream = 'stdout' | 'stderr' | 'launcher'
 
 export interface GameLogLine {
-  instanceId: string
   stream: LogStream
   line: string
+}
+
+/** `game-log` event payload: the backend sends lines in batches. */
+export interface GameLogBatch {
+  instanceId: string
+  lines: GameLogLine[]
 }
 
 export type RunState = 'stopped' | 'preparing' | 'running' | 'stopping'

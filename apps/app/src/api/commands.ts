@@ -26,6 +26,8 @@
  *   get_settings()                                           -> GlobalSettings
  *   save_settings(settings: GlobalSettings)                  -> void
  *   get_system_info()                                        -> SystemInfo
+ *   open_data_dir()                                          -> void
+ *   set_data_dir(path: string | null)                        -> boolean  (true = restart needed; data is not moved; null = default location)
  * Accounts (offline for now; settings.accounts mirrors the result)
  *   add_offline_account(name)                                -> Account
  *   remove_offline_account(accountId)                        -> void
@@ -43,14 +45,14 @@
  *   install_modpack_version(platform, projectId, versionId, name?) -> ModpackImport (emits `progress`)
  * Events (backend -> frontend, via emit)
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
- *   game-log        GameLogLine
+ *   game-log        GameLogBatch     (lines are batched)
  *   instance-state  InstanceRunState
  */
 import type {
   Account,
   AvailableUpdate,
   CreateInstanceRequest,
-  GameLogLine,
+  GameLogBatch,
   GlobalSettings,
   Instance,
   InstanceListing,
@@ -143,6 +145,8 @@ export const listManagedJava = () => call<JavaInstall[]>('list_managed_java')
 export const getSettings = () => call<GlobalSettings>('get_settings')
 export const saveSettings = (settings: GlobalSettings) => call<void>('save_settings', { settings })
 export const getSystemInfo = () => call<SystemInfo>('get_system_info')
+export const openDataDir = () => call<void>('open_data_dir')
+export const setDataDir = (path: string | null) => call<boolean>('set_data_dir', { path })
 
 // ---- accounts ----
 export const addOfflineAccount = (name: string) => call<Account>('add_offline_account', { name })
@@ -191,6 +195,6 @@ export const installModpackVersion = (version: ProjectVersion, name?: string) =>
 
 // ---- events ----
 export const onProgress = (cb: (e: ProgressEvent) => void) => subscribe('progress', cb)
-export const onGameLog = (cb: (e: GameLogLine) => void) => subscribe('game-log', cb)
+export const onGameLog = (cb: (e: GameLogBatch) => void) => subscribe('game-log', cb)
 export const onInstanceState = (cb: (e: InstanceRunState) => void) =>
   subscribe('instance-state', cb)
