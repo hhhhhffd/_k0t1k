@@ -3,7 +3,10 @@
 pub mod component;
 pub mod download;
 pub mod error;
+pub mod instance;
+pub mod java;
 pub mod paths;
 pub mod progress;
+pub mod settings;
 
 pub use error::{Error, Result};
