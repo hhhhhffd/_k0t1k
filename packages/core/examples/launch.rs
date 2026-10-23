@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
     }
 
     let progress: ProgressFn = Arc::new(|event: ProgressEvent| {
-        if event.done == event.total || event.done % 250 == 0 {
+        if event.done == event.total || event.done.is_multiple_of(250) {
             println!("[{}] {}/{}", event.stage, event.done, event.total);
         }
     });
