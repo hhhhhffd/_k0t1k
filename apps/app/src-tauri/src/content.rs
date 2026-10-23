@@ -371,13 +371,18 @@ async fn create_from_pack(
     let recommended_ram = manifest.recommended_ram_mb;
     let instance = blocking(move || {
         let instance = manager.create(new)?;
-        match recommended_ram {
-            Some(max_mib) => manager.update(&instance.id, |instance| {
+        let Some(max_mib) = recommended_ram else {
+            return Ok(instance);
+        };
+        manager
+            .update(&instance.id, |instance| {
                 let min_mib = MemorySettings::default().min_mib.min(max_mib);
                 instance.settings.memory = Some(MemorySettings { min_mib, max_mib });
-            }),
-            None => Ok(instance),
-        }
+            })
+            .map_err(|error| match manager.delete(&instance.id) {
+                Ok(()) => error,
+                Err(cleanup) => k0t1k_core::Error::Other(format!("{error}; the partly created instance could not be removed: {cleanup}")),
+            })
     })
     .await?;
 
