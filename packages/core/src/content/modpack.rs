@@ -17,6 +17,7 @@ use super::{BlockedFile, Clients, Hashes, Platform, Project, ProjectVersion, Res
 use crate::component::{ComponentSpec, MINECRAFT_UID};
 use crate::download::{Checksum, download_checked};
 use crate::error::{Error, IoContext, Result};
+use crate::instance::fsutil::is_link;
 use crate::progress::{ProgressEvent, ProgressFn};
 
 const PARALLEL_DOWNLOADS: usize = 16;
@@ -601,6 +602,8 @@ async fn run_downloads(
 }
 
 /// Unpacks `<folder>/...` entries for each folder in order, later folders overwriting earlier ones.
+/// Files that already exist in a linked (shared) `resourcepacks` folder are kept: it holds the
+/// user's packs, which a pack from the internet must not replace.
 async fn extract_overrides(
     zip_path: &Path,
     game_dir: &Path,
@@ -617,6 +620,8 @@ async fn extract_overrides(
     let folders: Vec<String> = folders.iter().map(|folder| (*folder).to_owned()).collect();
     tokio::task::spawn_blocking(move || -> Result<()> {
         let mut archive = zip::ZipArchive::new(File::open(&zip_path).at(&zip_path)?)?;
+        let shared_packs = game_dir.join("resourcepacks");
+        let packs_are_shared = is_link(&shared_packs);
         for folder in &folders {
             let prefix = format!("{}/", folder.trim_end_matches('/'));
             for index in 0..archive.len() {
@@ -631,6 +636,9 @@ async fn extract_overrides(
                 let destination = safe_join(&game_dir, relative)?;
                 if entry.is_dir() {
                     std::fs::create_dir_all(&destination).at(&destination)?;
+                    continue;
+                }
+                if packs_are_shared && destination.starts_with(&shared_packs) && destination.exists() {
                     continue;
                 }
                 if let Some(parent) = destination.parent() {
@@ -771,6 +779,34 @@ mod tests {
 
         let zip = write_zip(&dir, &[("readme.txt", "x")]);
         assert!(inspect_modpack(&zip).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn overrides_do_not_replace_files_in_shared_resourcepacks() {
+        let dir = temp_dir("shared-packs");
+        let shared = dir.join("shared");
+        std::fs::create_dir_all(&shared).unwrap();
+        std::fs::write(shared.join("mine.zip"), "user").unwrap();
+        let game_dir = dir.join("game");
+        std::fs::create_dir_all(&game_dir).unwrap();
+        std::os::unix::fs::symlink(&shared, game_dir.join("resourcepacks")).unwrap();
+
+        let zip = write_zip(
+            &dir,
+            &[
+                ("overrides/resourcepacks/mine.zip", "pack"),
+                ("overrides/resourcepacks/new.zip", "pack"),
+                ("overrides/config/a.txt", "pack"),
+            ],
+        );
+        extract_overrides(&zip, &game_dir, &["overrides"], &no_progress())
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(shared.join("mine.zip")).unwrap(), "user");
+        assert_eq!(std::fs::read_to_string(shared.join("new.zip")).unwrap(), "pack");
+        assert_eq!(std::fs::read_to_string(game_dir.join("config/a.txt")).unwrap(), "pack");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

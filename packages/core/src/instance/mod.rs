@@ -1,6 +1,6 @@
 //! Instances: `instances/<id>/instance.json` plus the `minecraft/` game dir and `natives/`.
 
-mod fsutil;
+pub(crate) mod fsutil;
 mod links;
 mod manager;
 
