@@ -13,15 +13,15 @@ use k0t1k_core::launch::{Account, LaunchCommand, LaunchOptions, LogFn, LogStream
 use k0t1k_core::profile::LaunchProfile;
 use k0t1k_core::progress::ProgressFn;
 use k0t1k_core::profile::library::RuntimeContext;
-use k0t1k_core::settings::GlobalSettings;
+use k0t1k_core::settings::{GlobalSettings, OnGameLaunch};
 use tauri::{AppHandle, State};
 use tokio::process::Command;
 use tokio::sync::watch;
 
 use crate::error::{AppError, CommandResult, blocking};
-use crate::events::{self, GameLog, InstanceStatePayload, RunState, progress_fn, tracked};
+use crate::events::{self, GameLog, InstanceStatePayload, LogLine, RunState, progress_fn, tracked};
 use crate::state::AppState;
-use crate::{cmdline, game};
+use crate::{cmdline, game, window};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -46,22 +46,27 @@ pub async fn launch_instance(
     let account = Account::offline(&account.name);
     let settings = instance.effective_settings(&global);
 
-    let kill_requests = state.reserve(&instance_id)?;
+    let kill_requests = state.reserve(&instance_id, &instance.name)?;
     events::instance_state(&app, &instance_id, RunState::Preparing, None);
-    tauri::async_runtime::spawn(run_session(app, state, instance, settings, account, kill_requests));
+    tauri::async_runtime::spawn(run_session(app, state, instance, settings, account, global.behavior.on_game_launch, kill_requests));
     Ok(())
 }
 
 #[tauri::command]
 pub fn kill_instance(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> CommandResult<()> {
+    kill(&app, &state, &instance_id)
+}
+
+/// Stops the game, or cancels its preparation.
+pub fn kill(app: &AppHandle, state: &AppState, instance_id: &str) -> CommandResult<()> {
     let mut running = state.running();
-    let entry = running.get_mut(&instance_id).ok_or_else(|| AppError::new("the instance is not running"))?;
+    let entry = running.get_mut(instance_id).ok_or_else(|| AppError::new("the instance is not running"))?;
     entry.cancel.send_replace(true);
     entry.state = RunState::Stopping;
     if let Some(handle) = &entry.handle {
         handle.kill();
     }
-    events::instance_state(&app, &instance_id, RunState::Stopping, None);
+    events::instance_state(app, instance_id, RunState::Stopping, None);
     Ok(())
 }
 
@@ -72,6 +77,12 @@ pub fn list_run_states(state: State<'_, AppState>) -> Vec<InstanceStatePayload> 
         .iter()
         .map(|(id, entry)| InstanceStatePayload { instance_id: id.clone(), state: entry.state, exit_code: None })
         .collect()
+}
+
+/// Recent log lines of an instance, for a window opened after the game started.
+#[tauri::command]
+pub fn get_game_logs(state: State<'_, AppState>, instance_id: String) -> Vec<LogLine> {
+    state.log_lines(&instance_id)
 }
 
 /// Clears the run entry and tells the UI the instance stopped when the session task ends without
@@ -91,6 +102,7 @@ impl SessionGuard {
         self.log.line("launcher", message);
         self.state.running().remove(&self.id);
         events::instance_state(&self.app, &self.id, RunState::Stopped, exit_code);
+        window::on_game_stopped(&self.app);
     }
 }
 
@@ -113,6 +125,7 @@ async fn run_session(
     instance: Instance,
     settings: EffectiveSettings,
     account: Account,
+    on_game_launch: OnGameLaunch,
     mut kill_requests: watch::Receiver<bool>,
 ) {
     let id = instance.id.clone();
@@ -120,7 +133,7 @@ async fn run_session(
     let title = format!("Запуск: {}", instance.name);
     let post_exit = settings.commands.post_exit.clone();
     let progress = progress_fn(&app, &task, &title);
-    let log = GameLog::new(&app, &id);
+    let log = GameLog::new(&app, &state, &id);
     let mut session = SessionGuard { app: app.clone(), state: state.clone(), id: id.clone(), log: log.clone(), ended: false };
 
     // Dropping `prepare` on a kill also stops its downloads and kills a running pre-launch hook.
@@ -171,6 +184,10 @@ async fn run_session(
             None => false,
         }
     };
+
+    if !killed_at_spawn {
+        window::on_game_started(&app, on_game_launch);
+    }
 
     let exit_code = match handle.wait().await {
         Ok(code) => code,

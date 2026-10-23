@@ -6,10 +6,12 @@ use std::time::{Duration, Instant};
 
 use k0t1k_core::progress::{ProgressEvent, ProgressFn};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 
 use crate::error::CommandResult;
+use crate::state::AppState;
+use crate::{tray, window};
 
 /// Core reports every downloaded file; the UI does not need more than a few updates per second.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
@@ -29,9 +31,10 @@ struct ProgressPayload {
 const LOG_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Serialize)]
-struct LogLine {
-    stream: &'static str,
-    line: String,
+pub struct LogLine {
+    pub seq: u64,
+    pub stream: &'static str,
+    pub line: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -117,19 +120,23 @@ pub async fn tracked<T>(app: &AppHandle, task: &str, title: &str, work: impl Fut
     result
 }
 
-/// Log of one launch session. Lines sent through it reach the UI as `game-log` events carrying
-/// arrays of lines, at most one event per [`LOG_INTERVAL`]. Clones share the same queue; the
-/// sender task ends, after sending what is left, when every clone is dropped.
+/// Log of one launch session. Lines sent through it are kept in the instance's ring buffer (see
+/// `AppState::record_log`) and reach the UI as `game-log` events carrying arrays of lines, at most one
+/// event per [`LOG_INTERVAL`]. Clones share the same queue; the sender task ends, after sending what
+/// is left, when every clone is dropped. With nothing queued it sleeps on the channel, not on a timer.
 #[derive(Clone)]
 pub struct GameLog {
+    state: AppState,
+    instance_id: String,
     lines: mpsc::UnboundedSender<LogLine>,
 }
 
 impl GameLog {
-    pub fn new(app: &AppHandle, instance_id: &str) -> Self {
+    pub fn new(app: &AppHandle, state: &AppState, instance_id: &str) -> Self {
+        state.reset_log(instance_id);
         let (lines, mut queue) = mpsc::unbounded_channel();
         let app = app.clone();
-        let instance_id = instance_id.to_owned();
+        let id = instance_id.to_owned();
         tauri::async_runtime::spawn(async move {
             while let Some(first) = queue.recv().await {
                 let mut batch = vec![first];
@@ -137,15 +144,19 @@ impl GameLog {
                 while let Ok(line) = queue.try_recv() {
                     batch.push(line);
                 }
-                emit(&app, "game-log", GameLogPayload { instance_id: instance_id.clone(), lines: batch });
+                // The lines are in the ring buffer; a window that opens later fetches them from there.
+                if app.get_webview_window(window::MAIN).is_some() {
+                    emit(&app, "game-log", GameLogPayload { instance_id: id.clone(), lines: batch });
+                }
             }
         });
-        Self { lines }
+        Self { state: state.clone(), instance_id: instance_id.to_owned(), lines }
     }
 
     /// `stream` is `stdout`, `stderr` or `launcher` (the launcher's own messages).
     pub fn line(&self, stream: &'static str, line: &str) {
-        if self.lines.send(LogLine { stream, line: line.to_owned() }).is_err() {
+        let entry = self.state.record_log(&self.instance_id, stream, line);
+        if self.lines.send(entry).is_err() {
             tracing::warn!("game log is closed, dropping: {line}");
         }
     }
@@ -153,4 +164,5 @@ impl GameLog {
 
 pub fn instance_state(app: &AppHandle, instance_id: &str, state: RunState, exit_code: Option<i32>) {
     emit(app, "instance-state", InstanceStatePayload { instance_id: instance_id.to_owned(), state, exit_code });
+    tray::refresh(app);
 }

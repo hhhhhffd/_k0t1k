@@ -9,29 +9,34 @@ mod java;
 mod launch;
 mod settings;
 mod state;
+mod tray;
 mod versions;
+mod window;
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, RunEvent, WindowEvent};
 
 pub fn run() {
     tauri::Builder::default()
+        // Registered first, as the plugin requires. A second launch shows the running launcher; it
+        // keeps its state in a named mutex and a hidden window (Windows) or the session bus (Linux).
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| window::open(app)))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(|window, event| {
+            if window.label() == window::MAIN
+                && let WindowEvent::CloseRequested { api, .. } = event
+            {
+                api.prevent_close();
+                window::request_close(window.app_handle());
+            }
+        })
         .setup(|app| {
             let state = datadir::resolve().and_then(state::AppState::new).map_err(|error| error.to_string())?;
             let webview_dir = state.location.webview_dir();
             std::fs::create_dir_all(&webview_dir)?;
             app.manage(state);
-            // Created here rather than in tauri.conf.json to keep WebView2's profile in the data
-            // directory instead of `%LOCALAPPDATA%`.
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
-                .title("_k0t1k")
-                .inner_size(1200.0, 760.0)
-                .min_inner_size(900.0, 560.0)
-                .decorations(false)
-                .shadow(true)
-                .data_directory(webview_dir)
-                .build()?;
+            window::create(app.handle())?;
+            tray::create(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -46,6 +51,7 @@ pub fn run() {
             launch::launch_instance,
             launch::kill_instance,
             launch::list_run_states,
+            launch::get_game_logs,
             versions::list_minecraft_versions,
             versions::list_loader_versions,
             java::detect_java,
@@ -69,6 +75,13 @@ pub fn run() {
             content::import_modpack_file,
             content::install_modpack_version,
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run the _k0t1k application");
+        .build(tauri::generate_context!())
+        .expect("failed to build the _k0t1k application")
+        .run(|_app, event| {
+            // No window left is not a reason to exit: the launcher lives in the tray. Explicit
+            // exits (`AppHandle::exit`) carry an exit code and are let through.
+            if let RunEvent::ExitRequested { api, code: None, .. } = event {
+                api.prevent_exit();
+            }
+        });
 }
