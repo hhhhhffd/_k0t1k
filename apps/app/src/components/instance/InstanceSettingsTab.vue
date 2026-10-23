@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { open } from '@tauri-apps/plugin-dialog'
 import { computed, reactive, ref } from 'vue'
+import { isTauri } from '../../api/commands'
 import { type Instance, type InstanceSettings, SHARED_FOLDERS, type SharedFolder } from '../../api/types'
 import { t } from '../../i18n/ru'
 import { useInstancesStore } from '../../stores/instances'
@@ -32,6 +34,15 @@ function setShared(folder: SharedFolder, on: boolean) {
 }
 const dirty = ref(false)
 const markDirty = () => (dirty.value = true)
+
+async function pickJava() {
+  if (!isTauri || !draft.settings.java) return
+  const picked = await open({ multiple: false, directory: false, title: t.iset.pickJavaTitle, filters: [{ name: 'Java', extensions: ['exe'] }] })
+  if (typeof picked === 'string') {
+    draft.settings.java.path = picked
+    markDirty()
+  }
+}
 
 /** Toggle for one override group: off -> inherit (group removed), on -> start from the global value. */
 function overrideModel<K extends keyof InstanceSettings>(key: K, fromGlobal: () => InstanceSettings[K]) {
@@ -107,26 +118,15 @@ async function save() {
     </section>
 
     <OverrideBlock v-model="javaOn" :title="t.iset.java" :override-label="t.iset.overrideJava">
-      <template #default="{ disabled }">
-        <div class="flex flex-col gap-3">
-          <input
-            class="input font-mono"
-            :disabled="disabled"
-            :value="javaView.path ?? ''"
-            :placeholder="t.settings.javaPath"
-            @input="draft.settings.java && (draft.settings.java.path = ($event.target as HTMLInputElement).value || null)"
-          />
-          <label class="flex items-center gap-2">
-            <ToggleSwitch
-              :model-value="javaView.autoSelect"
-              :disabled="disabled"
-              :label="t.settings.autoSelect"
-              @update:model-value="draft.settings.java && ((draft.settings.java.autoSelect = $event), markDirty())"
-            />
-            <span>{{ t.settings.autoSelect }}</span>
-          </label>
-        </div>
-      </template>
+      <div class="flex gap-2">
+        <input
+          class="input flex-1 font-mono"
+          :value="javaView.path ?? ''"
+          :placeholder="t.iset.javaPathPlaceholder"
+          @input="draft.settings.java && ((draft.settings.java.path = ($event.target as HTMLInputElement).value || null), markDirty())"
+        />
+        <button class="btn" @click="pickJava">{{ t.iset.browse }}</button>
+      </div>
     </OverrideBlock>
 
     <OverrideBlock v-model="memoryOn" :title="t.iset.memory" :override-label="t.iset.overrideMemory">
