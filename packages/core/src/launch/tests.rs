@@ -181,7 +181,7 @@ async fn java_9_plus_uses_an_argfile_next_to_the_natives_dir() {
     let options = options(root.path());
     let command = build_command(&paths, &profile("linux", ""), &assets(), &options).await.unwrap();
 
-    let argfile = root.path().join("inst/launch-args.txt");
+    let argfile = root.path().join("inst").join("launch-args.txt");
     assert_eq!(command.program, PathBuf::from("/jre/bin/java"));
     assert_eq!(command.args[0], format!("@{}", argfile.display()));
     assert_eq!(command.args[1], "--username");
