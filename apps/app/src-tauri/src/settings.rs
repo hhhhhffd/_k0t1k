@@ -31,6 +31,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> CommandResult<GlobalSet
 pub async fn save_settings(state: State<'_, AppState>, settings: GlobalSettings) -> CommandResult<()> {
     let paths = state.paths.clone();
     blocking(move || {
+        settings.ui.validate()?;
         GlobalSettings::update(&paths, |current| {
             let accounts = std::mem::take(&mut current.accounts);
             let selected_account_id = current.selected_account_id.take();
