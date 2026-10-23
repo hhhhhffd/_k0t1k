@@ -39,7 +39,14 @@ apps/app/src           Vue 3 UI
   with `shareResourcepacks` are converted on read (true = only resourcepacks). Named pools (different shared
   sets for groups of instances) would go in as a pool id in the shared path (`shared/<pool>/<folder>`), with
   the current list being the implicit default pool, so no migration would be needed.
-- **Playtime** is recorded per instance (seconds, total and last session) and globally.
+- **Playtime** is recorded per instance (seconds, total and last session) and globally. Every session records its
+  own duration when it ends, so overlapping sessions of one instance are counted separately.
+- **Sessions**: every launch is a session with an id that grows during the app run (`launch_instance` returns it).
+  The running map is keyed by session id, so an instance may run any number of times at once. Each session has
+  its own `instances/<id>/sessions/<session>/natives` and `launch-args.txt` next to it, removed when the session
+  ends; leftovers (crash, Windows file locks) are removed by the next launch of the instance. Deleting an
+  instance is refused while any of its sessions is live. Preparations run concurrently; `install_lock`
+  serialises the installs.
 
 ## Data directory (portable)
 
@@ -54,7 +61,7 @@ libraries/               Maven layout; must be named "libraries" (ForgeWrapper w
 assets/                  indexes/, objects/, virtual/
 java/<component>/        managed Java runtimes
 shared/<folder>/         resourcepacks, shaderpacks, screenshots shared between instances
-instances/<id>/          instance.json + minecraft/ (game dir) + natives/
+instances/<id>/          instance.json + minecraft/ (game dir) + sessions/<session>/ (natives of a live launch)
 cache/                   downloads cache
 ```
 
@@ -64,16 +71,18 @@ Goal: while a game runs the launcher costs ~15-30 MB and no CPU. WebView2's proc
 the main window is destroyed (not hidden) and the Rust process alone keeps running behind a tray icon.
 
 - The tray icon exists for the whole run. Left click opens the window (recreating it); the menu has "Открыть",
-  a submenu of running games with a stop item each (rebuilt on every `instance-state`, no timers) and "Выход".
-- `behavior.onGameLaunch`: `free_memory` (default) destroys the window when a game reaches `running`,
-  `hide_to_tray` hides it, `keep_open` does nothing. When the last game ends, a window released this way is
+  a submenu of running sessions ("<name>", or "<name> #<n>" for later launches and for instances with several
+  sessions) with a stop item each (rebuilt on every `instance-state`, no timers) and "Выход".
+- `behavior.onGameLaunch`: `free_memory` (default) destroys the window when a session reaches `running`,
+  `hide_to_tray` hides it, `keep_open` does nothing. When the last session of all instances ends, a window released this way is
   recreated/shown. Opening the window yourself clears the mark, so a window you closed afterwards stays closed.
 - `behavior.onClose`: `tray` (default) destroys the window on close, `exit` quits. With games running, exit
-  (and the tray's "Выход") asks in a native dialog: Да = kill games (waits until playtime is saved), Нет = leave
+  (and the tray's "Выход") asks in a native dialog: Да = kill all sessions (waits until playtime is saved), Нет = leave
   them running, Отмена = stay. Closing the last window never exits (`RunEvent::ExitRequested` with no code is
   prevented); only `AppHandle::exit` does.
 - A recreated window restores state from the backend: `list_run_states`, `list_instances` and
-  `get_game_logs` (ring buffer of the last 5000 lines per instance, kept until the instance's next launch).
+  `get_game_logs(sessionId)` (ring buffer of the last 5000 lines per session; the logs of the last 3 finished
+  sessions per instance are kept until the app exits, and `list_run_states` lists them as `stopped`).
   Log lines carry a global `seq` so lines delivered both live and by the backfill are not duplicated.
   While no window exists the log batcher keeps recording but does not emit.
 - A second launch of the exe shows the running launcher (`tauri-plugin-single-instance`: a named mutex and a
