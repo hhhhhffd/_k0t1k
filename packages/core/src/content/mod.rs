@@ -35,7 +35,7 @@ pub(crate) async fn send_json<T: serde::de::DeserializeOwned>(
 }
 
 pub use blocked::{BlockedScan, HashCache, collect_blocked};
-pub use dropped::{AddFilesReport, add_local_files, identify_file};
+pub use dropped::{AddFilesReport, SkipReason, add_local_files, identify_file};
 pub use export::{PackExportReport, PackExportRequest, export_curseforge, export_mrpack};
 pub use install::{
     AvailableUpdate, BlockedFile, InstallContext, InstallReport, InstalledResource, check_updates,

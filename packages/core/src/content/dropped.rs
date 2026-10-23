@@ -17,11 +17,23 @@ pub struct AddedFile {
     pub kind: ResourceKind,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SkipReason {
+    NotAFile,
+    /// The folder is fixed (a tab) and the file's extension does not fit it.
+    UnsupportedType,
+    /// Nothing in the file says what it is.
+    UnknownType,
+    /// Identified as a world or a data pack, which are not added by dropping.
+    WorldOrDataPack,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkippedFile {
     pub path: String,
-    pub reason: String,
+    pub reason: SkipReason,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -85,29 +97,29 @@ fn accepts(kind: ResourceKind, path: &Path) -> bool {
 pub fn add_local_files(game_dir: &Path, kind: Option<ResourceKind>, paths: &[PathBuf]) -> Result<AddFilesReport> {
     let mut report = AddFilesReport::default();
     for path in paths {
-        let skip = |reason: &str| SkippedFile { path: path.display().to_string(), reason: reason.to_owned() };
+        let skip = |reason| SkippedFile { path: path.display().to_string(), reason };
         let Some(file_name) = path.file_name().map(|name| name.to_string_lossy().into_owned()) else {
-            report.skipped.push(skip("not a file"));
+            report.skipped.push(skip(SkipReason::NotAFile));
             continue;
         };
         if !path.is_file() {
-            report.skipped.push(skip("not a file"));
+            report.skipped.push(skip(SkipReason::NotAFile));
             continue;
         }
         let target_kind = match kind {
             Some(kind) if accepts(kind, path) => kind,
             Some(_) => {
-                report.skipped.push(skip("unsupported file type"));
+                report.skipped.push(skip(SkipReason::UnsupportedType));
                 continue;
             }
             None => match identify_file(path)? {
                 Some(found @ (ResourceKind::Mod | ResourceKind::ResourcePack | ResourceKind::ShaderPack)) => found,
                 Some(_) => {
-                    report.skipped.push(skip("worlds and data packs are not supported here"));
+                    report.skipped.push(skip(SkipReason::WorldOrDataPack));
                     continue;
                 }
                 None => {
-                    report.skipped.push(skip("cannot tell what this file is"));
+                    report.skipped.push(skip(SkipReason::UnknownType));
                     continue;
                 }
             },
@@ -183,7 +195,8 @@ mod tests {
                 ("shader.zip", ResourceKind::ShaderPack)
             ]
         );
-        assert_eq!(report.skipped.len(), 2);
+        let reasons: Vec<_> = report.skipped.iter().map(|file| file.reason).collect();
+        assert_eq!(reasons, [SkipReason::WorldOrDataPack, SkipReason::UnknownType]);
         assert_eq!(std::fs::read_to_string(game_dir.join("mods/a.jar")).unwrap(), "mine");
         assert_eq!(std::fs::read_to_string(game_dir.join("mods/a (1).jar")).unwrap(), "dropped");
         assert!(game_dir.join("resourcepacks/pack.zip").is_file() && game_dir.join("shaderpacks/shader.zip").is_file());

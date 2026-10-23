@@ -9,6 +9,7 @@ mod java;
 mod launch;
 mod settings;
 mod state;
+mod transfer;
 mod tray;
 mod versions;
 mod window;
@@ -75,6 +76,13 @@ pub fn run() {
             content::list_worlds,
             content::import_modpack_file,
             content::install_modpack_version,
+            content::update_modpack,
+            transfer::list_export_entries,
+            transfer::export_instance,
+            transfer::add_local_files_to_instance,
+            transfer::scan_blocked_files,
+            transfer::get_downloads_dir,
+            transfer::set_update_lock,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the _k0t1k application")
