@@ -24,7 +24,7 @@ apps/app/src           Vue 3 UI
   so we never run loader installers ourselves. Responses are cached under `meta/` and validated against the
   parent index's `sha256`; cached data is used when offline.
 - **Java runtimes: Mojang's runtime index** (`all.json`), picked by the version's `compatibleJavaName` /
-  `compatibleJavaMajors`, installed into `java/<component>`. Detected system Java is a fallback.
+  `compatibleJavaMajors`, installed into `java/<component>`. Like Prism, a system Java is used only when automatic download is off.
 - **Storage formats are JSON** (`settings.json`, `instance.json`), not Prism's INI. Mod origin metadata uses
   packwiz `.index/*.pw.toml` files, the same as Prism, so instances stay compatible with packwiz tools.
 - **Per-instance settings are `Option<T>` groups**: `None` inherits the global value (Prism's `OverrideX` gates).
@@ -33,7 +33,11 @@ apps/app/src           Vue 3 UI
   directory junction (Windows) or symlink to `shared/resourcepacks`.
 - **Playtime** is recorded per instance (seconds, total and last session) and globally.
 
-## Data directory (`%APPDATA%/_k0t1k`)
+## Data directory (portable)
+
+Resolved once at startup by the app (`src-tauri/src/datadir.rs`): the folder in `<exe dir>/data-dir.txt` if
+present, otherwise the executable's own folder (Prism-portable style) when it is writable, otherwise
+`%APPDATA%/_k0t1k`. WebView2's profile lives in `<root>/webview`, so nothing is written elsewhere.
 
 ```
 settings.json            global settings

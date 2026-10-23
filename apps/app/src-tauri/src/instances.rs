@@ -97,10 +97,11 @@ pub async fn rename_instance(state: State<'_, AppState>, instance_id: String, na
 }
 
 #[tauri::command]
-pub async fn delete_instance(state: State<'_, AppState>, instance_id: String) -> CommandResult<()> {
+pub async fn delete_instance(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> CommandResult<()> {
     if state.is_running(&instance_id) {
         return Err(AppError::new("the instance is running; stop it before deleting"));
     }
+    game::cancel_game_install(&app, &state, &instance_id);
     let manager = state.instances.clone();
     blocking(move || manager.delete(&instance_id)).await
 }

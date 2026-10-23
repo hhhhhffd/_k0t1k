@@ -101,9 +101,47 @@ impl Default for PlaytimeSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UiSettings {
+    /// A built-in theme id or the id of one of `custom_themes`.
     pub theme: String,
     /// Lightweight mode for low-end PCs.
     pub lite_mode: bool,
+    pub custom_themes: Vec<CustomTheme>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomTheme {
+    pub id: String,
+    pub name: String,
+    /// Built-in theme this one starts from.
+    pub base: String,
+    /// CSS variable name without the leading `--` mapped to a color value.
+    pub colors: BTreeMap<String, String>,
+}
+
+impl UiSettings {
+    /// Theme values are injected into CSS by the UI, so only a narrow charset is accepted.
+    pub fn validate(&self) -> Result<()> {
+        let mut seen = std::collections::HashSet::new();
+        for theme in &self.custom_themes {
+            if theme.id.is_empty() || !seen.insert(theme.id.as_str()) {
+                return Err(Error::Other(format!("custom theme id {:?} is empty or not unique", theme.id)));
+            }
+            for (key, value) in &theme.colors {
+                let key_ok = (1..=40).contains(&key.len())
+                    && key.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+                let value_ok = (1..=64).contains(&value.len())
+                    && value.chars().all(|c| c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || "#(),.%-".contains(c));
+                if !key_ok || !value_ok {
+                    return Err(Error::Other(format!(
+                        "invalid color {key:?}: {value:?} in custom theme {:?}",
+                        theme.name
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for UiSettings {
@@ -111,6 +149,7 @@ impl Default for UiSettings {
         Self {
             theme: "k0t1k".to_owned(),
             lite_mode: false,
+            custom_themes: Vec::new(),
         }
     }
 }
@@ -247,6 +286,32 @@ mod tests {
         assert!(!settings.window.maximized);
         assert_eq!(settings.ui.theme, "k0t1k");
         assert!(settings.playtime.record && settings.playtime.show);
+    }
+
+    fn theme(id: &str, colors: &[(&str, &str)]) -> CustomTheme {
+        CustomTheme {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            base: "k0t1k".to_owned(),
+            colors: colors.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
+        }
+    }
+
+    #[test]
+    fn custom_theme_validation() {
+        let mut ui = UiSettings {
+            custom_themes: vec![theme("a", &[("bg-1", "#fff"), ("accent", "rgb(1, 2, 3)"), ("x", "hsl(10 20% 30%)")]), theme("b", &[])],
+            ..UiSettings::default()
+        };
+        assert!(ui.validate().is_ok());
+
+        ui.custom_themes[1].id = "a".to_owned();
+        assert!(ui.validate().is_err());
+        ui.custom_themes[1].id = "b".to_owned();
+        for (key, value) in [("Bad", "#fff"), ("ok", "red;}body{x:y"), ("ok", "a\\b"), ("ok", ""), ("", "#fff")] {
+            ui.custom_themes[1].colors = [(key.to_owned(), value.to_owned())].into();
+            assert!(ui.validate().is_err(), "{key}: {value}");
+        }
     }
 
     #[test]

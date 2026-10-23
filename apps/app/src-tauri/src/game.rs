@@ -10,8 +10,8 @@ use k0t1k_core::profile::{LaunchProfile, ResolvedComponent, resolve_components};
 use tauri::AppHandle;
 
 use crate::error::CommandResult;
-use crate::events::{progress_fn, tracked};
-use crate::state::AppState;
+use crate::events::{self, progress_fn, tracked};
+use crate::state::{AppState, GameInstall};
 
 /// `os.arch` of a Java matching this machine; the real value is known only once a Java is chosen.
 pub fn host_java_arch() -> &'static str {
@@ -36,17 +36,35 @@ pub async fn resolve(paths: &Paths, specs: Vec<ComponentSpec>) -> CommandResult<
 
 /// Downloads libraries and assets of a new instance in the background, so its first launch is fast.
 pub fn spawn_game_install(app: AppHandle, state: AppState, instance: Instance, components: Vec<ResolvedComponent>) {
-    tauri::async_runtime::spawn(async move {
-        let task = format!("game:{}", instance.id);
-        let title = format!("Загрузка игры: {}", instance.name);
-        let progress = progress_fn(&app, &task, &title);
-        let install = async {
-            let profile = LaunchProfile::build(&components, RuntimeContext::host(host_java_arch()))?;
-            let _installing = state.install_lock.lock().await;
-            install_game(&state.http, &state.paths, &profile, &task, &progress).await?;
-            Ok(())
-        };
-        // A failure is reported to the UI by `tracked` as an error event; the next launch retries.
-        let _ = tracked(&app, &task, &title, install).await;
+    let task = format!("game:{}", instance.id);
+    let title = format!("Загрузка игры: {}", instance.name);
+    // Held until the handle is registered: the task removes itself from the map when it ends.
+    let mut installs = state.game_installs();
+    let handle = tauri::async_runtime::spawn({
+        let state = state.clone();
+        let (task, title, id) = (task, title.clone(), instance.id.clone());
+        async move {
+            let progress = progress_fn(&app, &task, &title);
+            let install = async {
+                let profile = LaunchProfile::build(&components, RuntimeContext::host(host_java_arch()))?;
+                let _installing = state.install_lock.lock().await;
+                install_game(&state.http, &state.paths, &profile, &task, &progress).await?;
+                Ok(())
+            };
+            // A failure is reported to the UI by `tracked` as an error event; the next launch retries.
+            let _ = tracked(&app, &task, &title, install).await;
+            state.game_installs().remove(&id);
+        }
     });
+    installs.insert(instance.id, GameInstall { title, task: handle });
+}
+
+/// Stops the background install of the instance's game files, if one is running, and ends its
+/// progress row as cancelled.
+pub fn cancel_game_install(app: &AppHandle, state: &AppState, instance_id: &str) {
+    let install = state.game_installs().remove(instance_id);
+    if let Some(install) = install {
+        install.task.abort();
+        events::cancelled(app, &format!("game:{instance_id}"), &install.title);
+    }
 }

@@ -5,8 +5,10 @@ use k0t1k_core::content::{Clients, curseforge};
 use k0t1k_core::instance::InstanceManager;
 use k0t1k_core::launch::GameHandle;
 use k0t1k_core::paths::Paths;
+use tauri::async_runtime::JoinHandle;
 use tokio::sync::watch;
 
+use crate::datadir::DataLocation;
 use crate::error::{AppError, CommandResult};
 use crate::events::RunState;
 
@@ -27,31 +29,41 @@ impl RunEntry {
     }
 }
 
+/// A background install of an instance's game files.
+pub struct GameInstall {
+    pub title: String,
+    pub task: JoinHandle<()>,
+}
+
 /// Cheap to clone: every field is shared, so background tasks take their own copy.
 #[derive(Clone)]
 pub struct AppState {
     pub paths: Paths,
+    pub location: DataLocation,
     pub http: reqwest::Client,
     pub instances: Arc<InstanceManager>,
     pub clients: Arc<Clients>,
     running: Arc<Mutex<HashMap<String, RunEntry>>>,
+    /// Background game installs by instance id, so deleting the instance can stop its download.
+    game_installs: Arc<Mutex<HashMap<String, GameInstall>>>,
     /// Held while game files and Java are installed: concurrent installs would write the same
     /// files, and a launch must wait for a background install of its own game instead of racing it.
     pub install_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AppState {
-    pub fn new() -> CommandResult<Self> {
-        let root = Paths::default_root().ok_or_else(|| AppError::new("cannot determine the data directory"))?;
-        let paths = Paths::new(root);
+    pub fn new(location: DataLocation) -> CommandResult<Self> {
+        let paths = Paths::new(location.root.clone());
         let http = k0t1k_core::download::http_client();
         let key = CURSEFORGE_API_KEY.filter(|key| !key.is_empty());
         Ok(Self {
             instances: Arc::new(InstanceManager::new(paths.clone())),
             clients: Arc::new(Clients::new(http.clone(), key)?),
             paths,
+            location,
             http,
             running: Arc::default(),
+            game_installs: Arc::default(),
             install_lock: Arc::default(),
         })
     }
@@ -65,6 +77,10 @@ impl AppState {
 
     pub fn running(&self) -> MutexGuard<'_, HashMap<String, RunEntry>> {
         self.running.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn game_installs(&self) -> MutexGuard<'_, HashMap<String, GameInstall>> {
+        self.game_installs.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     pub fn is_running(&self, instance_id: &str) -> bool {

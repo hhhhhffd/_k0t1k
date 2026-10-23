@@ -16,7 +16,7 @@ pub fn meta_loader(loader: Loader) -> meta::Loader {
 
 #[tauri::command]
 pub async fn list_minecraft_versions(state: State<'_, AppState>) -> CommandResult<Vec<VersionEntry>> {
-    Ok(MetaClient::new(&state.paths, false).minecraft_versions().await?)
+    Ok(MetaClient::new(&state.paths, false).launchable_minecraft_versions().await?)
 }
 
 #[tauri::command]
