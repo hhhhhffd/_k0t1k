@@ -3,6 +3,7 @@ import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
 import BlockedFilesDialog from './components/BlockedFilesDialog.vue'
+import TitleBar from './components/TitleBar.vue'
 import TaskBar from './components/TaskBar.vue'
 import ToastHost from './components/ToastHost.vue'
 import { useInstancesStore } from './stores/instances'
@@ -22,6 +23,7 @@ onMounted(async () => {
 
 <template>
   <div class="flex h-full flex-col">
+    <TitleBar />
     <div class="flex min-h-0 flex-1">
       <AppSidebar />
       <main class="min-w-0 flex-1 overflow-y-auto">
