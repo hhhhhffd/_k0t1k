@@ -2092,7 +2092,10 @@ dependencies = [
 name = "k0t1k-app"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
+ "chrono",
  "k0t1k-core",
+ "reqwest",
  "serde",
  "serde_json",
  "tauri",
