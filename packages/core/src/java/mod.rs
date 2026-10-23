@@ -26,8 +26,10 @@ pub const fn game_executable() -> &'static str {
 /// Choose the Java for a launch, in this order:
 /// 1. the explicit path from the settings (it must work; no silent fallback),
 /// 2. the managed runtime for `component`,
-/// 3. a detected install whose major is in `required_majors`,
-/// 4. a fresh download of the runtime when `auto_download` is on.
+/// 3. a fresh download of the runtime when `auto_download` is on (and a component is known),
+/// 4. otherwise a detected install whose major is in `required_majors`.
+///
+/// A system Java is deliberately not preferred over the download, so the launcher stays self-contained.
 ///
 /// Without requirement info Java 8 is assumed. The result is never written back into settings.
 pub async fn ensure_java(
@@ -65,23 +67,22 @@ pub async fn ensure_java(
         }
     }
 
-    if let Some(install) = detect_java(paths)
+    if settings.auto_download
+        && let Some(component) = component
+    {
+        let path = install_runtime(paths, client, component, progress).await?;
+        return probe(&path).await;
+    }
+
+    detect_java(paths)
         .await
         .into_iter()
         .find(|install| majors.contains(&install.major))
-    {
-        return Ok(install);
-    }
-
-    match component {
-        Some(component) if settings.auto_download => {
-            let path = install_runtime(paths, client, component, progress).await?;
-            probe(&path).await
-        }
-        _ => Err(Error::Other(format!(
-            "no installed Java matches the required major version(s) {majors:?} and automatic download is unavailable"
-        ))),
-    }
+        .ok_or_else(|| {
+            Error::Other(format!(
+                "no installed Java matches the required major version(s) {majors:?} and automatic download is unavailable"
+            ))
+        })
 }
 
 #[cfg(all(test, unix))]
@@ -147,7 +148,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn falls_back_to_compatible_detected_java() {
+    async fn uses_compatible_detected_java_when_download_is_off() {
         let dir = tempfile::tempdir().unwrap();
         let paths = Paths::new(dir.path());
         // Not the requested component, but a managed Java 17 satisfies [17].
