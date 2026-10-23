@@ -42,6 +42,7 @@ pub fn spawn_game_install(app: AppHandle, state: AppState, instance: Instance, c
         let progress = progress_fn(&app, &task, &title);
         let install = async {
             let profile = LaunchProfile::build(&components, RuntimeContext::host(host_java_arch()))?;
+            let _installing = state.install_lock.lock().await;
             install_game(&state.http, &state.paths, &profile, &task, &progress).await?;
             Ok(())
         };

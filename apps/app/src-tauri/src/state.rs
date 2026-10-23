@@ -5,6 +5,7 @@ use k0t1k_core::content::{Clients, curseforge};
 use k0t1k_core::instance::InstanceManager;
 use k0t1k_core::launch::GameHandle;
 use k0t1k_core::paths::Paths;
+use tokio::sync::watch;
 
 use crate::error::{AppError, CommandResult};
 use crate::events::RunState;
@@ -16,8 +17,14 @@ const CURSEFORGE_API_KEY: Option<&str> = option_env!("K0T1K_CURSEFORGE_API_KEY")
 pub struct RunEntry {
     pub state: RunState,
     pub handle: Option<GameHandle>,
-    /// Kill was requested while the game was still being prepared.
-    pub kill_requested: bool,
+    /// Becomes `true` when a kill is requested; preparation waits on it to abort promptly.
+    pub cancel: watch::Sender<bool>,
+}
+
+impl RunEntry {
+    pub fn kill_requested(&self) -> bool {
+        *self.cancel.borrow()
+    }
 }
 
 /// Cheap to clone: every field is shared, so background tasks take their own copy.
@@ -28,6 +35,9 @@ pub struct AppState {
     pub instances: Arc<InstanceManager>,
     pub clients: Arc<Clients>,
     running: Arc<Mutex<HashMap<String, RunEntry>>>,
+    /// Held while game files and Java are installed: concurrent installs would write the same
+    /// files, and a launch must wait for a background install of its own game instead of racing it.
+    pub install_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AppState {
@@ -42,6 +52,7 @@ impl AppState {
             paths,
             http,
             running: Arc::default(),
+            install_lock: Arc::default(),
         })
     }
 
@@ -60,13 +71,19 @@ impl AppState {
         self.running().contains_key(instance_id)
     }
 
+    pub fn kill_requested(&self, instance_id: &str) -> bool {
+        self.running().get(instance_id).is_some_and(RunEntry::kill_requested)
+    }
+
     /// Marks the instance as being prepared; fails when it is already running.
-    pub fn reserve(&self, instance_id: &str) -> CommandResult<()> {
+    /// The receiver turns `true` when a kill is requested.
+    pub fn reserve(&self, instance_id: &str) -> CommandResult<watch::Receiver<bool>> {
         let mut running = self.running();
         if running.contains_key(instance_id) {
             return Err(AppError::new("the instance is already running"));
         }
-        running.insert(instance_id.to_owned(), RunEntry { state: RunState::Preparing, handle: None, kill_requested: false });
-        Ok(())
+        let (cancel, killed) = watch::channel(false);
+        running.insert(instance_id.to_owned(), RunEntry { state: RunState::Preparing, handle: None, cancel });
+        Ok(killed)
     }
 }

@@ -15,6 +15,7 @@ use k0t1k_core::profile::library::RuntimeContext;
 use k0t1k_core::settings::GlobalSettings;
 use tauri::{AppHandle, State};
 use tokio::process::Command;
+use tokio::sync::watch;
 
 use crate::error::{AppError, CommandResult, blocking};
 use crate::events::{self, InstanceStatePayload, RunState, progress_fn, tracked};
@@ -44,9 +45,9 @@ pub async fn launch_instance(
     let account = Account::offline(&account.name);
     let settings = instance.effective_settings(&global);
 
-    state.reserve(&instance_id)?;
+    let kill_requests = state.reserve(&instance_id)?;
     events::instance_state(&app, &instance_id, RunState::Preparing, None);
-    tauri::async_runtime::spawn(run_session(app, state, instance, settings, account));
+    tauri::async_runtime::spawn(run_session(app, state, instance, settings, account, kill_requests));
     Ok(())
 }
 
@@ -54,7 +55,7 @@ pub async fn launch_instance(
 pub fn kill_instance(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> CommandResult<()> {
     let mut running = state.running();
     let entry = running.get_mut(&instance_id).ok_or_else(|| AppError::new("the instance is not running"))?;
-    entry.kill_requested = true;
+    entry.cancel.send_replace(true);
     entry.state = RunState::Stopping;
     if let Some(handle) = &entry.handle {
         handle.kill();
@@ -72,19 +73,66 @@ pub fn list_run_states(state: State<'_, AppState>) -> Vec<InstanceStatePayload> 
         .collect()
 }
 
-async fn run_session(app: AppHandle, state: AppState, instance: Instance, settings: EffectiveSettings, account: Account) {
+/// Clears the run entry and tells the UI the instance stopped when the session task ends without
+/// [`SessionGuard::end`], i.e. when it panics; otherwise the instance would stay "running" forever.
+struct SessionGuard {
+    app: AppHandle,
+    state: AppState,
+    id: String,
+    ended: bool,
+}
+
+impl SessionGuard {
+    /// Forgets the running game and tells the UI it stopped; playtime must be saved before this.
+    fn end(&mut self, message: &str, exit_code: Option<i32>) {
+        self.ended = true;
+        events::game_log(&self.app, &self.id, "launcher", message);
+        self.state.running().remove(&self.id);
+        events::instance_state(&self.app, &self.id, RunState::Stopped, exit_code);
+    }
+}
+
+impl Drop for SessionGuard {
+    fn drop(&mut self) {
+        if !self.ended {
+            self.end("Сессия запуска завершилась аварийно", None);
+        }
+    }
+}
+
+async fn wait_killed(kill_requests: &mut watch::Receiver<bool>) {
+    // The sender lives in the run entry, which is removed only when the session ends.
+    let _ = kill_requests.wait_for(|requested| *requested).await;
+}
+
+async fn run_session(
+    app: AppHandle,
+    state: AppState,
+    instance: Instance,
+    settings: EffectiveSettings,
+    account: Account,
+    mut kill_requests: watch::Receiver<bool>,
+) {
     let id = instance.id.clone();
     let task = format!("launch:{id}");
     let title = format!("Запуск: {}", instance.name);
     let post_exit = settings.commands.post_exit.clone();
+    let mut session = SessionGuard { app: app.clone(), state: state.clone(), id: id.clone(), ended: false };
 
-    let prepared = tracked(&app, &task, &title, prepare(&app, &state, &instance, &settings, account, &task, &title)).await;
-    let command = match prepared {
-        Ok(command) => command,
-        Err(error) => return end_session(&app, &state, &id, &format!("Запуск не удался: {error}"), None),
+    // Dropping `prepare` on a kill also stops its downloads and kills a running pre-launch hook.
+    let preparation = async {
+        tokio::select! {
+            prepared = prepare(&app, &state, &instance, &settings, account, &task, &title) => prepared,
+            () = wait_killed(&mut kill_requests) => Err(AppError::new("запуск отменён")),
+        }
     };
-    if state.running().get(&id).is_some_and(|entry| entry.kill_requested) {
-        return end_session(&app, &state, &id, "Запуск отменён", None);
+    let command = match tracked(&app, &task, &title, preparation).await {
+        Ok(command) => command,
+        Err(_) if state.kill_requested(&id) => return session.end("Запуск отменён", None),
+        Err(error) => return session.end(&format!("Запуск не удался: {error}"), None),
+    };
+    if state.kill_requested(&id) {
+        return session.end("Запуск отменён", None);
     }
 
     let on_log: LogFn = {
@@ -99,27 +147,26 @@ async fn run_session(app: AppHandle, state: AppState, instance: Instance, settin
     };
     let handle = match spawn_game(&command, on_log) {
         Ok(handle) => handle,
-        Err(error) => return end_session(&app, &state, &id, &format!("Не удалось запустить игру: {}", AppError::from(error)), None),
+        Err(error) => return session.end(&format!("Не удалось запустить игру: {}", AppError::from(error)), None),
     };
     let started_at = Utc::now();
-    let kill_requested = {
+    let killed_at_spawn = {
         let mut running = state.running();
         match running.get_mut(&id) {
             Some(entry) => {
                 entry.handle = Some(handle.clone());
-                if entry.kill_requested {
+                if entry.kill_requested() {
                     handle.kill();
                 } else {
                     entry.state = RunState::Running;
+                    // Emitted under the lock so a concurrent kill's `Stopping` cannot be overwritten.
+                    events::instance_state(&app, &id, RunState::Running, None);
                 }
-                entry.kill_requested
+                entry.kill_requested()
             }
             None => false,
         }
     };
-    if !kill_requested {
-        events::instance_state(&app, &id, RunState::Running, None);
-    }
 
     let exit_code = match handle.wait().await {
         Ok(code) => code,
@@ -130,19 +177,27 @@ async fn run_session(app: AppHandle, state: AppState, instance: Instance, settin
     };
     let ended_at = Utc::now();
 
-    let manager = state.instances.clone();
-    let recorded = {
-        let id = id.clone();
-        blocking(move || manager.record_session(&id, started_at, ended_at).map(|_| ())).await
-    };
-    if let Err(error) = recorded {
-        events::game_log(&app, &id, "launcher", &format!("Не удалось сохранить время игры: {error}"));
+    // A game killed right at its start never really ran.
+    if !killed_at_spawn {
+        let manager = state.instances.clone();
+        let recorded = {
+            let id = id.clone();
+            blocking(move || manager.record_session(&id, started_at, ended_at).map(|_| ())).await
+        };
+        if let Err(error) = recorded {
+            events::game_log(&app, &id, "launcher", &format!("Не удалось сохранить время игры: {error}"));
+        }
     }
-    let message = match exit_code {
-        Some(code) => format!("Игра завершилась с кодом {code}"),
-        None => "Игра была завершена принудительно".to_owned(),
+    // Windows reports a killed process as exit code 1, so the code alone cannot tell a kill apart.
+    let message = if state.kill_requested(&id) {
+        "Игра была завершена принудительно".to_owned()
+    } else {
+        match exit_code {
+            Some(code) => format!("Игра завершилась с кодом {code}"),
+            None => "Игра была завершена сигналом".to_owned(),
+        }
     };
-    end_session(&app, &state, &id, &message, exit_code);
+    session.end(&message, exit_code);
 
     if !post_exit.is_empty() {
         let game_dir = instance.game_dir(&state.paths);
@@ -150,13 +205,6 @@ async fn run_session(app: AppHandle, state: AppState, instance: Instance, settin
             events::game_log(&app, &id, "launcher", &error.to_string());
         }
     }
-}
-
-/// Forgets the running game and tells the UI it stopped; playtime must be saved before this.
-fn end_session(app: &AppHandle, state: &AppState, instance_id: &str, message: &str, exit_code: Option<i32>) {
-    events::game_log(app, instance_id, "launcher", message);
-    state.running().remove(instance_id);
-    events::instance_state(app, instance_id, RunState::Stopped, exit_code);
 }
 
 async fn prepare(
@@ -175,6 +223,7 @@ async fn prepare(
     let (components, online) = game::resolve(paths, instance.components.clone()).await?;
     // Only the Java requirements are needed from this profile; natives depend on the chosen Java.
     let preliminary = LaunchProfile::build(&components, RuntimeContext::host(game::host_java_arch()))?;
+    let installing = state.install_lock.lock().await;
     let java = ensure_java(
         paths,
         &state.http,
@@ -199,6 +248,7 @@ async fn prepare(
         events::game_log(app, id, "launcher", "Нет сети: используются уже загруженные файлы игры");
         check_installed(paths, &profile).await?
     };
+    drop(installing);
 
     let game_dir = instance.game_dir(paths);
     let natives_dir = instance.natives_dir(paths);
@@ -246,7 +296,8 @@ async fn run_hook(name: &str, command_line: &str, game_dir: &Path) -> CommandRes
         .current_dir(game_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
     let status = command
