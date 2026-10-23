@@ -80,6 +80,21 @@ pub fn open(app: &AppHandle) {
     });
 }
 
+/// Exits the launcher. The window is destroyed first and the WebView2 profile lock awaited: exiting with a
+/// live webview leaves its msedgewebview2 processes running as orphans that keep the profile (and memory).
+/// Blocks for up to a few seconds, so call it from a blocking thread.
+pub fn exit(app: &AppHandle) {
+    destroy(app);
+    let lockfile = app.state::<AppState>().location.webview_dir().join("EBWebView").join("lockfile");
+    for _ in 0..50 {
+        match std::fs::remove_file(&lockfile) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => std::thread::sleep(Duration::from_millis(100)),
+            _ => break,
+        }
+    }
+    app.exit(0);
+}
+
 fn destroy(app: &AppHandle) {
     let _ops = lock_ops();
     if let Some(window) = app.get_webview_window(MAIN)
@@ -129,7 +144,7 @@ pub fn request_close(app: &AppHandle) {
     background(app, |app| {
         // The onboarding screen has no tray icon to come back from.
         if app.state::<AppState>().location.source == DataDirSource::Onboarding {
-            app.exit(0);
+            exit(app);
             return;
         }
         let on_close = match GlobalSettings::load(&app.state::<AppState>().paths) {
@@ -155,7 +170,7 @@ pub fn request_exit(app: &AppHandle) {
 fn ask_and_exit(app: &AppHandle) {
     let names: Vec<String> = tray::session_labels(&app.state::<AppState>()).into_iter().map(|(_, label)| label).collect();
     if names.is_empty() {
-        app.exit(0);
+        exit(app);
         return;
     }
     let answer = app
@@ -168,9 +183,9 @@ fn ask_and_exit(app: &AppHandle) {
     match answer {
         MessageDialogResult::Custom(label) if label == YES => {
             kill_games(app);
-            app.exit(0);
+            exit(app);
         }
-        MessageDialogResult::Custom(label) if label == NO => app.exit(0),
+        MessageDialogResult::Custom(label) if label == NO => exit(app),
         _ => {}
     }
 }

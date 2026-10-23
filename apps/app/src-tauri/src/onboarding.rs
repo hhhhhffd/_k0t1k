@@ -442,7 +442,7 @@ pub async fn relocate(app: AppHandle, state: State<'_, AppState>, target: String
         args.push(START_MENU_SHORTCUT.into());
     }
     spawn_detached(&installed, &args)?;
-    app.exit(0);
+    tokio::task::spawn_blocking(move || crate::window::exit(&app)).await?;
     Ok(())
 }
 
@@ -465,7 +465,7 @@ pub async fn keep_portable_here(app: AppHandle, state: State<'_, AppState>, reme
         args.push(PORTABLE_HERE.into());
     }
     spawn_detached(&std::env::current_exe()?, &args)?;
-    app.exit(0);
+    tokio::task::spawn_blocking(move || crate::window::exit(&app)).await?;
     Ok(())
 }
 
@@ -513,7 +513,7 @@ pub async fn uninstall(app: AppHandle, state: State<'_, AppState>) -> CommandRes
     let state = state.inner().clone();
     let script = tokio::task::spawn_blocking(move || removal_plan(&state).and_then(|plan| Ok(plan.cmd_script()?))).await??;
     spawn_cleanup(&script)?;
-    app.exit(0);
+    tokio::task::spawn_blocking(move || crate::window::exit(&app)).await?;
     Ok(())
 }
 
@@ -523,8 +523,10 @@ fn spawn_cleanup(script: &str) -> CommandResult<()> {
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     // `raw_arg`: cmd has its own quoting, the quotes around the whole script are stripped by `/C`.
+    // Run from the temp folder: a process's working directory cannot be deleted, and ours is the launcher folder.
     Command::new("cmd")
         .raw_arg(format!("/C \"{script}\""))
+        .current_dir(std::env::temp_dir())
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map(drop)
