@@ -107,8 +107,12 @@ pub async fn delete_instance(state: State<'_, AppState>, instance_id: String) ->
 
 #[tauri::command]
 pub async fn copy_instance(state: State<'_, AppState>, instance_id: String, name: String) -> CommandResult<InstanceView> {
+    let name = name.trim().to_owned();
+    if name.is_empty() {
+        return Err(AppError::new("the instance name is empty"));
+    }
     let manager = state.instances.clone();
-    Ok(blocking(move || manager.copy(&instance_id, name.trim(), &CopyOptions::default())).await?.into())
+    Ok(blocking(move || manager.copy(&instance_id, &name, &CopyOptions::default())).await?.into())
 }
 
 #[tauri::command]
