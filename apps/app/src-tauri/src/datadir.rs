@@ -7,6 +7,7 @@ use k0t1k_core::paths::Paths;
 use serde::Serialize;
 
 use crate::error::{AppError, CommandResult};
+use crate::onboarding;
 
 /// Holds the data directory chosen by the user; read at startup, next to the executable.
 const OVERRIDE_FILE: &str = "data-dir.txt";
@@ -20,6 +21,8 @@ pub enum DataDirSource {
     Portable,
     /// The user profile: the executable's folder is not writable, or `data-dir.txt` is unusable.
     Fallback,
+    /// A temporary folder, while the user decides where the launcher should live (see `onboarding`).
+    Onboarding,
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +60,8 @@ pub fn override_file(exe_dir: &Path) -> PathBuf {
     exe_dir.join(OVERRIDE_FILE)
 }
 
-pub fn resolve() -> CommandResult<DataLocation> {
+/// `portable_here`: the user already chose to stay in this folder for this run.
+pub fn resolve(portable_here: bool) -> CommandResult<DataLocation> {
     let exe_dir = executable_dir()?;
     let custom = match std::fs::read_to_string(override_file(&exe_dir)) {
         Ok(text) => Some(PathBuf::from(text.trim())).filter(|path| !path.as_os_str().is_empty()),
@@ -70,6 +74,9 @@ pub fn resolve() -> CommandResult<DataLocation> {
             Ok(()) => return Ok(DataLocation { root, exe_dir, source: DataDirSource::Custom }),
             Err(error) => tracing::warn!("ignoring {OVERRIDE_FILE}: {error}"),
         }
+    } else if cfg!(windows) && !portable_here && onboarding::needed(&exe_dir)? {
+        // Nothing may be written next to the exe before the user has decided.
+        return Ok(DataLocation { root: onboarding::temporary_root(), exe_dir, source: DataDirSource::Onboarding });
     } else if let Err(error) = ensure_writable(&exe_dir) {
         tracing::warn!("the executable's directory is not writable, using the user profile: {error}");
     } else {
