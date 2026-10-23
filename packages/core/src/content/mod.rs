@@ -1,7 +1,9 @@
 //! Mods and other content from Modrinth and CurseForge: search, install, update, local resources
 //! and modpack import. The packwiz `.pw.toml` index keeps the origin of every installed file.
 
+mod blocked;
 pub mod curseforge;
+mod dropped;
 mod export;
 mod install;
 mod local;
@@ -32,6 +34,8 @@ pub(crate) async fn send_json<T: serde::de::DeserializeOwned>(
     response.json().await.map_err(http)
 }
 
+pub use blocked::{BlockedScan, HashCache, collect_blocked};
+pub use dropped::{AddFilesReport, add_local_files, identify_file};
 pub use export::{PackExportReport, PackExportRequest, export_curseforge, export_mrpack};
 pub use install::{
     AvailableUpdate, BlockedFile, InstallContext, InstallReport, InstalledResource, check_updates,
