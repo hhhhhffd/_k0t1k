@@ -2,9 +2,13 @@
 
 use k0t1k_core::launch::offline_uuid;
 use k0t1k_core::settings::{Account, AccountKind, GlobalSettings, total_memory_mib};
+use std::path::PathBuf;
+
 use serde::Serialize;
 use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
 
+use crate::datadir::{self, DataDirSource};
 use crate::error::{AppError, CommandResult, blocking};
 use crate::state::AppState;
 
@@ -17,6 +21,12 @@ pub struct SystemInfo {
     os: &'static str,
     app_version: String,
     data_dir: String,
+    /// `false` when the data is in the user profile because the executable's folder is read-only
+    /// or `data-dir.txt` is unusable.
+    portable: bool,
+    /// `custom` (data-dir.txt), `portable` (next to the executable) or `fallback` (user profile).
+    data_dir_source: DataDirSource,
+    exe_dir: String,
 }
 
 #[tauri::command]
@@ -53,7 +63,39 @@ pub fn get_system_info(app: AppHandle, state: State<'_, AppState>) -> SystemInfo
         os: std::env::consts::OS,
         app_version: app.package_info().version.to_string(),
         data_dir: state.paths.root().display().to_string(),
+        portable: state.location.portable(),
+        data_dir_source: state.location.source,
+        exe_dir: state.location.exe_dir.display().to_string(),
     }
+}
+
+#[tauri::command]
+pub fn open_data_dir(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    app.opener().open_path(state.paths.root().display().to_string(), None::<&str>)?;
+    Ok(())
+}
+
+/// Points the next start at `path`, or back at the default location when `None`. Existing data is
+/// neither moved nor deleted. Returns whether a restart is needed: always, the data directory is
+/// read once at startup.
+#[tauri::command]
+pub async fn set_data_dir(state: State<'_, AppState>, path: Option<String>) -> CommandResult<bool> {
+    let file = datadir::override_file(&state.location.exe_dir);
+    match path.as_deref().map(str::trim).filter(|path| !path.is_empty()) {
+        Some(path) => {
+            let path = PathBuf::from(path);
+            let target = path.clone();
+            tokio::task::spawn_blocking(move || datadir::check_custom(&target)).await??;
+            std::fs::write(&file, path.display().to_string())
+                .map_err(|error| AppError::new(format!("cannot write {}: {error}", file.display())))?;
+        }
+        None => match std::fs::remove_file(&file) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(AppError::new(format!("cannot remove {}: {error}", file.display()))),
+        },
+    }
+    Ok(true)
 }
 
 fn validate_name(name: &str) -> CommandResult<()> {

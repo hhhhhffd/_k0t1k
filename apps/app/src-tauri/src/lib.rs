@@ -1,5 +1,6 @@
 mod cmdline;
 mod content;
+mod datadir;
 mod error;
 mod events;
 mod game;
@@ -10,14 +11,27 @@ mod settings;
 mod state;
 mod versions;
 
-use tauri::Manager;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            app.manage(state::AppState::new().map_err(|error| error.to_string())?);
+            let state = datadir::resolve().and_then(state::AppState::new).map_err(|error| error.to_string())?;
+            let webview_dir = state.location.webview_dir();
+            std::fs::create_dir_all(&webview_dir)?;
+            app.manage(state);
+            // Created here rather than in tauri.conf.json to keep WebView2's profile in the data
+            // directory instead of `%LOCALAPPDATA%`.
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+                .title("_k0t1k")
+                .inner_size(1200.0, 760.0)
+                .min_inner_size(900.0, 560.0)
+                .decorations(false)
+                .shadow(true)
+                .data_directory(webview_dir)
+                .build()?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -39,6 +53,8 @@ pub fn run() {
             settings::get_settings,
             settings::save_settings,
             settings::get_system_info,
+            settings::set_data_dir,
+            settings::open_data_dir,
             settings::add_offline_account,
             settings::remove_offline_account,
             settings::select_account,
