@@ -11,6 +11,9 @@
  *   copy_instance(instanceId, name)                          -> Instance
  *   set_instance_group(instanceId, group: string | null)     -> Instance
  *   update_instance_settings(instanceId, settings: InstanceSettingsUpdate) -> Instance
+ *   get_instances_dir()                                      -> string  (allows the asset protocol for it; custom icons are files in it)
+ *   set_instance_icon(instanceId, path)                      -> Instance  (image file, png/jpeg/gif/webp up to 5 MB; icon becomes `custom:<file>`)
+ *   reset_instance_icon(instanceId)                          -> Instance  (back to a built-in icon, removes the file)
  *   open_instance_folder(instanceId)                         -> void
  * Launch
  *   launch_instance(instanceId, accountId?)                  -> SessionId     (always starts a NEW session, also when the instance already
@@ -201,6 +204,9 @@ export const setInstanceGroup = (instanceId: string, group: string | null) =>
   call<Instance>('set_instance_group', { instanceId, group })
 export const updateInstanceSettings = (instanceId: string, settings: InstanceSettingsUpdate) =>
   call<Instance>('update_instance_settings', { instanceId, settings })
+export const getInstancesDir = () => call<string>('get_instances_dir')
+export const setInstanceIcon = (instanceId: string, path: string) => call<Instance>('set_instance_icon', { instanceId, path })
+export const resetInstanceIcon = (instanceId: string) => call<Instance>('reset_instance_icon', { instanceId })
 export const openInstanceFolder = (instanceId: string) =>
   call<void>('open_instance_folder', { instanceId })
 

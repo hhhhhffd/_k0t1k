@@ -76,7 +76,7 @@ const { dragging } = useFileDrop(async (paths) => {
     <button class="btn btn-ghost -ml-2 w-fit text-muted" @click="router.push('/')"><ArrowLeft :size="15" />{{ t.nav.library }}</button>
 
     <header class="card flex items-center gap-4 p-4">
-      <InstanceIcon :icon="instance.icon" :size="64" />
+      <InstanceIcon :icon="instance.icon" :instance-id="instance.id" :size="64" />
       <div class="min-w-0 flex-1">
         <h1 class="truncate text-[22px] leading-tight font-bold">{{ instance.name }}</h1>
         <div class="mt-1.5 flex flex-wrap items-center gap-1.5">

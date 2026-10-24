@@ -70,7 +70,7 @@ export type SharedFolder = (typeof SHARED_FOLDERS)[number]
 export interface Instance {
   id: string
   name: string
-  /** Built-in icon key (see InstanceIcon.vue). */
+  /** Built-in icon key (see InstanceIcon.vue), or `custom:<file name>` for an image in the instance folder. */
   icon: string
   group: string | null
   components: InstanceComponent[]

@@ -23,6 +23,8 @@ export const useInstancesStore = defineStore('instances', () => {
   const tasks = useTasksStore()
   const instances = ref<Instance[]>([])
   const loaded = ref(false)
+  /** Folder holding the instance folders; custom icons are files in it. */
+  const instancesDir = ref('')
   /** Live sessions and finished ones whose log is kept; entries are replaced, never mutated. */
   const sessions = reactive(new Map<SessionId, RunSession>())
   // Buffers are replaced (never mutated) once per flush, so a flood of lines costs one reactive update per flush.
@@ -65,6 +67,8 @@ export const useInstancesStore = defineStore('instances', () => {
   const create = async (...args: Parameters<typeof api.createInstance>) => upsert(await api.createInstance(...args))
   const rename = async (id: string, name: string) => upsert(await api.renameInstance(id, name))
   const copy = async (id: string, name: string) => upsert(await api.copyInstance(id, name))
+  const setIcon = async (id: string, path: string) => upsert(await api.setInstanceIcon(id, path))
+  const resetIcon = async (id: string) => upsert(await api.resetInstanceIcon(id))
   const setGroup = async (id: string, group: string | null) => upsert(await api.setInstanceGroup(id, group))
   const updateSettings = async (...args: Parameters<typeof api.updateInstanceSettings>) =>
     upsert(await api.updateInstanceSettings(...args))
@@ -173,12 +177,13 @@ export const useInstancesStore = defineStore('instances', () => {
     ])
     // a state event that arrived while the request was in flight is newer than the listing
     for (const s of await api.listRunStates()) if (!sessions.has(s.sessionId)) sessions.set(s.sessionId, s)
+    instancesDir.value = await api.getInstancesDir()
     await refresh()
     await Promise.all([...sessions.keys()].map(backfillLogs))
   }
 
   return {
-    instances, loaded, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setGroup,
+    instances, loaded, instancesDir, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setIcon, resetIcon, setGroup,
     updateSettings, remove, importModpack, installModpack, updateModpack, launch, kill, killSession, clearLog, init,
   }
 })
