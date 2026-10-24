@@ -147,6 +147,46 @@ pub async fn update_instance_settings(
     Ok(instance.into())
 }
 
+/// Replaces the instance's Minecraft version and mod loader (or removes the loader) and downloads the new
+/// game files in the background. Components that are neither of these stay; dependency-only ones are
+/// dropped because resolving adds them again in the versions the new set needs.
+#[tauri::command]
+pub async fn change_instance_versions(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    minecraft_version: String,
+    loader: Option<LoaderChoice>,
+) -> CommandResult<InstanceView> {
+    if state.is_running(&instance_id) {
+        return Err(AppError::new("the instance is running; stop it before changing its versions"));
+    }
+    let manager = state.instances.clone();
+    let current = blocking({
+        let (manager, id) = (manager.clone(), instance_id.clone());
+        move || manager.get(&id)
+    })
+    .await?;
+    let loader_uids = [Loader::Fabric, Loader::Quilt, Loader::Forge, Loader::NeoForge].map(|l| meta_loader(l).uid());
+    let mut specs = vec![spec(MINECRAFT_UID, minecraft_version)];
+    if let Some(loader) = loader {
+        specs.push(spec(meta_loader(loader.id).uid(), loader.version));
+    }
+    specs.extend(
+        current
+            .components
+            .into_iter()
+            .filter(|c| !c.dependency_only && c.uid != MINECRAFT_UID && !loader_uids.contains(&c.uid.as_str())),
+    );
+    // Resolving also checks that every chosen version exists and fits together.
+    let (components, _) = game::resolve(&state.paths, specs.clone()).await?;
+
+    let instance = blocking(move || manager.update(&instance_id, |instance| instance.components = specs)).await?;
+    game::cancel_game_install(&app, &state, &instance.id);
+    game::spawn_game_install(app, state.inner().clone(), instance.clone(), components);
+    Ok(instance.into())
+}
+
 /// Custom icons are files in the instance folders and are shown through the asset protocol, whose scope is
 /// empty in config. The UI asks for the folder once at startup; it is the only place the webview may read.
 #[tauri::command]

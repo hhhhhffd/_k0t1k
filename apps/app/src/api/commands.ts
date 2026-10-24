@@ -11,6 +11,7 @@
  *   copy_instance(instanceId, name)                          -> Instance
  *   set_instance_group(instanceId, group: string | null)     -> Instance
  *   update_instance_settings(instanceId, settings: InstanceSettingsUpdate) -> Instance
+ *   change_instance_versions(instanceId, minecraftVersion, loader: {id, version} | null) -> Instance (refused while running; downloads the new game files in the background)
  *   get_instances_dir()                                      -> string  (allows the asset protocol for it; custom icons are files in it)
  *   set_instance_icon(instanceId, path)                      -> Instance  (image file, png/jpeg/gif/webp up to 5 MB; icon becomes `custom:<file>`)
  *   reset_instance_icon(instanceId)                          -> Instance  (back to a built-in icon, removes the file)
@@ -219,6 +220,8 @@ export const setInstanceGroup = (instanceId: string, group: string | null) =>
   call<Instance>('set_instance_group', { instanceId, group })
 export const updateInstanceSettings = (instanceId: string, settings: InstanceSettingsUpdate) =>
   call<Instance>('update_instance_settings', { instanceId, settings })
+export const changeInstanceVersions = (instanceId: string, minecraftVersion: string, loader: CreateInstanceRequest['loader'] | null) =>
+  call<Instance>('change_instance_versions', { instanceId, minecraftVersion, loader })
 export const getInstancesDir = () => call<string>('get_instances_dir')
 export const setInstanceIcon = (instanceId: string, path: string) => call<Instance>('set_instance_icon', { instanceId, path })
 export const resetInstanceIcon = (instanceId: string) => call<Instance>('reset_instance_icon', { instanceId })

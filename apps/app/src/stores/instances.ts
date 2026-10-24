@@ -74,6 +74,8 @@ export const useInstancesStore = defineStore('instances', () => {
   const setGroup = async (id: string, group: string | null) => upsert(await api.setInstanceGroup(id, group))
   const updateSettings = async (...args: Parameters<typeof api.updateInstanceSettings>) =>
     upsert(await api.updateInstanceSettings(...args))
+  const changeVersions = async (...args: Parameters<typeof api.changeInstanceVersions>) =>
+    upsert(await api.changeInstanceVersions(...args))
   async function remove(id: string) {
     await api.deleteInstance(id)
     instances.value = instances.value.filter((i) => i.id !== id)
@@ -199,6 +201,6 @@ export const useInstancesStore = defineStore('instances', () => {
 
   return {
     instances, loaded, crashes, instancesDir, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setIcon, resetIcon, setGroup,
-    updateSettings, remove, importModpack, installModpack, updateModpack, launch, kill, killSession, dismissCrash, clearLog, init,
+    updateSettings, changeVersions, remove, importModpack, installModpack, updateModpack, launch, kill, killSession, dismissCrash, clearLog, init,
   }
 })

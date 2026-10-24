@@ -72,6 +72,7 @@ pub fn run() {
             instances::copy_instance,
             instances::set_instance_group,
             instances::update_instance_settings,
+            instances::change_instance_versions,
             instances::get_instances_dir,
             instances::set_instance_icon,
             instances::reset_instance_icon,

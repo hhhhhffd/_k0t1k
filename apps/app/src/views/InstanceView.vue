@@ -15,6 +15,7 @@ import LogsTab from '../components/instance/LogsTab.vue'
 import ResourceList from '../components/instance/ResourceList.vue'
 import ScreenshotsTab from '../components/instance/ScreenshotsTab.vue'
 import ServersTab from '../components/instance/ServersTab.vue'
+import VersionTab from '../components/instance/VersionTab.vue'
 import WorldsTab from '../components/instance/WorldsTab.vue'
 import PlayButton from '../components/PlayButton.vue'
 import { t } from '../i18n/ru'
@@ -32,8 +33,8 @@ const route = useRoute()
 const instance = computed(() => store.byId(props.id))
 const loader = computed(() => (instance.value ? loaderOf(instance.value) : undefined))
 
-type Tab = 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'screenshots' | 'servers' | 'logs' | 'settings'
-const tabs: Tab[] = ['mods', 'resourcepacks', 'shaders', 'worlds', 'screenshots', 'servers', 'logs', 'settings']
+type Tab = 'version' | 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'screenshots' | 'servers' | 'logs' | 'settings'
+const tabs: Tab[] = ['version', 'mods', 'resourcepacks', 'shaders', 'worlds', 'screenshots', 'servers', 'logs', 'settings']
 // `?tab=logs` opens a tab directly (the crash dialog does)
 const tabFromRoute = () => tabs.find((name) => name === route.query.tab) ?? 'mods'
 const tab = ref<Tab>(tabFromRoute())
@@ -118,6 +119,7 @@ const { dragging } = useFileDrop(async (paths) => {
       :kind="kindOfTab[tab]"
       :shared-note="sharedNote(tab)"
     />
+    <VersionTab v-else-if="tab === 'version'" :instance="instance" />
     <WorldsTab v-else-if="tab === 'worlds'" :key="instance.id" :instance-id="instance.id" />
     <ScreenshotsTab v-else-if="tab === 'screenshots'" :key="instance.id" :instance-id="instance.id" :shared="instance.sharedFolders.includes('screenshots')" />
     <ServersTab v-else-if="tab === 'servers'" :key="instance.id" :instance-id="instance.id" />

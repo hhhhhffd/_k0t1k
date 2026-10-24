@@ -569,6 +569,15 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       Object.assign(i, { icon, notes, sharedFolders, joinServer: (a.settings as InstanceSettingsUpdate).joinServer || null, settings: groups })
       return clone(i)
     }
+    case 'change_instance_versions': {
+      const i = findInstance(a.instanceId)
+      if ([...sessions.values()].some((s) => s.instanceId === i.id && s.state !== 'stopped')) {
+        throw new Error('the instance is running; stop it before changing its versions')
+      }
+      await fakeTask(`game:${i.id}`, `Загрузка игры: ${i.name}`, ['Библиотеки', 'Ассеты'], 300)
+      i.components = components(a.minecraftVersion as string, (a.loader as CreateInstanceRequest['loader']) ?? undefined)
+      return clone(i)
+    }
     case 'get_instances_dir': return 'C:\\mock\\instances'
     case 'set_instance_icon': { const i = findInstance(a.instanceId); i.icon = `custom:icon-${Date.now()}.png`; return clone(i) }
     case 'reset_instance_icon': { const i = findInstance(a.instanceId); i.icon = 'default'; return clone(i) }
