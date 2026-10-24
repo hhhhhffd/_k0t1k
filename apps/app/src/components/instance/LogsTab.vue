@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { Copy, Trash2 } from '@lucide/vue'
+import { Copy, Trash2, Upload } from '@lucide/vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { GameLogLine, SessionId } from '../../api/types'
 import { t } from '../../i18n/ru'
 import { MAX_LOG_LINES, useInstancesStore } from '../../stores/instances'
 import { useTasksStore } from '../../stores/tasks'
+import { openExternal } from '../../utils/external'
 import { errorMessage } from '../../utils/format'
+import { uploadSessionLog } from '../../utils/uploadLog'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
 const props = defineProps<{ instanceId: string }>()
@@ -54,6 +56,17 @@ function onScroll() {
   if (el) autoscroll.value = el.scrollHeight - el.scrollTop - el.clientHeight < 24
 }
 
+const uploading = ref(false)
+const uploadedLinks = ref(new Map<SessionId, string>())
+async function upload() {
+  const session = selected.value
+  if (!session) return
+  uploading.value = true
+  const link = await uploadSessionLog(session.sessionId)
+  uploading.value = false
+  if (link) uploadedLinks.value = new Map(uploadedLinks.value).set(session.sessionId, link)
+}
+
 async function copy() {
   try {
     await navigator.clipboard.writeText(lines.value.map((l) => l.line).join('\n'))
@@ -85,6 +98,14 @@ async function copy() {
         <ToggleSwitch v-model="autoscroll" :label="t.instance.autoscroll" @update:model-value="scrollToEnd" />
         {{ t.instance.autoscroll }}
       </label>
+      <a
+        v-if="selected && uploadedLinks.get(selected.sessionId)"
+        :href="uploadedLinks.get(selected.sessionId)"
+        class="selectable text-[12px] text-accent underline"
+        :title="t.instance.uploadedLink"
+        @click.prevent="openExternal(uploadedLinks.get(selected.sessionId)!)"
+      >{{ uploadedLinks.get(selected.sessionId) }}</a>
+      <button class="btn" :disabled="!lines.length || uploading" @click="upload"><Upload :size="15" />{{ uploading ? t.instance.uploading : t.instance.uploadLog }}</button>
       <button class="btn" :disabled="!lines.length" @click="copy"><Copy :size="15" />{{ t.common.copy }}</button>
       <button class="btn" :disabled="!lines.length" @click="selected && store.clearLog(selected.sessionId)"><Trash2 :size="15" />{{ t.common.clear }}</button>
     </div>

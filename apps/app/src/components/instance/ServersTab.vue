@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, Pencil, Plus, RefreshCw, Server as ServerIcon, Trash2 } from '@lucide/vue'
+import { ArrowDown, ArrowUp, Pencil, Play, Plus, RefreshCw, Server as ServerIcon, Trash2 } from '@lucide/vue'
 import { onMounted, reactive, ref, watch } from 'vue'
 import * as api from '../../api/commands'
 import type { ResourcePackPolicy, Server, ServerStatus } from '../../api/types'
 import { t } from '../../i18n/ru'
+import { useInstancesStore } from '../../stores/instances'
+import { useSettingsStore } from '../../stores/settings'
 import { useTasksStore } from '../../stores/tasks'
 import { errorMessage } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
@@ -14,6 +16,8 @@ type Ping = { state: 'pending' } | { state: 'ok'; status: ServerStatus } | { sta
 
 const props = defineProps<{ instanceId: string }>()
 const tasks = useTasksStore()
+const instances = useInstancesStore()
+const settings = useSettingsStore()
 
 const servers = ref<Server[]>([])
 const pings = reactive<Record<number, Ping>>({})
@@ -58,6 +62,9 @@ async function change(action: () => Promise<void>) {
   })
   if (done) await load()
 }
+
+const play = (address: string) =>
+  void tasks.guard(() => instances.launch(props.instanceId, settings.settings?.selectedAccountId ?? undefined, address))
 
 const move = (from: number, to: number) => change(() => api.moveServer(props.instanceId, from, to))
 
@@ -113,6 +120,7 @@ async function confirmDelete() {
           <span class="badge max-w-40 truncate" :title="pings[i].status.version">{{ pings[i].status.version }}</span>
           <span class="badge badge-accent">{{ pings[i].status.latencyMs }} мс</span>
         </template>
+        <button class="btn" :title="t.servers.playOn" @click="play(s.address)"><Play :size="13" fill="currentColor" />{{ t.servers.play }}</button>
         <button class="btn btn-ghost btn-icon text-muted" :title="t.servers.edit" :aria-label="t.servers.edit" @click="startEdit(i)"><Pencil :size="15" /></button>
         <button class="btn btn-ghost btn-icon text-muted hover:!text-danger" :aria-label="t.common.delete" @click="deleting = i"><Trash2 :size="15" /></button>
       </li>

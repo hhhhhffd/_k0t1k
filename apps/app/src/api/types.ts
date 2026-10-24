@@ -41,6 +41,8 @@ export interface JavaSettings {
 export interface MemorySettings {
   minMib: number
   maxMib: number
+  /** Choose the heap and GC flags at launch; minMib and maxMib are then ignored. */
+  auto: boolean
 }
 export interface WindowSettings {
   width: number
@@ -82,6 +84,8 @@ export interface Instance {
   settings: InstanceSettings
   /** Game folders linked to the folder shared with other instances (`shared/<folder>`). */
   sharedFolders: SharedFolder[]
+  /** Server (`host` or `host:port`) the game joins on every launch. */
+  joinServer?: string | null
 }
 
 /** An instance whose `instance.json` could not be read. */
@@ -100,6 +104,7 @@ export interface InstanceSettingsUpdate {
   icon: string
   notes: string
   sharedFolders: SharedFolder[]
+  joinServer?: string | null
   settings: InstanceSettings
 }
 
@@ -487,6 +492,29 @@ export interface RunSession {
   state: RunState
   /** ISO time of the launch request. */
   startedAt: string
+  /** Set for a crashed session until `dismiss_crash`. */
+  crash?: CrashInfo
+}
+
+/** How a session ended when the game crashed (it exited on its own with a non-zero code or by a signal). */
+export interface CrashInfo {
+  /** Absent when a signal ended the process. */
+  exitCode: number | null
+  /** Path of a crash report or JVM crash log written during the session. */
+  crashReport: string | null
+}
+
+/** `game-crashed` event payload. */
+export interface GameCrashed extends CrashInfo {
+  sessionId: SessionId
+  instanceId: string
+}
+
+/** `upload_game_log` result: the log page on mclo.gs. */
+export interface UploadedLog {
+  id: string
+  url: string
+  raw: string
 }
 /** Files dragged over the window (real paths, from Tauri's drag-drop events). */
 export type DragDropEvent = { type: 'enter' | 'drop'; paths: string[] } | { type: 'over' } | { type: 'leave' }

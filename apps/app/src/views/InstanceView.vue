@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft, Clock, FileArchive, Flame, FolderOpen, History, Package, RefreshCw, Upload } from '@lucide/vue'
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { addLocalFiles, openInstanceFolder } from '../api/commands'
 import type { ExportFormat } from '../api/types'
 import ContextMenu from '../components/ContextMenu.vue'
@@ -27,13 +27,17 @@ const props = defineProps<{ id: string }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
 const router = useRouter()
+const route = useRoute()
 
 const instance = computed(() => store.byId(props.id))
 const loader = computed(() => (instance.value ? loaderOf(instance.value) : undefined))
 
 type Tab = 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'screenshots' | 'servers' | 'logs' | 'settings'
-const tab = ref<Tab>('mods')
 const tabs: Tab[] = ['mods', 'resourcepacks', 'shaders', 'worlds', 'screenshots', 'servers', 'logs', 'settings']
+// `?tab=logs` opens a tab directly (the crash dialog does)
+const tabFromRoute = () => tabs.find((name) => name === route.query.tab) ?? 'mods'
+const tab = ref<Tab>(tabFromRoute())
+watch(() => route.query.tab, () => (tab.value = tabFromRoute()))
 const sharedFolderOfTab = { resourcepacks: 'resourcepacks', shaders: 'shaderpacks' } as const
 /** The notice shown above a resource list whose folder is linked to the shared one. */
 function sharedNote(tab: Tab) {

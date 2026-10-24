@@ -16,6 +16,7 @@ import type {
   GlobalSettings,
   Instance,
   InstanceComponent,
+  GameCrashed,
   InstanceRunState,
   InstanceSettingsUpdate,
   InstallReport,
@@ -30,7 +31,9 @@ import type {
   Platform,
   ProgressEvent,
   ProjectVersion,
+  CrashInfo,
   RunSession,
+  UploadedLog,
   RunState,
   Screenshot,
   SearchHit,
@@ -99,7 +102,7 @@ function loaderVersions(mc: string, loader: LoaderId): LoaderVersion[] {
 const SETTINGS_KEY = 'k0t1k.mock.settings'
 const defaultSettings: GlobalSettings = {
   java: { path: null, autoSelect: true, autoDownload: true },
-  memory: { minMib: 512, maxMib: 4096 },
+  memory: { minMib: 512, maxMib: 4096, auto: false },
   jvmArgs: '-XX:+UseG1GC -XX:+ParallelRefProcEnabled',
   window: { width: 854, height: 480, maximized: false },
   commands: { preLaunch: '', postExit: '', wrapper: '' },
@@ -158,7 +161,7 @@ const instances: Instance[] = [
     playtime: { totalSecs: 86_400 * 1.5, lastSecs: 5400 } }),
   newInstance({ id: 'inst-2', name: 'Fabric Optimized', icon: 'zap', group: 'Выживание', components: components('1.21.1', { id: 'fabric', version: '0.16.10' }),
     created: daysAgo(60), lastPlayed: daysAgo(0.1), playtime: { totalSecs: 3600 * 74, lastSecs: 7200 }, notes: 'Sodium + Lithium + Iris',
-    settings: { memory: { minMib: 1024, maxMib: 6144 } } }),
+    settings: { memory: { minMib: 1024, maxMib: 6144, auto: false } } }),
   newInstance({ id: 'inst-3', name: 'Create: Above and Beyond', icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'forge', version: '1.20.1-47.3.0' }),
     created: daysAgo(30), lastPlayed: daysAgo(6), playtime: { totalSecs: 3600 * 12, lastSecs: 1800 }, sharedFolders: [],
     managedPack: { platform: 'modrinth', projectId: 'create-aab', versionId: 'create-aab-v1', name: 'Create: Above and Beyond', versionName: '1.4.1' } }),
@@ -380,6 +383,8 @@ const KEPT_FINISHED_SESSIONS = 3
 const sessions = new Map<SessionId, RunSession>()
 const sessionLogs = new Map<SessionId, GameLogLine[]>()
 const killFlags = new Set<SessionId>()
+/** Sessions that ended in a crash and were not dismissed yet; the mock crashes when the joined server starts with `crash`. */
+const crashed = new Map<SessionId, CrashInfo>()
 const launches = new Map<string, number>()
 let nextSession = 1
 const live = (sessionId: SessionId) => sessions.get(sessionId)?.state === 'running'
@@ -426,8 +431,9 @@ function finish(sessionId: SessionId, exitCode: number) {
   }
 }
 
-function launch(instanceId: string): SessionId {
+function launch(instanceId: string, server?: string): SessionId {
   const inst = findInstance(instanceId)
+  const joined = server ?? inst.joinServer ?? ''
   const sessionId = nextSession++
   const number = (launches.get(instanceId) ?? 0) + 1
   launches.set(instanceId, number)
@@ -435,6 +441,7 @@ function launch(instanceId: string): SessionId {
   sessionLogs.set(sessionId, [])
   setRun(sessionId, 'preparing')
   log(sessionId, 'launcher', `Запуск ${inst.name}...`)
+  if (joined) log(sessionId, 'launcher', `Подключение к серверу ${joined}`)
   void (async () => {
     await fakeTask(`launch-${sessionId}`, `Подготовка ${inst.name}`, ['Метаданные', 'Библиотеки', 'Ассеты', 'Java'], 400)
     if (killFlags.has(sessionId)) return
@@ -454,6 +461,15 @@ function launch(instanceId: string): SessionId {
       if (killFlags.has(sessionId)) return
       log(sessionId, stream, line)
       await sleep(500)
+    }
+    if (joined.startsWith('crash')) {
+      await sleep(800)
+      log(sessionId, 'stderr', '# A fatal error has been detected by the Java Runtime Environment')
+      const info: CrashInfo = { exitCode: 1, crashReport: 'C:\\mock\\crash-reports\\crash-2026-01-01_12.00.00-client.txt' }
+      crashed.set(sessionId, info)
+      finish(sessionId, 1)
+      emit('game-crashed', { sessionId, instanceId, ...info } satisfies GameCrashed)
+      return
     }
     if (instanceId === 'inst-3') void logFlood(sessionId)
     let n = 0
@@ -533,14 +549,20 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'update_instance_settings': {
       const i = findInstance(a.instanceId)
       const { icon, notes, sharedFolders, settings: groups } = clone(a.settings as InstanceSettingsUpdate)
-      Object.assign(i, { icon, notes, sharedFolders, settings: groups })
+      Object.assign(i, { icon, notes, sharedFolders, joinServer: (a.settings as InstanceSettingsUpdate).joinServer || null, settings: groups })
       return clone(i)
     }
     case 'open_instance_folder': return undefined
-    case 'launch_instance': return launch(a.instanceId as string)
+    case 'launch_instance': return launch(a.instanceId as string, (a.server as string | undefined) || undefined)
     case 'kill_session': await killSession(a.sessionId as SessionId); return undefined
     case 'kill_instance': await killInstance(a.instanceId as string); return undefined
-    case 'list_run_states': return clone([...sessions.values()])
+    case 'list_run_states': return clone([...sessions.values()].map((s) => ({ ...s, crash: crashed.get(s.sessionId) })))
+    case 'dismiss_crash': crashed.delete(a.sessionId as SessionId); return undefined
+    case 'open_crash_report': return undefined
+    case 'upload_game_log': {
+      await sleep(500)
+      return { id: 'mock', url: 'https://mclo.gs/mock', raw: 'https://api.mclo.gs/1/raw/mock' } satisfies UploadedLog
+    }
     case 'get_game_logs': return clone(sessionLogs.get(a.sessionId as SessionId) ?? [])
     case 'list_minecraft_versions': return minecraftVersions
     case 'list_loader_versions': { await sleep(250); return loaderVersions(a.minecraftVersion as string, a.loader as LoaderId) }

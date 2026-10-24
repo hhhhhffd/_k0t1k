@@ -13,13 +13,17 @@
  *   update_instance_settings(instanceId, settings: InstanceSettingsUpdate) -> Instance
  *   open_instance_folder(instanceId)                         -> void
  * Launch
- *   launch_instance(instanceId, accountId?)                  -> SessionId     (always starts a NEW session, also when the instance already
- *                                                                              runs; state via `instance-state`, output via `game-log`)
+ *   launch_instance(instanceId, accountId?, server?)         -> SessionId     (always starts a NEW session, also when the instance already
+ *                                                                              runs; state via `instance-state`, output via `game-log`;
+ *                                                                              `server` = host[:port] to join, else the instance's joinServer)
  *   kill_session(sessionId)                                  -> void          (stops the game or cancels its preparation; errors when the session is gone)
  *   kill_instance(instanceId)                                -> void          (= kill_session for every live session; errors when none)
  *   list_run_states()                                        -> RunSession[]  (live sessions + up to 3 finished ones per instance, `state: 'stopped'`,
  *                                                                              whose log is kept; for a window opened mid-game)
  *   get_game_logs(sessionId)                                 -> GameLogLine[]  (ring buffer of one session, up to MAX_LOG_LINES)
+ *   upload_game_log(sessionId)                               -> UploadedLog   (POSTs the redacted log, plus the crash report if any, to mclo.gs; only on a user click)
+ *   open_crash_report(sessionId)                             -> void          (errors when the session left no report)
+ *   dismiss_crash(sessionId)                                 -> void          (list_run_states stops reporting the crash)
  *
  * Sessions: ids are numbers that grow during the app run and are never reused. Each session has its own natives
  * directory and log, records its own playtime when it ends (overlapping sessions of one instance are counted
@@ -99,6 +103,8 @@
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
  *   game-log        GameLogBatch     (lines of one session, batched)
  *   instance-state  InstanceRunState (one session; `stopped` is the last event of a session)
+ *   game-crashed    GameCrashed      (after `stopped`, when the game exited on its own with a non-zero code; a window created later
+ *                                     finds the crash in `list_run_states` until `dismiss_crash`)
  */
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type {
@@ -113,6 +119,7 @@ import type {
   PackExportReport,
   CreateInstanceRequest,
   GameLogBatch,
+  GameCrashed,
   GameLogLine,
   GlobalSettings,
   Instance,
@@ -142,6 +149,7 @@ import type {
   SharedFolder,
   SystemInfo,
   UninstallPlan,
+  UploadedLog,
   VersionFilter,
   World,
 } from './types'
@@ -205,12 +213,15 @@ export const openInstanceFolder = (instanceId: string) =>
   call<void>('open_instance_folder', { instanceId })
 
 // ---- launch ----
-export const launchInstance = (instanceId: string, accountId?: string) =>
-  call<SessionId>('launch_instance', { instanceId, accountId })
+export const launchInstance = (instanceId: string, accountId?: string, server?: string) =>
+  call<SessionId>('launch_instance', { instanceId, accountId, server })
 export const killSession = (sessionId: SessionId) => call<void>('kill_session', { sessionId })
 export const killInstance = (instanceId: string) => call<void>('kill_instance', { instanceId })
 export const listRunStates = () => call<RunSession[]>('list_run_states')
 export const getGameLogs = (sessionId: SessionId) => call<GameLogLine[]>('get_game_logs', { sessionId })
+export const uploadGameLog = (sessionId: SessionId) => call<UploadedLog>('upload_game_log', { sessionId })
+export const openCrashReport = (sessionId: SessionId) => call<void>('open_crash_report', { sessionId })
+export const dismissCrash = (sessionId: SessionId) => call<void>('dismiss_crash', { sessionId })
 
 // ---- versions ----
 export const listMinecraftVersions = () => call<MinecraftVersion[]>('list_minecraft_versions')
@@ -357,6 +368,7 @@ export const onProgress = (cb: (e: ProgressEvent) => void) => subscribe('progres
 export const onGameLog = (cb: (e: GameLogBatch) => void) => subscribe('game-log', cb)
 export const onInstanceState = (cb: (e: InstanceRunState) => void) =>
   subscribe('instance-state', cb)
+export const onGameCrashed = (cb: (e: GameCrashed) => void) => subscribe('game-crashed', cb)
 /** Files dropped onto the window; a no-op in the browser mock unless it is driven by hand. */
 export async function onDragDrop(cb: (event: DragDropEvent) => void): Promise<Unlisten> {
   const backend = await loadBackend()
