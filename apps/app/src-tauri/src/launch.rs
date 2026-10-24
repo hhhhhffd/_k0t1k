@@ -415,12 +415,6 @@ async fn prepare(
 ) -> CommandResult<LaunchCommand> {
     let paths = &state.paths;
 
-    // Refreshes expiring tokens; a failure (for example an expired sign-in) fails the launch with its message.
-    let identity = auth::resolve_launch_identity(paths, &state.http, MSA_CLIENT_ID, &account).await?;
-    // Scrubbed from an uploaded log; mclogs ignores tokens too short to be real (offline placeholders).
-    log.add_secret(&identity.account.access_token);
-    log.line("launcher", &format!("Аккаунт: {} ({})", account.name, identity.account.user_type));
-
     let (components, online) = game::resolve(paths, instance.components.clone()).await?;
     // Only the Java requirements are needed from this profile; natives depend on the chosen Java.
     let preliminary = LaunchProfile::build(&components, RuntimeContext::host(game::host_java_arch()))?;
@@ -475,6 +469,14 @@ async fn prepare(
     } else {
         (settings.memory.min_mib, settings.memory.max_mib)
     };
+    // Resolved last, so a long install or hook cannot leave the token expired. Refreshes expiring tokens;
+    // a failure (for example an expired sign-in) fails the launch with its message.
+    let identity = auth::resolve_launch_identity(paths, &state.http, MSA_CLIENT_ID, &account).await?;
+    // Masked in every log line from now on (before the command line is logged and the game starts) and in
+    // an uploaded log; masking ignores tokens too short to be real (offline placeholders).
+    log.add_secret(&identity.account.access_token);
+    log.line("launcher", &format!("Аккаунт: {} ({})", account.name, identity.account.user_type));
+
     let window = (!settings.window.maximized).then_some(WindowSize { width: settings.window.width, height: settings.window.height });
     let options = LaunchOptions {
         java_path: java.path,
