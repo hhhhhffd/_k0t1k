@@ -3,15 +3,17 @@ import { onMounted, ref } from 'vue'
 import { RouterView } from 'vue-router'
 import { getOnboarding, getRelocationReport } from './api/commands'
 import type { OnboardingInfo, RelocationReport } from './api/types'
-import AppSidebar from './components/AppSidebar.vue'
 import BlockedFilesDialog from './components/BlockedFilesDialog.vue'
 import CrashDialog from './components/CrashDialog.vue'
+import MainToolbar from './components/MainToolbar.vue'
 import RelocationNotice from './components/RelocationNotice.vue'
+import StatusBar from './components/StatusBar.vue'
 import TitleBar from './components/TitleBar.vue'
 import TaskBar from './components/TaskBar.vue'
 import ToastHost from './components/ToastHost.vue'
 import { t } from './i18n/ru'
 import { useInstancesStore } from './stores/instances'
+import { useLayoutStore } from './stores/layout'
 import { useSettingsStore } from './stores/settings'
 import { useTasksStore } from './stores/tasks'
 import OnboardingView from './views/OnboardingView.vue'
@@ -19,6 +21,7 @@ import OnboardingView from './views/OnboardingView.vue'
 const settings = useSettingsStore()
 const instances = useInstancesStore()
 const tasks = useTasksStore()
+const layout = useLayoutStore()
 
 // `undefined` until the backend has said whether the launcher still has to ask where to live
 const onboarding = ref<OnboardingInfo | null | undefined>(undefined)
@@ -41,13 +44,15 @@ onMounted(async () => {
   <div class="flex h-full flex-col">
     <TitleBar />
     <OnboardingView v-if="onboarding" :info="onboarding" />
-    <div v-else-if="onboarding === null" class="flex min-h-0 flex-1">
-      <AppSidebar />
-      <main class="min-w-0 flex-1 overflow-y-auto">
+    <template v-else-if="onboarding === null">
+      <MainToolbar v-if="layout.toolbar === 'top'" />
+      <main class="min-h-0 flex-1 overflow-y-auto">
         <RouterView />
       </main>
-    </div>
-    <TaskBar v-if="onboarding === null" />
+      <MainToolbar v-if="layout.toolbar === 'bottom'" />
+      <TaskBar />
+      <StatusBar />
+    </template>
     <RelocationNotice v-if="relocationReport" :report="relocationReport" @close="relocationReport = null" />
     <BlockedFilesDialog v-if="tasks.blocked.length" :files="tasks.blocked" :instance-id="tasks.blockedInstanceId" @close="tasks.blocked = []" />
     <CrashDialog v-if="onboarding === null" />

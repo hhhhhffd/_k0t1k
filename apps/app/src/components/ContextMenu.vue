@@ -4,7 +4,10 @@ import type { Component } from 'vue'
 export interface MenuItem {
   label: string
   icon?: Component
+  /** Colours the icon only, e.g. `text-ok`. */
+  iconClass?: string
   danger?: boolean
+  disabled?: boolean
   separatorBefore?: boolean
   action: () => void
 }
@@ -42,11 +45,12 @@ function pick(item: MenuItem) {
           <div v-if="item.separatorBefore" class="my-1 h-px bg-line" />
           <button
             role="menuitem"
-            class="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-hover"
+            class="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-hover disabled:pointer-events-none disabled:opacity-40"
             :class="item.danger ? 'text-danger' : 'text-fg'"
+            :disabled="item.disabled"
             @click="pick(item)"
           >
-            <component :is="item.icon" v-if="item.icon" :size="15" />
+            <component :is="item.icon" v-if="item.icon" :size="15" :class="item.iconClass" />
             {{ item.label }}
           </button>
         </template>

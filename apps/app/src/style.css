@@ -230,6 +230,30 @@ textarea,
   font-weight: 600;
 }
 
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 7px;
+  color: var(--c-fg);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.tool:hover:not(:disabled) {
+  background: var(--c-hover);
+}
+.tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tool-active {
+  background: color-mix(in srgb, var(--c-accent) 15%, transparent);
+}
+
 .input {
   height: 32px;
   width: 100%;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { Check, FolderOpen, Link, RefreshCw, RotateCcw, Trash2, UserPlus } from '@lucide/vue'
+import { AppWindow, Check, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createShortcuts, detectJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, openDataDir, openSharedFolder, setDataDir, uninstall } from '../api/commands'
@@ -25,6 +25,19 @@ const router = useRouter()
 
 const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'behavior', 'sharedFolders', 'appearance', 'accounts', 'storage', 'about'] as const
 type Section = (typeof sectionIds)[number]
+const sectionIcons = {
+  java: { icon: Coffee, color: 'text-warn' },
+  memory: { icon: MemoryStick, color: 'text-ok' },
+  jvm: { icon: SlidersHorizontal, color: 'text-muted' },
+  window: { icon: AppWindow, color: 'text-accent' },
+  commands: { icon: Terminal, color: 'text-muted' },
+  behavior: { icon: Zap, color: 'text-warn' },
+  sharedFolders: { icon: FolderSync, color: 'text-warn' },
+  appearance: { icon: Palette, color: 'text-accent' },
+  accounts: { icon: Users, color: 'text-ok' },
+  storage: { icon: HardDrive, color: 'text-muted' },
+  about: { icon: Info, color: 'text-accent' },
+} as const
 const SECTION_KEY = 'k0t1k.settingsSection'
 const asSection = (v: string | null | undefined) => (sectionIds.includes(v as Section) ? (v as Section) : null)
 function storedSection() {
@@ -132,10 +145,11 @@ async function addAccount() {
       <button
         v-for="id in sectionIds"
         :key="id"
-        class="h-8 rounded-lg px-3 text-left font-medium transition-colors"
-        :class="section === id ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
+        class="flex h-8 items-center gap-2.5 rounded-lg px-3 text-left font-medium transition-colors"
+        :class="section === id ? 'bg-accent/15 text-accent' : 'text-fg hover:bg-hover'"
         @click="section = id"
       >
+        <component :is="sectionIcons[id].icon" :size="16" :class="section === id ? '' : sectionIcons[id].color" />
         {{ t.settings.sections[id] }}
       </button>
     </nav>

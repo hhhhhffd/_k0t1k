@@ -6,6 +6,7 @@ import { isTauri } from '../api/commands'
 import type { LoaderId } from '../api/types'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
+import { useLayoutStore } from '../stores/layout'
 import { useTasksStore } from '../stores/tasks'
 import { LOADER_LABELS } from '../utils/format'
 import InstanceIcon, { INSTANCE_ICONS } from './InstanceIcon.vue'
@@ -16,6 +17,7 @@ import ModalDialog from './ModalDialog.vue'
 const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
+const layout = useLayoutStore()
 
 const name = ref('')
 const nameTouched = ref(false)
@@ -46,7 +48,9 @@ function create() {
     loader: loader.value ? { id: loader.value, version: loaderVersion.value } : undefined,
   }
   emit('close')
-  void tasks.guard(() => store.create(request))
+  void tasks.guard(() => store.create(request)).then((created) => {
+    if (created) layout.selectedId = created.id
+  })
 }
 
 async function importPack() {

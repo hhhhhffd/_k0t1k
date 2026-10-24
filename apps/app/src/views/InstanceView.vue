@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Clock, FileArchive, Flame, FolderOpen, History, Package, RefreshCw, Upload } from '@lucide/vue'
+import { ArrowLeft, Camera, Clock, FileArchive, Flame, FolderOpen, Globe, History, Image, Layers, Package, Puzzle, RefreshCw, ScrollText, Server, Settings2, Sparkles, Upload } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { addLocalFiles, openInstanceFolder } from '../api/commands'
@@ -20,6 +20,7 @@ import WorldsTab from '../components/instance/WorldsTab.vue'
 import PlayButton from '../components/PlayButton.vue'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
+import { useLayoutStore } from '../stores/layout'
 import { useTasksStore } from '../stores/tasks'
 import { formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'
 import { baseName, useFileDrop } from '../utils/useFileDrop'
@@ -27,14 +28,28 @@ import { baseName, useFileDrop } from '../utils/useFileDrop'
 const props = defineProps<{ id: string }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
+const layout = useLayoutStore()
 const router = useRouter()
 const route = useRoute()
 
 const instance = computed(() => store.byId(props.id))
+// the status bar and the library follow the instance being edited
+watch(() => props.id, (id) => (layout.selectedId = id), { immediate: true })
 const loader = computed(() => (instance.value ? loaderOf(instance.value) : undefined))
 
 type Tab = 'version' | 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'screenshots' | 'servers' | 'logs' | 'settings'
 const tabs: Tab[] = ['version', 'mods', 'resourcepacks', 'shaders', 'worlds', 'screenshots', 'servers', 'logs', 'settings']
+const tabIcons = {
+  version: { icon: Layers, color: 'text-ok' },
+  mods: { icon: Puzzle, color: 'text-accent' },
+  resourcepacks: { icon: Image, color: 'text-warn' },
+  shaders: { icon: Sparkles, color: 'text-warn' },
+  worlds: { icon: Globe, color: 'text-ok' },
+  screenshots: { icon: Camera, color: 'text-muted' },
+  servers: { icon: Server, color: 'text-accent' },
+  logs: { icon: ScrollText, color: 'text-muted' },
+  settings: { icon: Settings2, color: 'text-muted' },
+} as const
 // `?tab=logs` opens a tab directly (the crash dialog does)
 const tabFromRoute = () => tabs.find((name) => name === route.query.tab) ?? 'mods'
 const tab = ref<Tab>(tabFromRoute())
@@ -77,54 +92,59 @@ const { dragging } = useFileDrop(async (paths) => {
 </script>
 
 <template>
-  <div v-if="instance" class="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-    <button class="btn btn-ghost -ml-2 w-fit text-muted" @click="router.push('/')"><ArrowLeft :size="15" />{{ t.nav.library }}</button>
-
-    <header class="card flex items-center gap-4 p-4">
-      <InstanceIcon :icon="instance.icon" :instance-id="instance.id" :size="64" />
+  <div v-if="instance" class="flex h-full min-h-0 flex-col">
+    <header class="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3">
+      <button class="btn btn-ghost btn-icon shrink-0" :title="t.nav.library" :aria-label="t.nav.library" @click="router.push('/')"><ArrowLeft :size="17" /></button>
+      <InstanceIcon :icon="instance.icon" :instance-id="instance.id" :size="44" />
       <div class="min-w-0 flex-1">
-        <h1 class="truncate text-[22px] leading-tight font-bold">{{ instance.name }}</h1>
-        <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <h1 class="truncate text-[17px] leading-tight font-bold">{{ instance.name }}</h1>
+        <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[12px]">
           <span class="badge">Minecraft {{ minecraftVersionOf(instance) }}</span>
           <span v-if="loader" class="badge badge-accent">{{ loader.label }} {{ loader.version }}</span>
           <span v-if="instance.group" class="badge">{{ instance.group }}</span>
-          <span class="ml-2 flex items-center gap-1.5 text-muted"><Clock :size="13" />{{ formatPlaytime(instance.playtime.totalSecs) }}</span>
-          <span class="flex items-center gap-1.5 text-muted"><History :size="13" />{{ formatRelative(instance.lastPlayed) }}</span>
+          <span class="ml-1 flex items-center gap-1 text-muted"><Clock :size="12" />{{ formatPlaytime(instance.playtime.totalSecs) }}</span>
+          <span class="flex items-center gap-1 text-muted"><History :size="12" />{{ formatRelative(instance.lastPlayed) }}</span>
         </div>
       </div>
-      <button v-if="instance.managedPack" class="btn shrink-0" @click="showPackUpdate = true"><RefreshCw :size="15" />{{ t.pack.check }}</button>
-      <button class="btn shrink-0" @click="openExportMenu"><Upload :size="15" />{{ t.transfer.export }}</button>
-      <button class="btn btn-icon" :title="t.library.openFolder" :aria-label="t.library.openFolder" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="16" /></button>
-      <PlayButton :instance-id="instance.id" large />
+      <button v-if="instance.managedPack" class="tool shrink-0" @click="showPackUpdate = true"><RefreshCw :size="15" class="text-ok" />{{ t.pack.check }}</button>
+      <button class="tool shrink-0" @click="openExportMenu"><Upload :size="15" class="text-ok" />{{ t.transfer.export }}</button>
+      <button class="tool shrink-0" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="15" class="text-warn" />{{ t.panel.folder }}</button>
+      <PlayButton :instance-id="instance.id" />
     </header>
 
-    <div class="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line [scrollbar-width:none]" role="tablist">
-      <button
-        v-for="name in tabs"
-        :key="name"
-        role="tab"
-        :aria-selected="tab === name"
-        class="-mb-px h-9 border-b-2 px-3.5 font-medium transition-colors"
-        :class="tab === name ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-fg'"
-        @click="tab = name"
-      >
-        {{ t.instance.tabs[name] }}
-      </button>
-    </div>
+    <div class="flex min-h-0 flex-1">
+      <nav class="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line bg-surface p-1.5" role="tablist" aria-orientation="vertical">
+        <button
+          v-for="name in tabs"
+          :key="name"
+          role="tab"
+          :aria-selected="tab === name"
+          class="tool h-9 w-full justify-start"
+          :class="tab === name ? 'tool-active text-accent' : ''"
+          @click="tab = name"
+        >
+          <component :is="tabIcons[name].icon" :size="16" :class="tab === name ? '' : tabIcons[name].color" />
+          {{ t.instance.tabs[name] }}
+        </button>
+      </nav>
 
-    <ResourceList
-      v-if="tab === 'mods' || tab === 'resourcepacks' || tab === 'shaders'"
-      :key="`${instance.id}-${tab}-${listKey}`"
-      :instance-id="instance.id"
-      :kind="kindOfTab[tab]"
-      :shared-note="sharedNote(tab)"
-    />
-    <VersionTab v-else-if="tab === 'version'" :instance="instance" />
-    <WorldsTab v-else-if="tab === 'worlds'" :key="instance.id" :instance-id="instance.id" />
-    <ScreenshotsTab v-else-if="tab === 'screenshots'" :key="instance.id" :instance-id="instance.id" :shared="instance.sharedFolders.includes('screenshots')" />
-    <ServersTab v-else-if="tab === 'servers'" :key="instance.id" :instance-id="instance.id" />
-    <LogsTab v-else-if="tab === 'logs'" :instance-id="instance.id" />
-    <InstanceSettingsTab v-else :key="instance.id" :instance="instance" />
+      <section class="min-w-0 flex-1 overflow-y-auto p-4">
+        <h2 class="mb-3 text-[15px] font-semibold">{{ t.instance.tabs[tab] }}</h2>
+        <ResourceList
+          v-if="tab === 'mods' || tab === 'resourcepacks' || tab === 'shaders'"
+          :key="`${instance.id}-${tab}-${listKey}`"
+          :instance-id="instance.id"
+          :kind="kindOfTab[tab]"
+          :shared-note="sharedNote(tab)"
+        />
+        <VersionTab v-else-if="tab === 'version'" :instance="instance" />
+        <WorldsTab v-else-if="tab === 'worlds'" :key="instance.id" :instance-id="instance.id" />
+        <ScreenshotsTab v-else-if="tab === 'screenshots'" :key="instance.id" :instance-id="instance.id" :shared="instance.sharedFolders.includes('screenshots')" />
+        <ServersTab v-else-if="tab === 'servers'" :key="instance.id" :instance-id="instance.id" />
+        <LogsTab v-else-if="tab === 'logs'" :instance-id="instance.id" />
+        <InstanceSettingsTab v-else :key="instance.id" :instance="instance" />
+      </section>
+    </div>
   </div>
   <p v-else-if="store.loaded" class="p-10 text-center text-faint">{{ t.instance.notFound }}</p>
   <template v-if="instance">
