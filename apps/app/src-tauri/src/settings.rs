@@ -79,9 +79,13 @@ pub fn open_data_dir(app: AppHandle, state: State<'_, AppState>) -> CommandResul
 }
 
 /// Opens `shared/<folder>`, creating it first so the button works before any instance shares it.
+/// The server list is a single file, so for it the `shared` folder itself opens.
 #[tauri::command]
 pub async fn open_shared_folder(app: AppHandle, state: State<'_, AppState>, folder: SharedFolder) -> CommandResult<()> {
-    let dir = state.paths.shared_dir().join(folder.dir_name());
+    let dir = match folder {
+        SharedFolder::Servers => state.paths.shared_dir(),
+        _ => state.paths.shared_dir().join(folder.dir_name()),
+    };
     let created = dir.clone();
     blocking(move || std::fs::create_dir_all(&created).map_err(|source| k0t1k_core::Error::Io { path: created, source })).await?;
     app.opener().open_path(dir.display().to_string(), None::<&str>)?;
