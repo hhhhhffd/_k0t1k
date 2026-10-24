@@ -39,6 +39,16 @@ apps/app/src           Vue 3 UI
   with `shareResourcepacks` are converted on read (true = only resourcepacks). Named pools (different shared
   sets for groups of instances) would go in as a pool id in the shared path (`shared/<pool>/<folder>`), with
   the current list being the implicit default pool, so no migration would be needed.
+- **Shared server list**: `servers` is a fifth `SharedFolder` value, but `servers.dat` is a file the game replaces on
+  save (temp file + rename), which breaks hardlinks and replaces file symlinks, so it is synchronised, not linked.
+  `shared/servers.dat` is the master. Enabling merges the instance's entries into it (entries whose address, case-
+  insensitive, is missing are appended in order; unknown NBT tags survive), then copies it into the game dir;
+  disabling leaves the instance's copy. Before each launch `launch.rs` copies shared to the game dir and remembers
+  the bytes; after the game exits `push_shared` stores the game dir's file in shared if it differs from that
+  snapshot. If the shared file changed meanwhile (another session exited first), the exiting session's list wins
+  and shared-only entries are appended: nothing is lost, but a deletion made by the earlier session can come back.
+  Same-instance sessions overlap the same way (last exit wins). The launcher's server commands edit
+  `shared/servers.dat` for sharing instances (`servers::edit_list`) and mirror it into the game dir; listing reads it.
 - **Playtime** is recorded per instance (seconds, total and last session) and globally. Every session records its
   own duration when it ends, so overlapping sessions of one instance are counted separately.
 - **Sessions**: every launch is a session with an id that grows during the app run (`launch_instance` returns it).
@@ -62,6 +72,15 @@ apps/app/src           Vue 3 UI
   conventions are the same as for mods.
 - Screenshots are shown through Tauri's asset protocol (`convertFileSrc`). The scope is empty in config and the
   backend allows only the listed instance's `screenshots/` folder at runtime (the data dir is not known statically).
+- Discord Rich Presence (`src-tauri/src/discord.rs`, crate `discord-rich-presence`): `K0T1K_DISCORD_CLIENT_ID` is
+  embedded by `build.rs` like the CurseForge key (env or repo-root `.env`, warning when missing; without it the
+  feature is inert). While any session is Running the activity shows details = instance name, state =
+  "<mc version> · <loader>", start = session start, large image key `logo` (upload an asset named `logo` under
+  Rich Presence in the Discord developer portal); the most recently started session wins, and with none running
+  the activity is cleared. One dedicated thread owns the IPC client and is fed through a channel; connect/send
+  failures are only logged at debug level and the next state change reconnects. Setting: `discord.enabled`
+  (default true), read when a game starts.
+
 - Server status is a Server List Ping over TCP in `instance/servers.rs` (5 s timeout, no SRV lookup).
 
 ## Data directory (portable)
