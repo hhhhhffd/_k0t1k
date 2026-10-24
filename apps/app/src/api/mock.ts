@@ -109,6 +109,7 @@ const defaultSettings: GlobalSettings = {
   playtime: { record: true, show: true, totalSecs: 0 },
   ui: { theme: 'k0t1k', liteMode: false, customThemes: [] },
   behavior: { onGameLaunch: 'free_memory', onClose: 'tray' },
+  discord: { enabled: true },
   onboarding: { keepPortableAt: null, createdShortcuts: [] },
   sharedFoldersDefault: ['resourcepacks', 'shaderpacks'],
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],

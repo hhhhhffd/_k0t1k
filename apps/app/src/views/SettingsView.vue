@@ -231,6 +231,10 @@ async function addAccount() {
           <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.onClose }}</span><span class="text-[12px] text-faint">{{ t.settings.onCloseHint }}</span></span>
           <SelectMenu v-model="s.behavior.onClose" class="w-52" :options="onCloseOptions" :aria-label="t.settings.onClose" />
         </div>
+        <div class="flex items-center gap-4">
+          <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.discord }}</span><span class="text-[12px] text-faint">{{ t.settings.discordHint }}</span></span>
+          <ToggleSwitch v-model="s.discord.enabled" :label="t.settings.discord" />
+        </div>
       </section>
 
       <section v-else-if="section === 'sharedFolders'" class="card flex flex-col gap-3 p-4">

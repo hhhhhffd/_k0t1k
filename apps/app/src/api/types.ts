@@ -64,7 +64,7 @@ export interface InstanceSettings {
 }
 
 /** Folders that can be shared between instances; mods, config and saves never are. */
-export const SHARED_FOLDERS = ['resourcepacks', 'shaderpacks', 'screenshots'] as const
+export const SHARED_FOLDERS = ['resourcepacks', 'shaderpacks', 'screenshots', 'servers'] as const
 export type SharedFolder = (typeof SHARED_FOLDERS)[number]
 
 export interface Instance {
@@ -162,6 +162,7 @@ export interface GlobalSettings {
   /** `theme` is a built-in `ThemeId` or the id of one of `customThemes`. */
   ui: { theme: string; liteMode: boolean; customThemes: CustomTheme[] }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
+  discord: { enabled: boolean }
   /** Owned by the onboarding commands: `save_settings` never overwrites it. */
   onboarding: { keepPortableAt: string | null; createdShortcuts: string[] }
   /** Folders that new instances (and imported modpacks) share. */

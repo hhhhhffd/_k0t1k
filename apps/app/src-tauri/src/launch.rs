@@ -7,7 +7,8 @@ use std::sync::Arc;
 use chrono::Utc;
 use k0t1k_core::auth;
 use k0t1k_core::install::{check_installed, extract_natives, install_game, reconstruct_assets};
-use k0t1k_core::instance::{EffectiveSettings, Instance};
+use k0t1k_core::instance::servers::{pull_shared, push_shared};
+use k0t1k_core::instance::{EffectiveSettings, Instance, SharedFolder};
 use k0t1k_core::java::ensure_java;
 use k0t1k_core::launch::{LaunchCommand, LaunchOptions, LogFn, LogStream, WindowSize, build_command, spawn_game};
 use k0t1k_core::profile::LaunchProfile;
@@ -21,7 +22,7 @@ use tokio::sync::watch;
 use crate::error::{AppError, CommandResult, blocking};
 use crate::events::{self, GameLog, LogLine, RunState, progress_fn, tracked};
 use crate::state::{AppState, MSA_CLIENT_ID, SessionId, SessionInfo};
-use crate::{cmdline, game, window};
+use crate::{cmdline, discord, game, window};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -51,7 +52,7 @@ pub async fn launch_instance(
     let (session_id, kill_requests) = state.reserve(&instance_id, &instance.name);
     let number = state.session_number(session_id).unwrap_or(1);
     events::instance_state(&app, session_id, &instance_id, number, RunState::Preparing, None);
-    tauri::async_runtime::spawn(run_session(app, state, session_id, instance, settings, account, global.behavior.on_game_launch, kill_requests));
+    tauri::async_runtime::spawn(run_session(app, state, session_id, instance, settings, account, global.behavior.on_game_launch, global.discord.enabled, kill_requests));
     Ok(session_id)
 }
 
@@ -130,6 +131,7 @@ impl SessionGuard {
         }
         self.state.running().remove(&self.session_id);
         self.state.finish_log(self.session_id);
+        discord::session_stopped(self.session_id);
         events::instance_state(&self.app, self.session_id, &self.instance_id, self.number, RunState::Stopped, exit_code);
         window::on_game_stopped(&self.app);
     }
@@ -191,6 +193,7 @@ async fn run_session(
     settings: EffectiveSettings,
     account: Account,
     on_game_launch: OnGameLaunch,
+    show_in_discord: bool,
     mut kill_requests: watch::Receiver<bool>,
 ) {
     let id = instance.id.clone();
@@ -227,6 +230,20 @@ async fn run_session(
         return session.end("Запуск отменён", None);
     }
 
+    // A shared server list is copied into the game dir for this run and merged back after it.
+    let shared_servers = if instance.shared_folders.contains(&SharedFolder::Servers) {
+        let (paths, game_dir) = (state.paths.clone(), instance.game_dir(&state.paths));
+        match blocking(move || pull_shared(&paths, &game_dir)).await {
+            Ok(snapshot) => Some(snapshot),
+            Err(error) => {
+                log.line("launcher", &format!("Не удалось подготовить общий список серверов: {error}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     let on_log: LogFn = {
         let log = log.clone();
         Arc::new(move |line| {
@@ -262,6 +279,9 @@ async fn run_session(
 
     if !killed_at_spawn {
         window::on_game_started(&app, on_game_launch);
+        if show_in_discord {
+            discord::session_started(session_id, &instance, started_at);
+        }
     }
 
     let exit_code = match handle.wait().await {
@@ -272,6 +292,13 @@ async fn run_session(
         }
     };
     let ended_at = Utc::now();
+
+    if let Some(snapshot) = shared_servers {
+        let (paths, game_dir) = (state.paths.clone(), instance.game_dir(&state.paths));
+        if let Err(error) = blocking(move || push_shared(&paths, &game_dir, snapshot.as_deref())).await {
+            log.line("launcher", &format!("Не удалось сохранить общий список серверов: {error}"));
+        }
+    }
 
     // A game killed right at its start never really ran.
     if !killed_at_spawn {

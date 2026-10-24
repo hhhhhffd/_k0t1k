@@ -3,10 +3,11 @@ use std::path::Path;
 fn main() {
     embed_from_env("K0T1K_CURSEFORGE_API_KEY", "CurseForge will be unavailable");
     embed_from_env("K0T1K_MSA_CLIENT_ID", "Microsoft sign-in will be unavailable");
+    embed_from_env("K0T1K_DISCORD_CLIENT_ID", "Discord Rich Presence will be off");
     tauri_build::build()
 }
 
-/// Bakes a value (the CurseForge API key, the Azure application id) into the binary at build time,
+/// Bakes a value (the CurseForge API key, the Azure and Discord application ids) into the binary at build time,
 /// taken from the environment or from the gitignored `.env` at the repository root, so it never lives
 /// in source control. The file is parsed directly rather than through a shell because CurseForge keys
 /// start with `$2a$10$`.

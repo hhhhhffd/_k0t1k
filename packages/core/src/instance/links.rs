@@ -1,5 +1,6 @@
 //! Sharing folders (`resourcepacks`, `shaderpacks`, `screenshots`) between instances through one
-//! folder per kind, `shared/<folder>`.
+//! folder per kind, `shared/<folder>`. The server list (`servers.dat`) is a file, so it is shared as a
+//! synchronised copy instead (`servers::pull_shared`).
 //!
 //! The game dir entry becomes a symlink on unix and a directory junction on Windows. A junction
 //! needs no administrator rights or Developer Mode, unlike a symlink, and works for a local directory.
@@ -13,6 +14,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::fsutil::{copy_dir, is_link, remove_link, unique_path};
+use super::servers;
 use crate::error::{Error, IoContext, Result};
 use crate::paths::Paths;
 
@@ -23,18 +25,27 @@ pub enum SharedFolder {
     Resourcepacks,
     Shaderpacks,
     Screenshots,
+    /// The server list, `servers.dat`. A file the game replaces on save, so it is synchronised
+    /// instead of linked (see `servers::pull_shared`).
+    Servers,
 }
 
 impl SharedFolder {
-    pub const ALL: [SharedFolder; 3] = [Self::Resourcepacks, Self::Shaderpacks, Self::Screenshots];
+    pub const ALL: [SharedFolder; 4] = [Self::Resourcepacks, Self::Shaderpacks, Self::Screenshots, Self::Servers];
 
-    /// Name of the folder in the game dir and under `shared/`.
+    /// Name of the entry in the game dir and under `shared/`.
     pub fn dir_name(self) -> &'static str {
         match self {
             Self::Resourcepacks => "resourcepacks",
             Self::Shaderpacks => "shaderpacks",
             Self::Screenshots => "screenshots",
+            Self::Servers => "servers.dat",
         }
+    }
+
+    /// Shared through a directory link; `false` for the synchronised file.
+    pub(super) fn is_linked(self) -> bool {
+        self != Self::Servers
     }
 }
 
@@ -42,7 +53,7 @@ impl SharedFolder {
 /// file that a modpack must not replace.
 pub fn exists_in_linked_shared_folder(game_dir: &Path, path: &Path) -> bool {
     path.exists()
-        && SharedFolder::ALL.iter().any(|folder| {
+        && SharedFolder::ALL.iter().filter(|folder| folder.is_linked()).any(|folder| {
             let link = game_dir.join(folder.dir_name());
             path.starts_with(&link) && is_link(&link)
         })
@@ -52,6 +63,9 @@ pub fn exists_in_linked_shared_folder(game_dir: &Path, path: &Path) -> bool {
 /// moved into the shared one first (renamed on a name clash), so no user file is deleted.
 /// Calling it again is harmless.
 pub fn enable_shared(paths: &Paths, game_dir: &Path, folder: SharedFolder) -> Result<()> {
+    if !folder.is_linked() {
+        return servers::enable_shared_list(paths, game_dir);
+    }
     let shared = paths.shared_dir().join(folder.dir_name());
     std::fs::create_dir_all(&shared).at(&shared)?;
     let link = game_dir.join(folder.dir_name());
@@ -79,6 +93,10 @@ pub fn enable_shared(paths: &Paths, game_dir: &Path, folder: SharedFolder) -> Re
 /// Replace the link with a real folder holding a copy of the shared content, so the instance
 /// keeps working with the same files. Does nothing when the folder is not a link.
 pub fn disable_shared(paths: &Paths, game_dir: &Path, folder: SharedFolder) -> Result<()> {
+    // The instance keeps its copy of the server list.
+    if !folder.is_linked() {
+        return Ok(());
+    }
     let link = game_dir.join(folder.dir_name());
     if !is_link(&link) {
         return Ok(());
@@ -95,7 +113,7 @@ pub fn disable_shared(paths: &Paths, game_dir: &Path, folder: SharedFolder) -> R
 /// Remove every shared-folder link of a game dir, leaving the shared content untouched. Used before
 /// deleting an instance so a recursive delete can never reach shared files.
 pub fn detach_all(game_dir: &Path) -> Result<()> {
-    for folder in SharedFolder::ALL {
+    for folder in SharedFolder::ALL.into_iter().filter(|folder| folder.is_linked()) {
         let link = game_dir.join(folder.dir_name());
         if is_link(&link) {
             remove_link(&link)?;
@@ -208,12 +226,12 @@ mod tests {
     #[test]
     fn detach_all_removes_links_but_keeps_shared_content() {
         let (_dir, paths, game) = setup();
-        for folder in SharedFolder::ALL {
+        for folder in SharedFolder::ALL.into_iter().filter(|folder| folder.is_linked()) {
             enable_shared(&paths, &game, folder).unwrap();
             std::fs::write(paths.shared_dir().join(folder.dir_name()).join("f"), "x").unwrap();
         }
         detach_all(&game).unwrap();
-        for folder in SharedFolder::ALL {
+        for folder in SharedFolder::ALL.into_iter().filter(|folder| folder.is_linked()) {
             assert!(!game.join(folder.dir_name()).exists());
             assert!(paths.shared_dir().join(folder.dir_name()).join("f").is_file());
         }

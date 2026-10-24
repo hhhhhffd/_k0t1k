@@ -2,6 +2,7 @@ mod accounts;
 mod cmdline;
 mod content;
 mod datadir;
+mod discord;
 mod error;
 mod events;
 mod game;

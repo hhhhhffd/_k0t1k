@@ -614,8 +614,8 @@ mod tests {
             assert_eq!(std::fs::read(source_packs.join("p.zip")).unwrap(), b"pack");
 
             let copy = manager.copy("Source", "Copy", &CopyOptions::default()).unwrap();
-            assert_eq!(copy.shared_folders.len(), 3);
-            for folder in SharedFolder::ALL {
+            assert_eq!(copy.shared_folders.len(), 4);
+            for folder in SharedFolder::ALL.into_iter().filter(|folder| folder.is_linked()) {
                 assert!(is_link(&copy.game_dir(paths).join(folder.dir_name())), "{folder:?}");
             }
             assert!(copy.game_dir(paths).join("screenshots/s.png").is_file());
