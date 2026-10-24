@@ -326,6 +326,7 @@ async function addAccount() {
               @click="s.behavior.onGameLaunch = o.value as typeof s.behavior.onGameLaunch"
             >{{ o.label }}</button>
           </div>
+          <p class="text-[12px] text-muted">{{ t.settings.onGameLaunchExplain[s.behavior.onGameLaunch] }}</p>
         </div>
         <div class="flex flex-col gap-2">
           <span><span class="block font-medium">{{ t.settings.onClose }}</span><span class="text-[12px] text-faint">{{ t.settings.onCloseHint }}</span></span>

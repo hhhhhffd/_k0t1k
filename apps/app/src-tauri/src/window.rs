@@ -15,7 +15,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use k0t1k_core::settings::{GlobalSettings, OnClose, OnGameLaunch};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
 
 use crate::datadir::DataDirSource;
@@ -38,6 +38,31 @@ fn lock_ops() -> std::sync::MutexGuard<'static, ()> {
     WINDOW_OPS.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Where the window was when it was last destroyed, so a re-created window opens in the same place
+/// instead of the screen centre. Kept in memory only: a new launcher run starts centred as before.
+#[derive(Clone, Copy)]
+struct Placement {
+    position: PhysicalPosition<i32>,
+    size: PhysicalSize<u32>,
+    maximized: bool,
+}
+
+static LAST_PLACEMENT: Mutex<Option<Placement>> = Mutex::new(None);
+
+fn last_placement() -> std::sync::MutexGuard<'static, Option<Placement>> {
+    LAST_PLACEMENT.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Destroys the window after remembering its placement.
+fn destroy_window(window: &WebviewWindow) -> tauri::Result<()> {
+    let maximized = window.is_maximized()?;
+    // a minimized window reports a position far off screen, which must not be restored
+    if !window.is_minimized()? {
+        *last_placement() = Some(Placement { position: window.outer_position()?, size: window.inner_size()?, maximized });
+    }
+    window.destroy()
+}
+
 /// Window operations wait for the main thread, so they run on a blocking thread: callers are often
 /// event handlers on the main thread itself.
 fn background(app: &AppHandle, work: impl FnOnce(&AppHandle) + Send + 'static) {
@@ -50,14 +75,27 @@ fn background(app: &AppHandle, work: impl FnOnce(&AppHandle) + Send + 'static) {
 pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let state = app.state::<AppState>();
     state.window_released.store(false, Ordering::SeqCst);
-    WebviewWindowBuilder::new(app, MAIN, WebviewUrl::default())
+    let placement = *last_placement();
+    let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::default())
         .title("_k0t1k")
         .inner_size(1200.0, 760.0)
         .min_inner_size(900.0, 560.0)
         .decorations(false)
         .shadow(true)
+        // a window put back where it was stays hidden until it is there, so it does not flash in the centre
+        .visible(placement.is_none())
         .data_directory(state.location.webview_dir())
-        .build()
+        .build()?;
+    if let Some(placement) = placement {
+        window.set_size(placement.size)?;
+        window.set_position(placement.position)?;
+        if placement.maximized {
+            window.maximize()?;
+        }
+        window.show()?;
+        window.set_focus()?;
+    }
+    Ok(window)
 }
 
 fn show_or_create(app: &AppHandle) -> tauri::Result<()> {
@@ -98,7 +136,7 @@ pub fn exit(app: &AppHandle) {
 fn destroy(app: &AppHandle) {
     let _ops = lock_ops();
     if let Some(window) = app.get_webview_window(MAIN)
-        && let Err(error) = window.destroy()
+        && let Err(error) = destroy_window(&window)
     {
         tracing::error!("cannot close the launcher window: {error}");
     }
@@ -119,7 +157,7 @@ pub fn on_game_started(app: &AppHandle, mode: OnGameLaunch) {
             return;
         };
         state.window_released.store(true, Ordering::SeqCst);
-        let result = if mode == OnGameLaunch::FreeMemory { window.destroy() } else { window.hide() };
+        let result = if mode == OnGameLaunch::FreeMemory { destroy_window(&window) } else { window.hide() };
         if let Err(error) = result {
             tracing::error!("cannot release the launcher window: {error}");
         }
