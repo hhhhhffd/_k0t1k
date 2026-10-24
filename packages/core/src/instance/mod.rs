@@ -118,6 +118,9 @@ pub struct Instance {
     /// Old files had `shareResourcepacks: bool`; `Instance::from_json` converts it.
     #[serde(default)]
     pub shared_folders: BTreeSet<SharedFolder>,
+    /// Server (`host` or `host:port`) the game joins on every launch; blank for none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_server: Option<String>,
 }
 
 fn default_icon() -> String {
@@ -182,6 +185,7 @@ mod tests {
             memory: Some(MemorySettings {
                 min_mib: 1024,
                 max_mib: 8192,
+                auto: false,
             }),
             jvm_args: Some(String::new()),
             java: Some(JavaSettings {

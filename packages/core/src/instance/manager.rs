@@ -165,6 +165,7 @@ impl InstanceManager {
                 notes: String::new(),
                 settings: InstanceSettings::default(),
                 shared_folders,
+                join_server: None,
             };
             let game_dir = staging.join("minecraft");
             std::fs::create_dir_all(&game_dir).at(&game_dir)?;

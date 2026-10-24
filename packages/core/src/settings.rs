@@ -42,6 +42,8 @@ impl Default for JavaSettings {
 pub struct MemorySettings {
     pub min_mib: u32,
     pub max_mib: u32,
+    /// Choose the heap and GC flags at launch (see `launch::tuning`); `min_mib` and `max_mib` are then ignored.
+    pub auto: bool,
 }
 
 impl Default for MemorySettings {
@@ -49,6 +51,7 @@ impl Default for MemorySettings {
         Self {
             min_mib: 512,
             max_mib: default_max_memory_mib(total_memory_mib()),
+            auto: false,
         }
     }
 }

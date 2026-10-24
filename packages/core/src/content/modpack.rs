@@ -1125,7 +1125,7 @@ mod tests {
         let instance = manager
             .update(&created.id, |instance| {
                 instance.notes = "remember".into();
-                instance.settings.memory = Some(MemorySettings { min_mib: 512, max_mib: 4096 });
+                instance.settings.memory = Some(MemorySettings { min_mib: 512, max_mib: 4096, auto: false });
                 instance.settings.java = Some(JavaSettings { path: Some("/opt/java".into()), ..JavaSettings::default() });
                 instance.playtime.total_secs = 500;
             })
@@ -1147,7 +1147,7 @@ mod tests {
         let ModpackSource::Instance(source) = &manifest.source else { panic!("wrong source") };
         assert_eq!(source.notes, "remember");
         assert_eq!(source.icon.as_deref(), Some("grass"));
-        assert_eq!(source.settings.memory, Some(MemorySettings { min_mib: 512, max_mib: 4096 }));
+        assert_eq!(source.settings.memory, Some(MemorySettings { min_mib: 512, max_mib: 4096, auto: false }));
         assert!(source.settings.java.as_ref().is_some_and(|java| java.path.is_none()));
         assert_eq!(source.managed_pack.as_ref().map(|pack| pack.project_id.as_str()), Some("p"));
 

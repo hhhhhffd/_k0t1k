@@ -8,6 +8,7 @@ pub mod install;
 pub mod instance;
 pub mod java;
 pub mod launch;
+pub mod mclogs;
 pub mod meta;
 pub mod paths;
 pub mod placement;

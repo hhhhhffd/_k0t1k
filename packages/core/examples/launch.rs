@@ -83,6 +83,7 @@ async fn main() -> Result<()> {
         account: Account::offline("Player"),
         env: BTreeMap::new(),
         wrapper: Vec::new(),
+        join_server: None,
     };
     let command = build_command(&paths, &profile, &assets, &options).await?;
     println!("command: {}", command.display_redacted());
