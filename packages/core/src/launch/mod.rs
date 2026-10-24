@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 use crate::error::{Error, IoContext, Result};
 use crate::install::AssetIndex;
+use crate::mclogs::mask_secrets;
 use crate::paths::Paths;
 use crate::profile::LaunchProfile;
 
@@ -66,15 +67,17 @@ pub struct LaunchCommand {
     pub args: Vec<String>,
     pub cwd: PathBuf,
     pub env: BTreeMap<String, String>,
+    /// Values to hide in logs (the access token); it also appears inside `${auth_session}`.
+    pub secrets: Vec<String>,
 }
 
 impl LaunchCommand {
-    /// The command line for logs, with the access token masked.
+    /// The command line for logs, with the value after `--accessToken` and every secret masked.
     pub fn display_redacted(&self) -> String {
         let mut parts = vec![self.program.display().to_string()];
         let mut mask_next = false;
         for arg in &self.args {
-            parts.push(if std::mem::take(&mut mask_next) { "***".to_owned() } else { arg.clone() });
+            parts.push(if std::mem::take(&mut mask_next) { "***".to_owned() } else { mask_secrets(arg, &self.secrets) });
             mask_next = arg == "--accessToken";
         }
         parts.join(" ")
@@ -239,7 +242,13 @@ pub async fn build_command(
     };
     args.extend(java_args);
 
-    Ok(LaunchCommand { program, args, cwd: options.game_dir.clone(), env: options.env.clone() })
+    Ok(LaunchCommand {
+        program,
+        args,
+        cwd: options.game_dir.clone(),
+        env: options.env.clone(),
+        secrets: vec![options.account.access_token.clone()],
+    })
 }
 
 #[cfg(test)]

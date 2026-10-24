@@ -347,10 +347,34 @@ fn parse_meminfo_total_kib(meminfo: &str) -> Option<u64> {
 
 /// Write JSON next to `path` and rename it into place, so readers never see a half-written file.
 pub(crate) fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+    write_json(path, value, false)
+}
+
+/// Like [`write_json_atomic`], but on unix the file is readable by its owner only (for tokens).
+pub(crate) fn write_json_private<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+    write_json(path, value, true)
+}
+
+fn write_json<T: Serialize>(path: &Path, value: &T, private: bool) -> Result<()> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent).at(parent)?;
     let tmp = path.with_extension("json.tmp");
-    let mut file = std::fs::File::create(&tmp).at(&tmp)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    if private {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&tmp).at(&tmp)?;
+    #[cfg(unix)]
+    if private {
+        // `mode` only applies to a new file; a temp file left by a crashed write keeps its old permissions.
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600)).at(&tmp)?;
+    }
+    #[cfg(not(unix))]
+    let _ = private;
     serde_json::to_writer_pretty(&mut file, value)?;
     file.sync_all().at(&tmp)?;
     drop(file);

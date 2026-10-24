@@ -57,7 +57,13 @@ fn redact(text: &str, secrets: &[&str]) -> String {
         rest = &value[value_len..];
     }
     out.push_str(rest);
-    for secret in secrets.iter().filter(|secret| secret.len() >= MIN_SECRET_LEN) {
+    mask_secrets(&out, secrets)
+}
+
+/// Replaces every occurrence of each secret with `***`; secrets that are too short are ignored.
+pub fn mask_secrets<S: AsRef<str>>(text: &str, secrets: &[S]) -> String {
+    let mut out = text.to_owned();
+    for secret in secrets.iter().map(AsRef::as_ref).filter(|secret| secret.len() >= MIN_SECRET_LEN) {
         out = out.replace(secret, "***");
     }
     out

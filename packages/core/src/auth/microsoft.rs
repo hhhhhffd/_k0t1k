@@ -23,6 +23,8 @@ const SLOW_DOWN_STEP: Duration = Duration::from_secs(5);
 const REFRESH_MARGIN_SECS: i64 = 5 * 60;
 
 pub const RELOGIN_MESSAGE: &str = "Сессия Microsoft истекла: войдите в аккаунт заново";
+const CLIENT_NOT_APPROVED_MESSAGE: &str = "Minecraft отказал во входе (403): идентификатор приложения лаунчера не одобрен для Minecraft API (вероятно, ошибка конфигурации сборки)";
+const NO_PROFILE_MESSAGE: &str = "У аккаунта нет Minecraft или ещё не создан профиль (ник) — зайдите на minecraft.net";
 const EXPIRED_CODE_MESSAGE: &str = "Код входа Microsoft истёк: начните вход заново";
 
 /// The code the user types at `verification_uri`.
@@ -90,10 +92,13 @@ pub async fn poll_token(http: &reqwest::Client, client_id: &str, device: &Device
             ("client_id", client_id),
             ("device_code", device.device_code.as_str()),
         ];
-        match token_request(http, &form).await? {
-            Poll::Done(tokens) => return Ok(into_tokens(tokens)),
-            Poll::Pending => {}
-            Poll::SlowDown => interval += SLOW_DOWN_STEP,
+        match token_request(http, &form).await {
+            Ok(Poll::Done(tokens)) => return Ok(into_tokens(tokens)),
+            Ok(Poll::Pending) => {}
+            Ok(Poll::SlowDown) => interval += SLOW_DOWN_STEP,
+            // A network hiccup must not end a sign-in the user is still completing; the deadline does.
+            Err(Error::Http { url, source }) => tracing::warn!("device code poll failed for {url}, retrying: {source}"),
+            Err(error) => return Err(error),
         }
     }
 }
@@ -234,8 +239,19 @@ pub async fn secrets_from_tokens(
     let xsts: XboxResponse = response.json().await.map_err(|source| http_error(XSTS_URL, source))?;
 
     let login_body = json!({ "identityToken": format!("XBL3.0 x={uhs};{}", xsts.token) });
-    let login: MinecraftLogin =
-        send_json(http.post(MINECRAFT_LOGIN_URL).json(&login_body), MINECRAFT_LOGIN_URL, "Minecraft").await?;
+    let response = http
+        .post(MINECRAFT_LOGIN_URL)
+        .json(&login_body)
+        .send()
+        .await
+        .map_err(|source| http_error(MINECRAFT_LOGIN_URL, source))?;
+    if response.status() == reqwest::StatusCode::FORBIDDEN {
+        return Err(Error::Other(CLIENT_NOT_APPROVED_MESSAGE.to_owned()));
+    }
+    if !response.status().is_success() {
+        return Err(Error::Other(format!("Minecraft вернул ошибку {}", response.status())));
+    }
+    let login: MinecraftLogin = response.json().await.map_err(|source| http_error(MINECRAFT_LOGIN_URL, source))?;
 
     let response = http
         .get(MINECRAFT_PROFILE_URL)
@@ -244,7 +260,7 @@ pub async fn secrets_from_tokens(
         .await
         .map_err(|source| http_error(MINECRAFT_PROFILE_URL, source))?;
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err(Error::Other("На этом аккаунте Microsoft нет купленной Minecraft: Java Edition".to_owned()));
+        return Err(Error::Other(NO_PROFILE_MESSAGE.to_owned()));
     }
     if !response.status().is_success() {
         return Err(Error::Other(format!("Профиль Minecraft недоступен: ошибка {}", response.status())));
@@ -269,6 +285,15 @@ fn xsts_error_message(code: u64) -> String {
         2148916238 => "Это детский аккаунт: взрослый должен добавить его в семейную группу Microsoft".to_owned(),
         _ => format!("Xbox Live отказал в доступе (XErr {code})"),
     }
+}
+
+/// Whether a refresh failure is final (the refresh token is dead or the Xbox account is unusable), as opposed
+/// to a transient one after which a still valid Minecraft token can be used.
+pub fn requires_relogin(error: &Error) -> bool {
+    let Error::Other(message) = error else { return false };
+    message == RELOGIN_MESSAGE
+        || message.starts_with("Xbox Live отказал в доступе")
+        || [2148916233, 2148916235, 2148916236, 2148916237, 2148916238].iter().any(|&code| *message == xsts_error_message(code))
 }
 
 /// Whether the Minecraft token (valid until `expires_at`, unix seconds) is too close to expiry to launch with.
@@ -298,6 +323,14 @@ mod tests {
         assert_eq!(xsts_error_message(2148916236), xsts_error_message(2148916237));
         assert!(xsts_error_message(2148916238).contains("семейн"));
         assert!(xsts_error_message(1).contains("XErr 1"));
+    }
+
+    #[test]
+    fn only_final_refresh_failures_require_a_new_sign_in() {
+        assert!(requires_relogin(&Error::Other(RELOGIN_MESSAGE.to_owned())));
+        assert!(requires_relogin(&Error::Other(xsts_error_message(2148916233))));
+        assert!(requires_relogin(&Error::Other(xsts_error_message(1))));
+        assert!(!requires_relogin(&Error::Other("Minecraft вернул ошибку 503".to_owned())));
     }
 
     #[test]

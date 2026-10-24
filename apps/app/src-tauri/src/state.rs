@@ -7,6 +7,7 @@ use k0t1k_core::auth::DeviceCode;
 use k0t1k_core::content::{Clients, curseforge};
 use k0t1k_core::instance::InstanceManager;
 use k0t1k_core::launch::GameHandle;
+use k0t1k_core::mclogs::mask_secrets;
 use k0t1k_core::paths::Paths;
 use serde::Serialize;
 use tauri::async_runtime::JoinHandle;
@@ -257,10 +258,16 @@ impl AppState {
         }
     }
 
-    /// Numbers the line and keeps it in the session's ring buffer.
+    /// Numbers the line, masks the session's secrets in it and keeps it in the session's ring buffer.
     pub fn record_log(&self, session_id: SessionId, stream: &'static str, line: &str) -> LogLine {
-        let entry = LogLine { seq: self.log_seq.fetch_add(1, Ordering::Relaxed), stream, line: line.to_owned() };
-        if let Some(log) = self.logs().sessions.get_mut(&session_id) {
+        let mut logs = self.logs();
+        let session = logs.sessions.get_mut(&session_id);
+        let line = match &session {
+            Some(log) => mask_secrets(line, &log.secrets),
+            None => line.to_owned(),
+        };
+        let entry = LogLine { seq: self.log_seq.fetch_add(1, Ordering::Relaxed), stream, line };
+        if let Some(log) = session {
             if log.lines.len() == MAX_LOG_LINES {
                 log.lines.pop_front();
             }
@@ -348,5 +355,18 @@ mod tests {
         let infos = state.sessions();
         assert_eq!(infos.iter().filter(|info| info.state == RunState::Stopped).count(), KEPT_FINISHED_SESSIONS);
         assert!(infos.iter().any(|info| info.session_id == other && info.state == RunState::Preparing));
+    }
+
+    #[test]
+    fn registered_secrets_are_masked_in_recorded_lines() {
+        let root = std::env::temp_dir().join("k0t1k-state-secret-test");
+        let location = DataLocation { root: root.clone(), exe_dir: root, source: DataDirSource::Custom };
+        let state = AppState::new(location).unwrap();
+        let (session, _) = state.reserve("inst", "Inst");
+        state.add_log_secret(session, "secret-access-token");
+        state.add_log_secret(session, "0");
+        let entry = state.record_log(session, "stdout", "(Session ID is token:secret-access-token:uuid) 0");
+        assert_eq!(entry.line, "(Session ID is token:***:uuid) 0");
+        assert_eq!(state.log_lines(session)[0].line, entry.line);
     }
 }

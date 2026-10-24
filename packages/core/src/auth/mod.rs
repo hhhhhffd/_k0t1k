@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::launch::Account as GameAccount;
 use crate::paths::Paths;
-use crate::settings::{Account, AccountKind, GlobalSettings, write_json_atomic};
+use crate::settings::{Account, AccountKind, GlobalSettings, write_json_private};
 
 pub use elyby::{ElybySecrets, Login as ElybyLogin};
 pub use microsoft::{DeviceCode, MicrosoftSecrets};
@@ -23,7 +23,7 @@ pub use microsoft::{DeviceCode, MicrosoftSecrets};
 /// Serialises read-modify-write cycles of `accounts.json` within this process.
 static UPDATE_LOCK: Mutex<()> = Mutex::new(());
 
-/// Keeps two launches from refreshing the same Microsoft token (which rotates) at once.
+/// Keeps two launches from refreshing the same Microsoft or ely.by token (which rotates) at once.
 static REFRESH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Tokens of one account.
@@ -77,7 +77,7 @@ impl SecretsFile {
         let _guard = UPDATE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut file = Self::load(paths)?;
         let result = change(&mut file);
-        write_json_atomic(&paths.accounts_file(), &file)?;
+        write_json_private(&paths.accounts_file(), &file)?;
         Ok(result)
     }
 }
@@ -95,6 +95,15 @@ pub fn save_account(paths: &Paths, secrets: Secrets) -> Result<Account> {
         settings.selected_account_id.get_or_insert_with(|| account.id.clone());
     })?;
     Ok(account)
+}
+
+/// Stores refreshed tokens of an account that is still there; a sign-out during the refresh must not bring it back.
+fn replace_secrets(paths: &Paths, account_id: &str, secrets: Secrets) -> Result<()> {
+    SecretsFile::update(paths, |file| {
+        if let Some(stored) = file.accounts.get_mut(account_id) {
+            *stored = secrets;
+        }
+    })
 }
 
 /// Removes the account and its tokens; the selection moves to the first remaining account.
@@ -201,17 +210,25 @@ async fn fresh_microsoft_secrets(
     let client_id = msa_client_id.ok_or_else(|| Error::Other(NO_MSA_CLIENT_ID.to_owned()))?;
     let refreshed = async {
         let tokens = microsoft::refresh(http, client_id, &current.refresh_token).await?;
+        if let Some(rotated) = &tokens.refresh_token {
+            // The old refresh token is spent now, so the new one is saved even if a later step fails.
+            let rotated = MicrosoftSecrets { refresh_token: rotated.clone(), ..current.clone() };
+            replace_secrets(paths, account_id, Secrets::Microsoft(rotated))?;
+        }
         microsoft::secrets_from_tokens(http, tokens, Some(&current.refresh_token)).await
     }
     .await;
     let secrets = match refreshed {
         Ok(Secrets::Microsoft(secrets)) => secrets,
         Ok(Secrets::Elyby(_)) => unreachable!("a Microsoft refresh yields Microsoft secrets"),
-        // Offline: a token that has not expired yet is still good for the launch.
-        Err(Error::Http { .. }) if current.expires_at > now => return Ok(current),
+        // A token that has not expired yet is still good for the launch, unless Microsoft says to sign in again.
+        Err(error) if current.expires_at > now && !microsoft::requires_relogin(&error) => {
+            tracing::warn!("cannot refresh the Microsoft token, using the stored one: {error}");
+            return Ok(current);
+        }
         Err(error) => return Err(error),
     };
-    SecretsFile::update(paths, |file| file.accounts.insert(account_id.to_owned(), Secrets::Microsoft(secrets.clone())))?;
+    replace_secrets(paths, account_id, Secrets::Microsoft(secrets.clone()))?;
     if secrets.name != current.name {
         GlobalSettings::update(paths, |settings| {
             if let Some(account) = settings.accounts.iter_mut().find(|account| account.id == account_id) {
@@ -223,12 +240,15 @@ async fn fresh_microsoft_secrets(
 }
 
 async fn valid_elyby_secrets(paths: &Paths, http: &reqwest::Client, account_id: &str) -> Result<ElybySecrets> {
+    // Two launches must not refresh the same token: the loser would be told to sign in again. The secrets
+    // are read after the lock is taken, so a launch that waited sees the winner's new token.
+    let _guard = REFRESH_LOCK.lock().await;
     let Secrets::Elyby(secrets) = stored_secrets(paths, account_id, elyby::RELOGIN_MESSAGE)? else {
         return Err(Error::Other(elyby::RELOGIN_MESSAGE.to_owned()));
     };
     match elyby::ensure_valid(http, &secrets).await? {
         Some(refreshed) => {
-            SecretsFile::update(paths, |file| file.accounts.insert(account_id.to_owned(), Secrets::Elyby(refreshed.clone())))?;
+            replace_secrets(paths, account_id, Secrets::Elyby(refreshed.clone()))?;
             Ok(refreshed)
         }
         None => Ok(secrets),
@@ -306,6 +326,27 @@ mod tests {
         remove_account(&paths, "ms-abc").unwrap();
         assert_eq!(GlobalSettings::load(&paths).unwrap().selected_account_id.as_deref(), Some("elyby-abc"));
         assert_eq!(SecretsFile::load(&paths).unwrap().accounts.keys().collect::<Vec<_>>(), ["elyby-abc"]);
+    }
+
+    #[test]
+    fn refreshed_tokens_do_not_resurrect_a_removed_account() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path());
+        save_account(&paths, microsoft_secrets("abc")).unwrap();
+        remove_account(&paths, "ms-abc").unwrap();
+        replace_secrets(&paths, "ms-abc", microsoft_secrets("abc")).unwrap();
+        assert!(SecretsFile::load(&paths).unwrap().accounts.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn accounts_file_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path());
+        save_account(&paths, microsoft_secrets("abc")).unwrap();
+        let mode = std::fs::metadata(paths.accounts_file()).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 
     #[tokio::test]
