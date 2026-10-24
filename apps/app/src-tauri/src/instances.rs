@@ -2,9 +2,10 @@ use k0t1k_core::component::{ComponentSpec, MINECRAFT_UID};
 use k0t1k_core::content::Loader;
 use std::collections::BTreeSet;
 
+use k0t1k_core::instance::icon::read_image;
 use k0t1k_core::instance::{BrokenInstance, CopyOptions, Instance, InstanceSettings, NewInstance, SharedFolder};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{AppError, CommandResult, blocking};
@@ -141,6 +142,28 @@ pub async fn update_instance_settings(
     })
     .await?;
     Ok(instance.into())
+}
+
+/// Custom icons are files in the instance folders and are shown through the asset protocol, whose scope is
+/// empty in config. The UI asks for the folder once at startup; it is the only place the webview may read.
+#[tauri::command]
+pub fn get_instances_dir(app: AppHandle, state: State<'_, AppState>) -> CommandResult<String> {
+    let dir = state.paths.instances_dir();
+    app.asset_protocol_scope().allow_directory(&dir, true)?;
+    Ok(dir.display().to_string())
+}
+
+#[tauri::command]
+pub async fn set_instance_icon(state: State<'_, AppState>, instance_id: String, path: String) -> CommandResult<InstanceView> {
+    let manager = state.instances.clone();
+    let instance = blocking(move || manager.set_custom_icon(&instance_id, &read_image(path.as_ref())?)).await?;
+    Ok(instance.into())
+}
+
+#[tauri::command]
+pub async fn reset_instance_icon(state: State<'_, AppState>, instance_id: String) -> CommandResult<InstanceView> {
+    let manager = state.instances.clone();
+    Ok(blocking(move || manager.reset_icon(&instance_id)).await?.into())
 }
 
 #[tauri::command]

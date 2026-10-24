@@ -12,6 +12,8 @@ use k0t1k_core::content::{
     update_modpack as update_installed_modpack,
 };
 use k0t1k_core::download::{Checksum, download_checked};
+use k0t1k_core::instance::archive::read_custom_icon;
+use k0t1k_core::instance::icon::custom_file_name;
 use k0t1k_core::instance::{Instance, ManagedPack, ManagedPlatform, NewInstance};
 use k0t1k_core::settings::MemorySettings;
 use serde::{Deserialize, Serialize};
@@ -372,10 +374,21 @@ async fn create_from_pack(
     };
     let manager = state.instances.clone();
     let recommended_ram = manifest.recommended_ram_mb;
+    let icon_zip = zip_path.clone();
     let instance = blocking(move || {
         let instance = manager.create(new)?;
         if recommended_ram.is_none() && from_zip.is_none() {
             return Ok(instance);
+        }
+        // A custom icon is a file next to instance.json in our zips; it is stored as a new icon of the instance.
+        if let Some(icon) = from_zip.as_ref().and_then(|source| source.icon.as_deref())
+            && custom_file_name(icon).is_some()
+        {
+            let stored = read_custom_icon(&icon_zip, icon)
+                .and_then(|bytes| bytes.map_or(Ok(()), |bytes| manager.set_custom_icon(&instance.id, &bytes).map(drop)));
+            if let Err(error) = stored {
+                tracing::warn!("the imported instance icon was skipped: {error}");
+            }
         }
         manager
             .update(&instance.id, |instance| {
@@ -386,7 +399,8 @@ async fn create_from_pack(
                 if let Some(source) = from_zip {
                     instance.notes = source.notes;
                     instance.settings = source.settings;
-                    if let Some(icon) = source.icon {
+                    // A custom icon was stored above; its name in the zip means nothing here.
+                    if let Some(icon) = source.icon.filter(|icon| custom_file_name(icon).is_none()) {
                         instance.icon = icon;
                     }
                 }
