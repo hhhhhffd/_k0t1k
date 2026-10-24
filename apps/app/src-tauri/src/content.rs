@@ -15,7 +15,8 @@ use k0t1k_core::download::{Checksum, download_checked};
 use k0t1k_core::instance::archive::read_custom_icon;
 use k0t1k_core::instance::icon::custom_file_name;
 use k0t1k_core::instance::{Instance, ManagedPack, ManagedPlatform, NewInstance};
-use k0t1k_core::settings::MemorySettings;
+use k0t1k_core::launch::tuning::cap_recommended_ram;
+use k0t1k_core::settings::{MemorySettings, total_memory_mib};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
@@ -392,7 +393,8 @@ async fn create_from_pack(
         }
         manager
             .update(&instance.id, |instance| {
-                if let Some(max_mib) = recommended_ram {
+                if let Some(recommended) = recommended_ram {
+                    let max_mib = cap_recommended_ram(recommended, total_memory_mib());
                     let min_mib = MemorySettings::default().min_mib.min(max_mib);
                     instance.settings.memory = Some(MemorySettings { min_mib, max_mib, auto: false });
                 }

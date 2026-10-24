@@ -186,11 +186,11 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
   of `launch_instance` (the "Играть" button of the servers tab; wins). `LaunchOptions.join_server` becomes
   `--quickPlayMultiplayer host:port` when the profile has the `feature:is_quick_play_multiplayer` trait (1.20+),
   else `--server host --port port`; the port defaults to 25565.
-- Tuning: `MemorySettings.auto` (default false, global or per-instance override). At launch `core::launch::tuning::tune`
-  picks the heap from total RAM, the number of enabled `mods/*.jar` and whether a loader component exists:
-  2048 MiB vanilla; 3072 + 40 per mod over 50 with a loader; capped at 8192 and at RAM minus 3072 (never below 1024);
-  min heap = half of max (at least 512). G1 flags (Aikar subset valid for Java 8-21+) are added unless the JVM
-  arguments already contain a `-XX:+Use...GC`. The choice is written to the session log ("Автоподбор: ...").
+- Tuning: `MemorySettings.auto` (default false, global or per-instance override) follows Prism Launcher: at launch
+  `core::launch::tuning::tune` gives 4096 MiB, or two thirds of the RAM below 6 GiB (`default_max_memory_mib`, Prism's
+  `defaultMaxJvmMem`; Mojang's launcher also defaults to 4 GiB), with a 512 MiB minimum, and adds no GC flags (Java 17+
+  uses G1 by default). The choice is written to the session log. A CurseForge pack's `recommendedRam` is applied at
+  import as an instance memory override, capped at 90% of the RAM (`cap_recommended_ram`, as in Prism).
 
 ## Later (ideas already accounted for)
 

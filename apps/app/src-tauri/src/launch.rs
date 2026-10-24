@@ -13,7 +13,7 @@ use k0t1k_core::instance::servers::{pull_shared, push_shared};
 use k0t1k_core::instance::{EffectiveSettings, Instance, SharedFolder};
 use k0t1k_core::java::ensure_java;
 use k0t1k_core::launch::crash::find_crash_report;
-use k0t1k_core::launch::tuning::{count_mods, has_mod_loader, tune};
+use k0t1k_core::launch::tuning::tune;
 use k0t1k_core::launch::{LaunchCommand, LaunchOptions, LogFn, LogStream, WindowSize, build_command, spawn_game};
 use k0t1k_core::profile::LaunchProfile;
 use k0t1k_core::progress::ProgressFn;
@@ -456,15 +456,10 @@ async fn prepare(
         run_hook("pre-launch", &settings.commands.pre_launch, &game_dir).await?;
     }
 
-    let mut extra_jvm_args = cmdline::split(&settings.jvm_args)?;
+    let extra_jvm_args = cmdline::split(&settings.jvm_args)?;
     let (min_memory_mb, max_memory_mb) = if settings.memory.auto {
-        let mods = count_mods(&game_dir.join("mods"));
-        let modded = has_mod_loader(&instance.components);
-        let tuning = tune(total_memory_mib(), modded, mods, &extra_jvm_args);
-        let gc = if tuning.gc_args.is_empty() { "сборщик мусора задан вручную" } else { "GC: G1" };
-        let kind = if modded { format!("с загрузчиком, модов: {mods}") } else { "без загрузчика".to_owned() };
-        log.line("launcher", &format!("Автоподбор: память {}-{} МиБ ({kind}), {gc}", tuning.min_mib, tuning.max_mib));
-        extra_jvm_args.extend(tuning.gc_args);
+        let tuning = tune(total_memory_mib());
+        log.line("launcher", &format!("Автоподбор памяти (как в Prism): {}-{} МиБ", tuning.min_mib, tuning.max_mib));
         (tuning.min_mib, tuning.max_mib)
     } else {
         (settings.memory.min_mib, settings.memory.max_mib)
