@@ -1,4 +1,4 @@
-//! Global settings, accounts and system information.
+//! Global settings, offline accounts and system information (premium accounts: `accounts`).
 
 use k0t1k_core::instance::SharedFolder;
 use k0t1k_core::launch::offline_uuid;
@@ -144,19 +144,11 @@ pub async fn add_offline_account(state: State<'_, AppState>, name: String) -> Co
     .await?
 }
 
+/// Removes an account of any kind together with its stored tokens.
 #[tauri::command]
-pub async fn remove_offline_account(state: State<'_, AppState>, account_id: String) -> CommandResult<()> {
+pub async fn remove_account(state: State<'_, AppState>, account_id: String) -> CommandResult<()> {
     let paths = state.paths.clone();
-    blocking(move || {
-        GlobalSettings::update(&paths, |settings| {
-            settings.accounts.retain(|account| account.id != account_id);
-            if settings.selected_account().is_none() {
-                settings.selected_account_id = settings.accounts.first().map(|account| account.id.clone());
-            }
-        })
-        .map(|_| ())
-    })
-    .await
+    blocking(move || k0t1k_core::auth::remove_account(&paths, &account_id)).await
 }
 
 #[tauri::command]

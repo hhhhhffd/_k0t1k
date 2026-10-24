@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::{DateTime, Utc};
+use k0t1k_core::auth::DeviceCode;
 use k0t1k_core::content::{Clients, curseforge};
 use k0t1k_core::instance::InstanceManager;
 use k0t1k_core::launch::GameHandle;
@@ -17,6 +18,9 @@ use crate::events::{LogLine, RunState};
 
 /// Baked in by build.rs from the environment or `.env`; absent in builds without a key.
 const CURSEFORGE_API_KEY: Option<&str> = option_env!("K0T1K_CURSEFORGE_API_KEY");
+
+/// Azure application id for Microsoft sign-in, baked in by build.rs; absent in builds without one.
+pub const MSA_CLIENT_ID: Option<&str> = option_env!("K0T1K_MSA_CLIENT_ID");
 
 /// Lines of one session's log kept for a window that is opened later; matches the UI's own cap.
 pub const MAX_LOG_LINES: usize = 5000;
@@ -73,6 +77,13 @@ pub struct SessionInfo {
     pub started_at: DateTime<Utc>,
 }
 
+/// A Microsoft sign-in waiting for the user to enter the device code.
+pub struct MicrosoftLogin {
+    pub device: DeviceCode,
+    /// Becomes `true` when the sign-in is cancelled.
+    pub cancel: watch::Sender<bool>,
+}
+
 /// A background install of an instance's game files.
 pub struct GameInstall {
     pub title: String,
@@ -99,6 +110,8 @@ pub struct AppState {
     /// Held while game files and Java are installed: concurrent installs would write the same
     /// files, and a launch must wait for a background install of its own game instead of racing it.
     pub install_lock: Arc<tokio::sync::Mutex<()>>,
+    /// The pending Microsoft sign-in, if any (one at a time).
+    pub microsoft_login: Arc<Mutex<Option<MicrosoftLogin>>>,
 }
 
 impl AppState {
@@ -119,6 +132,7 @@ impl AppState {
             log_seq: Arc::default(),
             window_released: Arc::default(),
             install_lock: Arc::default(),
+            microsoft_login: Arc::default(),
         })
     }
 
