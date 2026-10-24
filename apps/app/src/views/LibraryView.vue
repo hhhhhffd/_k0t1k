@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronRight, Copy, FileArchive, Flame, FolderOpen, Package, Pencil, Play, Puzzle, RefreshCw, Square, Tag, TextCursorInput, Trash2, Upload } from '@lucide/vue'
+import { ChevronDown, ChevronRight, Copy, Loader, FileArchive, Flame, FolderOpen, Package, Pencil, Play, Puzzle, RefreshCw, Square, Tag, TextCursorInput, Trash2, Upload } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { openInstanceFolder } from '../api/commands'
@@ -47,8 +47,16 @@ const sections = computed(() => {
     map.set(key, [...(map.get(key) ?? []), inst])
   }
   for (const items of map.values()) items.sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  for (const p of store.pending) if (!map.has(p.group ?? UNGROUPED)) map.set(p.group ?? UNGROUPED, [])
   return [...map.entries()].sort(([a], [b]) => (a === UNGROUPED ? -1 : b === UNGROUPED ? 1 : a.localeCompare(b, 'ru')))
 })
+
+const pendingIn = (group: string) => store.pending.filter((p) => (p.group ?? UNGROUPED) === group)
+/** Background download of the game files of an instance (after creating it or changing its versions). */
+function downloadOf(inst: Instance) {
+  const task = tasks.tasks.find((e) => e.task === `game:${inst.id}` && !e.finished && !e.error)
+  return task ? { percent: task.total ? Math.round((task.done / task.total) * 100) : 0, stage: task.stage } : null
+}
 
 function toggle(group: string) {
   const next = new Set(collapsed.value)
@@ -163,7 +171,7 @@ const { dragging } = useFileDrop(async (paths) => {
 <template>
   <div class="flex h-full min-h-0" :class="layout.panel === 'left' ? 'flex-row-reverse' : ''" @pointerdown.capture="rememberPointer">
     <div class="min-w-0 flex-1 overflow-y-auto px-3 py-2" @click.self="layout.selectedId = null">
-      <div v-if="store.loaded && !store.instances.length" class="flex flex-col items-center gap-3 py-24 text-center">
+      <div v-if="store.loaded && !store.instances.length && !store.pending.length" class="flex flex-col items-center gap-3 py-24 text-center">
         <img :src="mascot" alt="" class="pixelated anim-bob size-24 opacity-90" />
         <p class="text-[16px] font-semibold">{{ t.library.empty }}</p>
         <p class="text-muted">{{ t.library.emptyHint }}</p>
@@ -180,7 +188,7 @@ const { dragging } = useFileDrop(async (paths) => {
         <button class="flex w-full items-center gap-1.5 px-1 py-1.5 text-faint hover:text-fg" :aria-expanded="!collapsed.has(group)" @click="toggle(group)">
           <component :is="collapsed.has(group) ? ChevronRight : ChevronDown" :size="15" />
           <span class="text-[12.5px] font-semibold">{{ group || t.library.ungrouped }}</span>
-          <span class="text-[11px]">{{ items.length }}</span>
+          <span class="text-[11px]">{{ items.length + pendingIn(group).length }}</span>
           <span class="ml-1 h-px flex-1 bg-line" />
         </button>
         <div v-if="!collapsed.has(group)" class="flex flex-wrap gap-1 px-1 pb-2">
@@ -209,6 +217,20 @@ const { dragging } = useFileDrop(async (paths) => {
               />
             </span>
             <span class="line-clamp-2 w-full rounded px-1 text-center text-[12.5px] leading-tight break-words">{{ inst.name }}</span>
+            <span v-if="downloadOf(inst)" class="h-1 w-16 overflow-hidden rounded-full bg-raised" :title="`${t.library.downloading}: ${downloadOf(inst)!.stage}`">
+              <span class="block h-full bg-accent transition-[width]" :style="{ width: `${downloadOf(inst)!.percent}%` }" />
+            </span>
+          </div>
+          <div
+            v-for="p in pendingIn(group)"
+            :key="`pending-${p.key}`"
+            class="flex w-[104px] flex-col items-center gap-1.5 rounded-lg p-2 opacity-80"
+            :title="t.library.creating"
+            aria-busy="true"
+          >
+            <span class="pix flex size-[52px] items-center justify-center bg-raised"><Loader :size="22" class="animate-spin text-accent" /></span>
+            <span class="line-clamp-2 w-full px-1 text-center text-[12.5px] leading-tight break-words">{{ p.name }}</span>
+            <span class="text-[11px] text-faint">{{ t.library.creating }}</span>
           </div>
         </div>
       </section>

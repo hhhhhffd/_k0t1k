@@ -6,7 +6,7 @@ export type PackPlatform = 'modrinth' | 'curseForge' | 'ftb'
 /** What the new-instance dialog installs when OK is pressed on a pack page. */
 export interface PackChoice {
   title: string
-  install: (name: string) => Promise<Instance | undefined>
+  install: (name: string, group: string) => Promise<Instance | undefined>
 }
 </script>
 
@@ -41,7 +41,7 @@ interface PackVersion {
   id: string
   label: string
   hint: string
-  install: (name: string) => Promise<Instance | undefined>
+  install: (name: string, group: string) => Promise<Instance | undefined>
 }
 
 const PAGE = 30
@@ -67,7 +67,7 @@ function versionOfProject(v: ProjectVersion): PackVersion {
     id: v.id,
     label: v.versionNumber || v.name,
     hint: [releaseLabel[v.releaseType], v.gameVersions[0], v.loaders.map((l) => LOADER_LABELS[l]).join('/')].filter(Boolean).join(' · '),
-    install: (name) => tasks.guard(() => store.installModpack(v, name)),
+    install: (name, group) => tasks.guard(() => store.installModpack(v, name, group)),
   }
 }
 function versionOfFtb(packId: number, v: FtbVersion): PackVersion {
@@ -75,7 +75,7 @@ function versionOfFtb(packId: number, v: FtbVersion): PackVersion {
     id: String(v.id),
     label: v.name,
     hint: [releaseLabel[v.type] ?? v.type, v.minecraftVersion, v.loader ? LOADER_LABELS[v.loader.id] : ''].filter(Boolean).join(' · '),
-    install: (name) => tasks.guard(() => store.installFtbPack(packId, v.id, name)),
+    install: (name, group) => tasks.guard(() => store.installFtbPack(packId, v.id, name, group)),
   }
 }
 

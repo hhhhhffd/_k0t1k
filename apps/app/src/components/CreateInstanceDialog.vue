@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { Box, Flame, FolderInput, Hammer, Leaf } from '@lucide/vue'
+import { FolderInput } from '@lucide/vue'
+import curseforgeLogo from '../assets/brands/curseforge.svg'
+import ftbLogo from '../assets/brands/ftb.svg'
+import modrinthLogo from '../assets/brands/modrinth.svg'
 import { computed, ref } from 'vue'
 import { isTauri } from '../api/commands'
 import type { Instance, LoaderId } from '../api/types'
@@ -21,12 +24,13 @@ const tasks = useTasksStore()
 const layout = useLayoutStore()
 
 type Page = 'custom' | 'import' | 'modrinth' | 'curseForge' | 'ftb'
-const pages: { id: Page; icon: typeof Box; color: string }[] = [
-  { id: 'custom', icon: Box, color: 'text-ok' },
-  { id: 'import', icon: FolderInput, color: 'text-warn' },
-  { id: 'modrinth', icon: Leaf, color: 'text-ok' },
-  { id: 'curseForge', icon: Flame, color: 'text-warn' },
-  { id: 'ftb', icon: Hammer, color: 'text-danger' },
+/** Each page shows its platform's own logo; the import page a folder like Prism's. */
+const pages: { id: Page; logo?: string }[] = [
+  { id: 'custom', logo: INSTANCE_ICONS.grass },
+  { id: 'import' },
+  { id: 'modrinth', logo: modrinthLogo },
+  { id: 'curseForge', logo: curseforgeLogo },
+  { id: 'ftb', logo: ftbLogo },
 ]
 const page = ref<Page>('custom')
 
@@ -70,12 +74,10 @@ async function browseFile() {
   if (typeof path === 'string') source.value = path
 }
 
-/** Runs in the background after the dialog closes: modpacks can take minutes to download. */
-async function finish(work: Promise<Instance | undefined>, groupName: string) {
+/** Runs in the background after the dialog closes (modpacks can take minutes); a placeholder tile shows meanwhile. */
+async function finish(work: Promise<Instance | undefined>) {
   const created = await work
-  if (!created) return
-  layout.selectedId = created.id
-  if (groupName) await tasks.guard(() => store.setGroup(created.id, groupName))
+  if (created) layout.selectedId = created.id
 }
 
 function create() {
@@ -94,12 +96,14 @@ function create() {
     work = tasks.guard(() => store.create(request))
   } else if (page.value === 'import') {
     const src = source.value.trim()
-    work = tasks.guard(() => (isUrl(src) ? store.importModpackUrl(src, finalName || undefined) : store.importModpack(src, finalName || undefined)))
+    work = tasks.guard(() =>
+      isUrl(src) ? store.importModpackUrl(src, finalName || undefined, groupName) : store.importModpack(src, finalName || undefined, groupName),
+    )
   } else {
-    work = packChoice.value!.install(finalName)
+    work = packChoice.value!.install(finalName, groupName)
   }
   emit('close')
-  void finish(work, page.value === 'custom' ? '' : groupName)
+  void finish(work)
 }
 </script>
 
@@ -112,7 +116,7 @@ function create() {
         </button>
         <template v-if="iconsOpen">
           <div class="fixed inset-0 z-10" @mousedown="iconsOpen = false" />
-          <div class="card anim-pop absolute top-full left-0 z-20 mt-1 grid w-max grid-cols-6 gap-1 p-2 shadow-[var(--shadow-pop)]">
+          <div class="card anim-pop absolute top-full left-0 z-20 mt-1 grid w-max grid-cols-7 gap-1 p-2 shadow-[var(--shadow-pop)]">
             <button
               v-for="key in Object.keys(INSTANCE_ICONS)"
               :key="key"
@@ -147,17 +151,18 @@ function create() {
           :class="page === p.id ? 'tool-active text-accent' : ''"
           @click="switchPage(p.id)"
         >
-          <component :is="p.icon" :size="16" :class="page === p.id ? '' : p.color" />
+          <img v-if="p.logo" :src="p.logo" alt="" class="pixelated size-[18px] object-contain" />
+          <FolderInput v-else :size="18" class="text-warn" />
           {{ t.create.pages[p.id] }}
         </button>
       </nav>
 
-      <section class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
+      <section class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
         <h3 class="shrink-0 text-[15px] font-semibold">{{ t.create.pages[page] }}</h3>
 
         <template v-if="page === 'custom'">
-          <div class="flex min-h-0 flex-[3] flex-col"><McVersionList v-model="mcVersion" /></div>
-          <div class="flex min-h-0 flex-[2] flex-col border-t border-line pt-3">
+          <div class="flex min-h-[250px] flex-[3] flex-col"><McVersionList v-model="mcVersion" /></div>
+          <div class="flex min-h-[240px] flex-[2] flex-col border-t border-line pt-3">
             <LoaderPicker v-model:loader="loader" v-model:loader-version="loaderVersion" :mc-version="mcVersion" />
           </div>
         </template>

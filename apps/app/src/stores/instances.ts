@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref, shallowReactive } from 'vue'
 import * as api from '../api/commands'
-import type { GameCrashed, GameLogBatch, GameLogLine, Instance, InstanceRunState, ModpackImport, RunSession, RunState, SessionId } from '../api/types'
+import type { GameCrashed, GameLogBatch, GameLogLine, Instance, InstanceRunState, ModpackImport, ProjectVersion, RunSession, RunState, SessionId } from '../api/types'
 import { t } from '../i18n/ru'
 import { useTasksStore } from './tasks'
+import { baseName } from '../utils/useFileDrop'
 
 export const MAX_LOG_LINES = 5000
 const LOG_FLUSH_MS = 100
@@ -18,6 +19,12 @@ interface LogBuffer {
   dropped: number
 }
 const EMPTY_LOG: LogBuffer = { lines: [], dropped: 0 }
+
+export interface PendingInstance {
+  key: number
+  name: string
+  group: string | null
+}
 
 export const useInstancesStore = defineStore('instances', () => {
   const tasks = useTasksStore()
@@ -80,17 +87,40 @@ export const useInstancesStore = defineStore('instances', () => {
     await api.deleteInstance(id)
     instances.value = instances.value.filter((i) => i.id !== id)
   }
-  function upsertImport(result: ModpackImport) {
+  /** Instances being created from a pack or file; shown as placeholder tiles until they exist. */
+  const pending = ref<PendingInstance[]>([])
+  let pendingSeq = 0
+  /**
+   * Imports or installs a pack in the background. The group is set before the instance appears,
+   * so its tile shows up once, in the right place.
+   */
+  async function createFromPack(info: Omit<PendingInstance, 'key'>, run: () => Promise<ModpackImport>) {
+    const key = ++pendingSeq
+    pending.value.push({ key, ...info })
+    try {
+      const result = await run()
+      let inst = result.instance
+      if (info.group && inst.group !== info.group) inst = await api.setInstanceGroup(inst.id, info.group)
+      tasks.showBlocked(result.blocked, inst.id)
+      return upsert(inst)
+    } finally {
+      pending.value = pending.value.filter((p) => p.key !== key)
+    }
+  }
+  const importModpack = (path: string, name?: string, group?: string) =>
+    createFromPack({ name: name || baseName(path).replace(/\.(mrpack|zip)$/i, ''), group: group ?? null }, () => api.importModpackFile(path, name))
+  const importModpackUrl = (url: string, name?: string, group?: string) =>
+    createFromPack({ name: name || url, group: group ?? null }, () => api.importModpackUrl(url, name))
+  const installModpack = (version: ProjectVersion, name: string, group?: string) =>
+    createFromPack({ name: name || version.name, group: group ?? null }, () => api.installModpackVersion(version, name || undefined))
+  const installFtbPack = (packId: number, versionId: number, name: string, group?: string) =>
+    createFromPack({ name, group: group ?? null }, () => api.installFtbPack(packId, versionId, name || undefined))
+
+  async function updateModpack(instanceId: string, versionId: string) {
+    const result = await api.updateModpack(instanceId, versionId)
     tasks.showBlocked(result.blocked, result.instance.id)
     return upsert(result.instance)
   }
-  const importModpack = async (path: string, name?: string) => upsertImport(await api.importModpackFile(path, name))
-  const importModpackUrl = async (url: string, name?: string) => upsertImport(await api.importModpackUrl(url, name))
-  const installFtbPack = async (...args: Parameters<typeof api.installFtbPack>) => upsertImport(await api.installFtbPack(...args))
-  const installModpack = async (...args: Parameters<typeof api.installModpackVersion>) =>
-    upsertImport(await api.installModpackVersion(...args))
-
-  const updateModpack = async (instanceId: string, versionId: string) => upsertImport(await api.updateModpack(instanceId, versionId))
 
   async function launch(id: string, accountId?: string, server?: string) {
     const alreadyRunning = liveSessionsOf(id).length > 0
@@ -202,7 +232,7 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   return {
-    instances, loaded, crashes, instancesDir, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setIcon, resetIcon, setGroup,
+    instances, pending, loaded, crashes, instancesDir, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setIcon, resetIcon, setGroup,
     updateSettings, changeVersions, remove, importModpack, importModpackUrl, installFtbPack, installModpack, updateModpack, launch, kill, killSession, dismissCrash, clearLog, init,
   }
 })

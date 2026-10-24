@@ -131,6 +131,7 @@ import type {
   PackExportReport,
   CreateInstanceRequest,
   FtbPack,
+  ManagedJavaUsage,
   FtbVersion,
   GameLogBatch,
   GameCrashed,
@@ -250,6 +251,8 @@ export const listLoaderVersions = (minecraftVersion: string, loader: LoaderId) =
 // ---- java ----
 export const detectJava = () => call<JavaInstall[]>('detect_java')
 export const listManagedJava = () => call<JavaInstall[]>('list_managed_java')
+export const listManagedJavaUsage = () => call<ManagedJavaUsage[]>('list_managed_java_usage')
+export const deleteManagedJava = (dir: string) => call<void>('delete_managed_java', { dir })
 
 // ---- settings / system ----
 export const getSettings = () => call<GlobalSettings>('get_settings')

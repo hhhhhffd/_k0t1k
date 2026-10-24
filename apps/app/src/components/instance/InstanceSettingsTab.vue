@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { computed, reactive, ref } from 'vue'
-import { isTauri } from '../../api/commands'
-import { type Instance, type InstanceSettings, SHARED_FOLDERS, type SharedFolder } from '../../api/types'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { detectJava, isTauri, listManagedJava } from '../../api/commands'
+import { type Instance, type InstanceSettings, type JavaInstall, SHARED_FOLDERS, type SharedFolder } from '../../api/types'
 import { t } from '../../i18n/ru'
 import { useInstancesStore } from '../../stores/instances'
 import { useSettingsStore } from '../../stores/settings'
@@ -13,6 +13,7 @@ import MemoryFields from '../fields/MemoryFields.vue'
 import OverrideBlock from '../fields/OverrideBlock.vue'
 import WindowFields from '../fields/WindowFields.vue'
 import InstanceIcon, { INSTANCE_ICONS } from '../InstanceIcon.vue'
+import SelectMenu from '../SelectMenu.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
 const props = defineProps<{ instance: Instance }>()
@@ -35,6 +36,22 @@ function setShared(folder: SharedFolder, on: boolean) {
 }
 const dirty = ref(false)
 const markDirty = () => (dirty.value = true)
+
+// Java the launcher downloaded plus installations found on the system, offered as quick choices for the override.
+const javaInstalls = ref<JavaInstall[]>([])
+onMounted(async () => {
+  const [managed, detected] = await Promise.all([tasks.guard(listManagedJava), tasks.guard(detectJava)])
+  const seen = new Set<string>()
+  javaInstalls.value = [...(managed ?? []), ...(detected ?? [])].filter((j) => !seen.has(j.path) && seen.add(j.path))
+})
+const javaOptions = computed(() =>
+  javaInstalls.value.map((j) => ({ value: j.path, label: `Java ${j.major} — ${j.vendor} ${j.version}`, hint: j.path })),
+)
+function chooseJava(path: string) {
+  if (!draft.settings.java) return
+  draft.settings.java.path = path
+  markDirty()
+}
 
 async function pickJava() {
   if (!isTauri || !draft.settings.java) return
@@ -159,6 +176,16 @@ async function save() {
             />
             <button class="btn" :disabled="disabled" @click="pickJava">{{ t.iset.browse }}</button>
           </div>
+          <SelectMenu
+            v-if="javaOptions.length"
+            class="mt-2"
+            :model-value="javaView.path ?? ''"
+            :options="javaOptions"
+            :disabled="disabled"
+            :placeholder="t.iset.javaPickInstalled"
+            :aria-label="t.iset.javaPickInstalled"
+            @update:model-value="chooseJava"
+          />
         </template>
       </OverrideBlock>
 

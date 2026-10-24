@@ -1,25 +1,28 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { AppWindow, Check, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
+import { AppWindow, Check, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createShortcuts, detectJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, openDataDir, openSharedFolder, setDataDir, uninstall } from '../api/commands'
-import { type JavaInstall, SHARED_FOLDERS, type SharedFolder, type SystemInfo, type UninstallPlan } from '../api/types'
+import { createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openSharedFolder, setDataDir, uninstall } from '../api/commands'
+import { type JavaInstall, type ManagedJavaUsage, SHARED_FOLDERS, type SharedFolder, type SystemInfo, type UninstallPlan } from '../api/types'
 import mascot from '../assets/mascot.png'
 import CommandFields from '../components/fields/CommandFields.vue'
 import MemoryFields from '../components/fields/MemoryFields.vue'
 import WindowFields from '../components/fields/WindowFields.vue'
 import AccountLoginDialog from '../components/AccountLoginDialog.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import ThemeEditor from '../components/ThemeEditor.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n/ru'
+import { useInstancesStore } from '../stores/instances'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
 import { THEMES, themeVars } from '../utils/theme'
 
 const store = useSettingsStore()
 const tasks = useTasksStore()
+const instances = useInstancesStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -63,9 +66,9 @@ watch(
 )
 
 const system = ref<SystemInfo | null>(null)
-const detected = ref<JavaInstall[]>([])
 const managed = ref<JavaInstall[]>([])
-const scanning = ref(false)
+const javaUsage = ref<ManagedJavaUsage[]>([])
+const javaToDelete = ref<{ install: JavaInstall; usage: ManagedJavaUsage } | null>(null)
 const newName = ref('')
 const loginKind = ref<'microsoft' | 'elyby' | null>(null)
 const restartNeeded = ref(false)
@@ -80,16 +83,39 @@ const themeTiles = computed(() => [
 const onGameLaunchOptions = Object.entries(t.settings.onGameLaunchOptions).map(([value, label]) => ({ value, label }))
 const onCloseOptions = Object.entries(t.settings.onCloseOptions).map(([value, label]) => ({ value, label }))
 
-async function rescan() {
-  scanning.value = true
-  detected.value = (await tasks.guard(detectJava)) ?? []
-  scanning.value = false
+/** The two settings only make sense together, so the page shows them as one switch. */
+const autoJava = computed({
+  get: () => !!s.value && s.value.java.autoSelect && s.value.java.autoDownload,
+  set: (on: boolean) => {
+    if (!s.value) return
+    s.value.java.autoSelect = on
+    s.value.java.autoDownload = on
+  },
+})
+const usageOf = (j: JavaInstall) => javaUsage.value.find((u) => u.path === j.path)
+const instanceNames = (ids: string[]) => ids.map((id) => instances.byId(id)?.name ?? id).join(', ')
+
+async function loadManagedJava() {
+  managed.value = (await tasks.guard(listManagedJava)) ?? []
+  javaUsage.value = (await tasks.guard(listManagedJavaUsage)) ?? []
+}
+/** A runtime nobody needs goes at once; one that some instance needs is deleted only after asking. */
+async function removeJava(install: JavaInstall) {
+  const usage = usageOf(install)
+  if (!usage) return
+  if (usage.usedBy.length) javaToDelete.value = { install, usage }
+  else await deleteJava(usage)
+}
+async function deleteJava(usage: ManagedJavaUsage) {
+  javaToDelete.value = null
+  const done = await tasks.guard(() => deleteManagedJava(usage.dir).then(() => true))
+  if (done) tasks.toast(t.settings.javaDeleted, 'ok')
+  await loadManagedJava()
 }
 
 onMounted(async () => {
   system.value = (await tasks.guard(getSystemInfo)) ?? null
-  managed.value = (await tasks.guard(listManagedJava)) ?? []
-  await rescan()
+  await loadManagedJava()
 })
 
 // Autosave: every edit of the settings object is persisted after a short pause.
@@ -158,50 +184,49 @@ async function addAccount() {
       <h2 class="text-[17px] font-bold">{{ t.settings.sections[section] }}</h2>
 
       <template v-if="section === 'java'">
-        <section class="card flex flex-col gap-4 p-4">
+        <section class="card flex flex-col gap-3 p-4">
+          <p class="text-muted">{{ t.settings.javaIntro }}</p>
           <label class="flex items-center gap-3">
-            <ToggleSwitch v-model="s.java.autoSelect" :label="t.settings.autoSelect" />
-            <span><span class="block font-medium">{{ t.settings.autoSelect }}</span><span class="text-[12px] text-faint">{{ t.settings.autoSelectHint }}</span></span>
+            <ToggleSwitch v-model="autoJava" :label="t.settings.autoJava" />
+            <span><span class="block font-medium">{{ t.settings.autoJava }}</span><span class="text-[12px] text-faint">{{ t.settings.autoJavaHint }}</span></span>
           </label>
-          <label class="flex items-center gap-3">
-            <ToggleSwitch v-model="s.java.autoDownload" :label="t.settings.autoDownload" />
-            <span><span class="block font-medium">{{ t.settings.autoDownload }}</span><span class="text-[12px] text-faint">{{ t.settings.autoDownloadHint }}</span></span>
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="label">{{ t.settings.javaPath }}</span>
-            <input :value="s.java.path ?? ''" class="input font-mono" placeholder="C:\Program Files\Java\...\javaw.exe" @input="s.java.path = ($event.target as HTMLInputElement).value || null" />
-          </label>
-        </section>
-        <section class="card p-4">
-          <div class="mb-2 flex items-center justify-between">
-            <h3 class="section-title">{{ t.settings.detected }}</h3>
-            <button class="btn h-7" :disabled="scanning" @click="rescan"><RefreshCw :size="14" :class="scanning ? 'animate-spin' : ''" />{{ scanning ? t.settings.scanning : t.settings.rescan }}</button>
+          <div v-if="s.java.path" class="flex items-center gap-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] text-warn">
+            <span class="min-w-0 flex-1">{{ t.settings.globalJavaForced }} <span class="font-mono break-all">{{ s.java.path }}</span></span>
+            <button class="btn h-7 shrink-0" @click="s.java.path = null"><RotateCcw :size="14" />{{ t.settings.resetJava }}</button>
           </div>
-          <ul class="flex flex-col gap-1.5">
-            <li v-for="j in detected" :key="j.path" class="flex items-center gap-3 rounded-lg bg-raised px-3 py-2">
-              <span class="badge badge-accent">Java {{ j.major }}</span>
-              <div class="min-w-0 flex-1">
-                <div class="font-medium">{{ j.vendor }} {{ j.version }} <span class="text-faint">· {{ j.arch }}</span></div>
-                <div class="truncate font-mono text-[11.5px] text-faint">{{ j.path }}</div>
-              </div>
-              <button class="btn h-7" :disabled="s.java.path === j.path" @click="s.java.path = j.path"><Check v-if="s.java.path === j.path" :size="14" />{{ t.settings.use }}</button>
-            </li>
-            <li v-if="!detected.length && !scanning" class="text-faint">{{ t.common.nothingFound }}</li>
-          </ul>
+          <p class="text-[12px] text-faint">{{ t.settings.javaPerInstance }}</p>
         </section>
         <section class="card p-4">
           <h3 class="section-title mb-2">{{ t.settings.managed }}</h3>
           <ul class="flex flex-col gap-1.5">
             <li v-for="j in managed" :key="j.path" class="flex items-center gap-3 rounded-lg bg-raised px-3 py-2">
-              <span class="badge">Java {{ j.major }}</span>
+              <span class="badge badge-accent">Java {{ j.major }}</span>
               <div class="min-w-0 flex-1">
                 <div class="font-medium">{{ j.vendor }} {{ j.version }}</div>
-                <div class="truncate font-mono text-[11.5px] text-faint">{{ j.path }}</div>
+                <div class="truncate text-[12px]" :class="usageOf(j)?.usedBy.length ? 'text-muted' : 'text-faint'">
+                  {{ usageOf(j)?.usedBy.length ? t.settings.javaUsedBy(instanceNames(usageOf(j)!.usedBy)) : t.settings.javaUnused }}
+                </div>
               </div>
+              <button
+                class="btn btn-ghost btn-icon shrink-0 text-danger"
+                :disabled="!usageOf(j) || usageOf(j)!.running"
+                :title="usageOf(j)?.running ? t.settings.javaRunning : t.common.delete"
+                :aria-label="t.common.delete"
+                @click="removeJava(j)"
+              >
+                <Trash2 :size="15" />
+              </button>
             </li>
-            <li v-if="!managed.length" class="text-faint">{{ t.common.none }}</li>
+            <li v-if="!managed.length" class="text-faint">{{ t.settings.noManagedJava }}</li>
           </ul>
         </section>
+        <ConfirmDialog
+          v-if="javaToDelete"
+          :title="t.settings.deleteJavaTitle(javaToDelete.install.major)"
+          :text="t.settings.deleteJavaText(instanceNames(javaToDelete.usage.usedBy))"
+          @confirm="deleteJava(javaToDelete.usage)"
+          @close="javaToDelete = null"
+        />
       </template>
 
       <section v-else-if="section === 'memory'" class="card p-4"><MemoryFields v-model="s.memory" :total-ram-mib="system?.totalRamMib" /></section>

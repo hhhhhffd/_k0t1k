@@ -14,6 +14,7 @@ import type {
   PackExportReport,
   CreateInstanceRequest,
   FtbPack,
+  ManagedJavaUsage,
   FtbVersion,
   GameLogBatch,
   GameLogLine,
@@ -198,7 +199,7 @@ const instances: Instance[] = [
 ]
 const findInstance = (id: unknown): Instance => {
   const inst = instances.find((i) => i.id === id)
-  if (!inst) throw new Error(`Инстанс не найден: ${String(id)}`)
+  if (!inst) throw new Error(`Экземпляр не найден: ${String(id)}`)
   return inst
 }
 
@@ -607,6 +608,16 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'list_loader_versions': { await sleep(250); return loaderVersions(a.minecraftVersion as string, a.loader as LoaderId) }
     case 'detect_java': await sleep(400); return javaInstalls
     case 'list_managed_java': return managedJava
+    case 'list_managed_java_usage':
+      return managedJava.map((j): ManagedJavaUsage => ({
+        path: j.path, dir: j.path.replace(/\\bin\\javaw\.exe$/, ''), major: j.major, running: false,
+        usedBy: instances.filter((i) => (j.major === 21) === /^1\.(2[1-9]|20\.[5-9])/.test(i.components[0]!.version) && j.major !== 17).map((i) => i.id),
+      }))
+    case 'delete_managed_java': {
+      const at = managedJava.findIndex((j) => j.path.startsWith(a.dir as string))
+      if (at >= 0) managedJava.splice(at, 1)
+      return undefined
+    }
     case 'get_settings': return clone(settings)
     case 'save_settings': settings = clone(a.settings as GlobalSettings); persistSettings(); return undefined
     case 'get_system_info':
@@ -854,7 +865,7 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
     case 'update_modpack': {
       const inst = findInstance(a.instanceId)
       const pack = inst.managedPack
-      if (!pack) throw new Error('Инстанс установлен не из модпака')
+      if (!pack) throw new Error('Экземпляр установлен не из модпака')
       const platform: Platform = pack.platform === 'modrinth' ? 'modrinth' : 'curseForge'
       const v = projectVersions(platform, pack.projectId, {}).find((x) => x.id === a.versionId)
       if (!v) throw new Error('Версия модпака не найдена')

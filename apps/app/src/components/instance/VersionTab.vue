@@ -131,9 +131,9 @@ function removeLoader() {
     </div>
 
     <ModalDialog v-if="editing" :title="t.version.dialogTitle" large @close="editing = false">
-      <div class="flex min-h-0 flex-1 flex-col gap-3 p-4">
-        <div class="flex min-h-0 flex-[3] flex-col"><McVersionList v-model="draftMc" /></div>
-        <div class="flex min-h-0 flex-[2] flex-col border-t border-line pt-3">
+      <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+        <div class="flex min-h-[250px] flex-[3] flex-col"><McVersionList v-model="draftMc" /></div>
+        <div class="flex min-h-[240px] flex-[2] flex-col border-t border-line pt-3">
           <LoaderPicker v-model:loader="draftLoader" v-model:loader-version="draftLoaderVersion" :mc-version="draftMc" />
         </div>
         <p v-if="loaderChanges && loader" class="shrink-0 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] text-warn">{{ t.version.loaderWarning }}</p>

@@ -7,6 +7,8 @@ import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
 import { formatCount, LOADER_LABELS, loaderOf, minecraftVersionOf } from '../utils/format'
+import curseforgeLogo from '../assets/brands/curseforge.svg'
+import modrinthLogo from '../assets/brands/modrinth.svg'
 import ModalDialog from './ModalDialog.vue'
 import ProjectDrawer from './ProjectDrawer.vue'
 import ProjectIcon from './ProjectIcon.vue'
@@ -81,8 +83,8 @@ onMounted(async () => {
   <ModalDialog :title="`${t.content.titles[kind]}${instance ? ` — ${instance.name}` : ''}`" large @close="emit('close')">
     <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-line p-4">
       <div class="flex gap-0.5 rounded-lg border border-line p-0.5" role="group">
-        <button class="btn btn-ghost h-7" :class="platform === 'modrinth' ? '!bg-accent !text-accent-fg' : ''" @click="platform = 'modrinth'">Modrinth</button>
-        <button class="btn btn-ghost h-7" :class="platform === 'curseForge' ? '!bg-accent !text-accent-fg' : ''" @click="platform = 'curseForge'">CurseForge</button>
+        <button class="btn btn-ghost h-7" :class="platform === 'modrinth' ? '!bg-accent !text-accent-fg' : ''" @click="platform = 'modrinth'"><img :src="modrinthLogo" alt="" class="size-4" />Modrinth</button>
+        <button class="btn btn-ghost h-7" :class="platform === 'curseForge' ? '!bg-accent !text-accent-fg' : ''" @click="platform = 'curseForge'"><img :src="curseforgeLogo" alt="" class="size-4" />CurseForge</button>
       </div>
       <div class="relative min-w-60 flex-1">
         <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />

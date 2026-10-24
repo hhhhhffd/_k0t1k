@@ -409,6 +409,16 @@ export interface ModpackImport {
   blocked: BlockedFile[]
 }
 
+/** A Java runtime the launcher downloaded, with the instances whose launch would pick it. */
+export interface ManagedJavaUsage {
+  path: string
+  /** Runtime folder inside the launcher's `java` folder; what `delete_managed_java` takes. */
+  dir: string
+  major: number
+  usedBy: string[]
+  running: boolean
+}
+
 /** A Feed The Beast modpack (api.feed-the-beast.com). */
 export interface FtbPack {
   id: number
