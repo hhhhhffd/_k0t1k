@@ -48,10 +48,15 @@
  *   create_shortcuts(desktop, startMenu)                     -> string[]  (created .lnk paths; recorded for uninstall)
  *   get_uninstall_plan()                                     -> UninstallPlan  (errors when uninstalling is refused: user folder, running games)
  *   uninstall()                                              -> void  (a detached cmd deletes the launcher after exit)
- * Accounts (offline for now; settings.accounts mirrors the result)
+ * Accounts (settings.accounts mirrors the result; tokens live in accounts.json and never reach the UI)
  *   add_offline_account(name)                                -> Account
- *   remove_offline_account(accountId)                        -> void
+ *   remove_account(accountId)                                -> void  (any kind; also deletes the stored tokens)
  *   select_account(accountId)                                -> void
+ *   start_microsoft_login()                                  -> DeviceCodeInfo  (errors in builds without K0T1K_MSA_CLIENT_ID)
+ *   finish_microsoft_login()                                 -> Account  (waits until the code is entered; errors when cancelled,
+ *                                                                          declined or expired; re-adding an account updates it)
+ *   cancel_microsoft_login()                                 -> void
+ *   elyby_login(username, password, totp: string | null)     -> ElybyLoginResult  (retry with the code when twoFactorRequired)
  * Content
  *   search_content(query: SearchQuery)                       -> SearchPage
  *   get_project_versions(platform, projectId, filter: VersionFilter) -> ProjectVersion[]
@@ -107,6 +112,8 @@ import type {
   AvailableUpdate,
   BlockedFile,
   BlockedScan,
+  DeviceCodeInfo,
+  ElybyLoginResult,
   DragDropEvent,
   ExportEntry,
   ExportRequest,
@@ -242,8 +249,12 @@ export const uninstall = () => call<void>('uninstall')
 
 // ---- accounts ----
 export const addOfflineAccount = (name: string) => call<Account>('add_offline_account', { name })
-export const removeOfflineAccount = (accountId: string) =>
-  call<void>('remove_offline_account', { accountId })
+export const removeAccount = (accountId: string) => call<void>('remove_account', { accountId })
+export const startMicrosoftLogin = () => call<DeviceCodeInfo>('start_microsoft_login')
+export const finishMicrosoftLogin = () => call<Account>('finish_microsoft_login')
+export const cancelMicrosoftLogin = () => call<void>('cancel_microsoft_login')
+export const elybyLogin = (username: string, password: string, totp: string | null) =>
+  call<ElybyLoginResult>('elyby_login', { username, password, totp })
 export const selectAccount = (accountId: string) => call<void>('select_account', { accountId })
 
 // ---- content ----

@@ -61,7 +61,7 @@ async function pick(id: string) {
         <span class="pix flex size-8 shrink-0 items-center justify-center bg-accent/20 text-accent"><User :size="16" /></span>
         <span class="min-w-0 flex-1 leading-tight">
           <span class="block truncate font-medium">{{ current?.name ?? t.account.none }}</span>
-          <span class="block text-[11px] text-faint">{{ t.account.offline }}</span>
+          <span class="block text-[11px] text-faint">{{ current ? t.account.kinds[current.kind] : '' }}</span>
         </span>
         <ChevronsUpDown :size="14" class="text-faint" />
       </button>
