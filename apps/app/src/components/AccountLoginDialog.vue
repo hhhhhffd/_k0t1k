@@ -32,7 +32,13 @@ async function copyCode() {
 
 async function signInMicrosoft() {
   try {
-    device.value = await startMicrosoftLogin()
+    const code = await startMicrosoftLogin()
+    if (closed) {
+      // The dialog went away while the code was requested; its cancel found nothing to stop.
+      await cancelMicrosoftLogin()
+      return
+    }
+    device.value = code
     void openExternal(device.value.verificationUri).catch(() => {})
     await finishMicrosoftLogin()
     await store.load()
