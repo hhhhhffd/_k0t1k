@@ -5,10 +5,11 @@ use std::path::{Path, PathBuf};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use k0t1k_core::component::MINECRAFT_UID;
+use k0t1k_core::content::pack_url::{PackUrl, parse_pack_url};
 use k0t1k_core::content::packwiz::PwMod;
 use k0t1k_core::content::{
     self as core_content, AvailableUpdate, BlockedFile, InstallContext, InstallReport, LocalResource, Loader, Platform,
-    ModpackSource, PackState, ProjectVersion, ResourceKind, SearchPage, SearchQuery, SearchSort, inspect_modpack, install_modpack,
+    ModpackSource, PackState, ProjectVersion, ReleaseType, ResourceKind, SearchPage, SearchQuery, SearchSort, inspect_modpack, install_modpack,
     update_modpack as update_installed_modpack,
 };
 use k0t1k_core::download::{Checksum, download_checked};
@@ -92,8 +93,8 @@ impl From<LocalResource> for LocalResourceView {
 /// The new instance and the files the author forbids to download; the UI shows their manual links.
 #[derive(Serialize)]
 pub struct ModpackImport {
-    instance: InstanceView,
-    blocked: Vec<BlockedFile>,
+    pub(crate) instance: InstanceView,
+    pub(crate) blocked: Vec<BlockedFile>,
 }
 
 pub(crate) async fn instance_of(state: &AppState, instance_id: &str) -> CommandResult<Instance> {
@@ -247,16 +248,27 @@ pub async fn install_modpack_version(
     version_id: String,
     name: Option<String>,
 ) -> CommandResult<ModpackImport> {
-    let state = state.inner().clone();
-    let version = fetch_version(&state, platform, &project_id, &version_id).await?;
+    install_managed_pack(&app, state.inner(), platform, project_id, version_id, name).await
+}
+
+/// Installs one version of a Modrinth or CurseForge modpack as a new instance that remembers its pack.
+async fn install_managed_pack(
+    app: &AppHandle,
+    state: &AppState,
+    platform: Platform,
+    project_id: String,
+    version_id: String,
+    name: Option<String>,
+) -> CommandResult<ModpackImport> {
+    let version = fetch_version(state, platform, &project_id, &version_id).await?;
     let project = state.clients.project(platform, &project_id).await?;
     let task = format!("modpack:{platform:?}:{version_id}");
     let title = format!("Установка модпака: {}", name.as_deref().unwrap_or(&project.title));
 
     let work = async {
-        progress_step(&app, &task, &title, "Скачивание пакета", 0, 1);
-        let zip_path = download_pack(&state, &version).await?;
-        progress_step(&app, &task, &title, "Скачивание пакета", 1, 1);
+        progress_step(app, &task, &title, "Скачивание пакета", 0, 1);
+        let zip_path = download_pack(state, &version).await?;
+        progress_step(app, &task, &title, "Скачивание пакета", 1, 1);
         let managed_pack = ManagedPack {
             platform: match platform {
                 Platform::Modrinth => ManagedPlatform::Modrinth,
@@ -267,9 +279,104 @@ pub async fn install_modpack_version(
             name: project.title.clone(),
             version_name: version.name.clone(),
         };
-        create_from_pack(&app, &state, zip_path, name, Some(managed_pack), &task, &title).await
+        create_from_pack(app, state, zip_path, name, Some(managed_pack), &task, &title).await
     };
-    tracked(&app, &task, &title, work).await
+    tracked(app, &task, &title, work).await
+}
+
+/// Installs a modpack from a link: a `curseforge://install` link, a Modrinth or CurseForge modpack page
+/// (managed packs, like picking a version in the browser), or a direct link to a pack file.
+#[tauri::command]
+pub async fn import_modpack_url(app: AppHandle, state: State<'_, AppState>, url: String, name: Option<String>) -> CommandResult<ModpackImport> {
+    let state = state.inner();
+    match parse_pack_url(&url)? {
+        PackUrl::CurseForgeInstall { project_id, file_id } => install_managed_pack(&app, state, Platform::CurseForge, project_id, file_id, name).await,
+        PackUrl::Modrinth { project, version } => {
+            let project = state.clients.modrinth.project(&project).await?;
+            if project.kind != Some(ResourceKind::Modpack) {
+                return Err(AppError::new(format!("{} is not a modpack", project.title)));
+            }
+            let versions = state.clients.modrinth.versions(&project.id, &[], &[]).await?;
+            let version = pick_pack_version(&versions, version.as_deref(), &project.title)?;
+            install_managed_pack(&app, state, Platform::Modrinth, project.id, version.id.clone(), name).await
+        }
+        PackUrl::CurseForgePage { slug, file_id } => {
+            let curseforge = state.curseforge()?;
+            let query = SearchQuery {
+                query: slug.clone(),
+                kind: ResourceKind::Modpack,
+                game_version: None,
+                loaders: Vec::new(),
+                categories: Vec::new(),
+                sort: SearchSort::Relevance,
+                offset: 0,
+                limit: 20,
+            };
+            let hit = curseforge
+                .search(&query)
+                .await?
+                .hits
+                .into_iter()
+                .find(|hit| hit.slug.eq_ignore_ascii_case(&slug))
+                .ok_or_else(|| AppError::new(format!("no CurseForge modpack with the address {slug:?} was found")))?;
+            let version_id = match file_id {
+                Some(file_id) => file_id,
+                None => {
+                    let versions = curseforge.versions(&hit.project_id, None, &[]).await?;
+                    pick_pack_version(&versions, None, &hit.title)?.id.clone()
+                }
+            };
+            install_managed_pack(&app, state, Platform::CurseForge, hit.project_id, version_id, name).await
+        }
+        PackUrl::File(url) => import_pack_from_link(&app, state, &url, name).await,
+    }
+}
+
+/// The version asked for by id or version number, else the newest release (the newest of any type if
+/// the project has no release).
+fn pick_pack_version<'a>(versions: &'a [ProjectVersion], wanted: Option<&str>, title: &str) -> CommandResult<&'a ProjectVersion> {
+    if let Some(wanted) = wanted {
+        return versions
+            .iter()
+            .find(|version| version.id == wanted || version.version_number == wanted)
+            .ok_or_else(|| AppError::new(format!("{title} has no version {wanted:?}")));
+    }
+    let newest = |releases_only: bool| {
+        versions.iter().filter(|version| !releases_only || version.release_type == ReleaseType::Release).max_by(|a, b| a.published.cmp(&b.published))
+    };
+    newest(true).or_else(|| newest(false)).ok_or_else(|| AppError::new(format!("{title} has no versions")))
+}
+
+/// Downloads the pack file at `url` into a temporary folder of the cache, imports it like a local file
+/// and removes the download.
+async fn import_pack_from_link(app: &AppHandle, state: &AppState, url: &str, name: Option<String>) -> CommandResult<ModpackImport> {
+    let file_name = reqwest::Url::parse(url)
+        .ok()
+        .and_then(|url| url.path_segments().and_then(|mut segments| segments.next_back().map(str::to_owned)))
+        .map(|segment| segment.chars().map(|c| if r#"<>:"/\|?*"#.contains(c) { '_' } else { c }).collect::<String>())
+        .filter(|segment| !segment.is_empty())
+        .unwrap_or_else(|| "modpack.zip".to_owned());
+    let label = name.clone().unwrap_or_else(|| Path::new(&file_name).file_stem().map_or_else(|| file_name.clone(), |stem| stem.to_string_lossy().into_owned()));
+    let task = format!("modpack:{url}");
+    let title = format!("Импорт модпака: {label}");
+
+    let work = async {
+        let dir = state.paths.cache_dir().join("modpack-links").join(chrono::Utc::now().timestamp_millis().to_string());
+        let zip_path = dir.join(&file_name);
+        progress_step(app, &task, &title, "Скачивание пакета", 0, 1);
+        let imported = match download_checked(&state.http, url, &zip_path, None).await {
+            Ok(()) => {
+                progress_step(app, &task, &title, "Скачивание пакета", 1, 1);
+                create_from_pack(app, state, zip_path, name, None, &task, &title).await
+            }
+            Err(error) => Err(error.into()),
+        };
+        if let Err(error) = tokio::fs::remove_dir_all(&dir).await {
+            tracing::warn!("the downloaded modpack in {} was not removed: {error}", dir.display());
+        }
+        imported
+    };
+    tracked(app, &task, &title, work).await
 }
 
 /// Updates an instance installed from a modpack to another version of that pack, in place: files the

@@ -5,6 +5,7 @@ mod datadir;
 mod discord;
 mod error;
 mod events;
+mod ftb;
 mod game;
 mod instances;
 mod java;
@@ -118,6 +119,10 @@ pub fn run() {
             content::check_updates,
             content::import_modpack_file,
             content::install_modpack_version,
+            content::import_modpack_url,
+            ftb::ftb_search_packs,
+            ftb::ftb_pack_versions,
+            ftb::install_ftb_pack,
             worlds::list_worlds,
             worlds::rename_world,
             worlds::copy_world,
