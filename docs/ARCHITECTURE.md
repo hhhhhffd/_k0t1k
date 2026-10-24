@@ -61,7 +61,9 @@ apps/app/src           Vue 3 UI
 
 - `settings.json` holds only the public list `{id, name, kind}` (`offline` | `microsoft` | `elyby`); ids are the offline
   UUID, `ms-<uuid>` and `elyby-<uuid>`, so kinds cannot collide. Tokens live in `accounts.json` (`auth::Secrets`, own
-  lock, never sent to the UI; both names are in `placement::OWNED_NAMES`). Saving an account that exists updates it;
+  lock, never sent to the UI; on Windows encrypted with DPAPI for the current user plus app entropy, `auth/protect.rs`, so
+  nothing lands in the system store and a portable folder moved to another user/PC asks to sign in again; a plain file
+  from an older version is encrypted at startup; both names are in `placement::OWNED_NAMES`). Saving an account that exists updates it;
   `auth::remove_account` drops its tokens.
 - **Microsoft**: OAuth device code flow (client id baked in by build.rs from `K0T1K_MSA_CLIENT_ID`, env or `.env`, like the
   CurseForge key), then Xbox Live, XSTS and Minecraft services. `start_microsoft_login` returns the code at once,

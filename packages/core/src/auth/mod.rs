@@ -1,11 +1,12 @@
 //! Premium accounts: Microsoft (device code flow) and ely.by (Yggdrasil + authlib-injector).
 //!
 //! The public account list (`{id, name, kind}`) lives in `settings.json`; the tokens live in
-//! `accounts.json`, which is never sent to the UI. Account ids: offline accounts use the offline UUID,
+//! `accounts.json`, which is never sent to the UI and is encrypted with DPAPI on Windows (see [`protect`]). Account ids: offline accounts use the offline UUID,
 //! Microsoft `ms-<uuid>` and ely.by `elyby-<uuid>`, so they cannot collide.
 
 pub mod elyby;
 pub mod microsoft;
+mod protect;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -63,23 +64,82 @@ struct SecretsFile {
     accounts: BTreeMap<String, Secrets>,
 }
 
+/// What `accounts.json` holds on disk.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredFile {
+    /// Hex of the DPAPI-encrypted JSON of a [`SecretsFile`] (Windows).
+    Protected { protected: String },
+    /// Plain JSON: other platforms, and files written before the tokens were encrypted.
+    Plain(SecretsFile),
+}
+
 impl SecretsFile {
     fn load(paths: &Paths) -> Result<Self> {
+        Ok(Self::load_stored(paths)?.0)
+    }
+
+    /// The tokens and whether the file still holds them unencrypted.
+    fn load_stored(paths: &Paths) -> Result<(Self, bool)> {
         let file = paths.accounts_file();
-        match std::fs::read(&file) {
-            Ok(bytes) => Ok(serde_json::from_slice(&bytes)?),
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(source) => Err(Error::Io { path: file, source }),
+        let bytes = match std::fs::read(&file) {
+            Ok(bytes) => bytes,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok((Self::default(), false)),
+            Err(source) => return Err(Error::Io { path: file, source }),
+        };
+        match serde_json::from_slice(&bytes)? {
+            StoredFile::Plain(secrets) => Ok((secrets, true)),
+            StoredFile::Protected { protected } => Ok((Self::decrypt(&protected), false)),
         }
+    }
+
+    /// Tokens encrypted for another Windows user or PC (a moved portable folder) cannot be used anyway: they are
+    /// dropped with a warning, launches then ask to sign in again and the next save replaces the file.
+    #[cfg(windows)]
+    fn decrypt(protected: &str) -> Self {
+        let decrypted = hex::decode(protected)
+            .map_err(|error| Error::Other(format!("accounts.json is damaged: {error}")))
+            .and_then(|blob| protect::unprotect(&blob))
+            .and_then(|json| Ok(serde_json::from_slice(&json)?));
+        decrypted.unwrap_or_else(|error| {
+            tracing::warn!("account tokens are unusable, sign in again: {error}");
+            Self::default()
+        })
+    }
+
+    #[cfg(not(windows))]
+    fn decrypt(_protected: &str) -> Self {
+        tracing::warn!("accounts.json is encrypted with Windows DPAPI and cannot be read here");
+        Self::default()
+    }
+
+    fn save(&self, paths: &Paths) -> Result<()> {
+        #[cfg(windows)]
+        {
+            let blob = protect::protect(&serde_json::to_vec(self)?)?;
+            write_json_private(&paths.accounts_file(), &serde_json::json!({ "protected": hex::encode(blob) }))
+        }
+        #[cfg(not(windows))]
+        write_json_private(&paths.accounts_file(), self)
     }
 
     fn update<T>(paths: &Paths, change: impl FnOnce(&mut Self) -> T) -> Result<T> {
         let _guard = UPDATE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut file = Self::load(paths)?;
         let result = change(&mut file);
-        write_json_private(&paths.accounts_file(), &file)?;
+        file.save(paths)?;
         Ok(result)
     }
+}
+
+/// Rewrites an `accounts.json` left unencrypted by an older version. Meant to run once at startup.
+pub fn protect_stored_tokens(paths: &Paths) -> Result<()> {
+    if !cfg!(windows) {
+        return Ok(());
+    }
+    let _guard = UPDATE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let (file, plain) = SecretsFile::load_stored(paths)?;
+    if plain { file.save(paths) } else { Ok(()) }
 }
 
 /// Stores the tokens and adds the account to the public list; an account that is already there
@@ -335,6 +395,37 @@ mod tests {
         save_account(&paths, microsoft_secrets("abc")).unwrap();
         remove_account(&paths, "ms-abc").unwrap();
         replace_secrets(&paths, "ms-abc", microsoft_secrets("abc")).unwrap();
+        assert!(SecretsFile::load(&paths).unwrap().accounts.is_empty());
+    }
+
+    #[test]
+    fn tokens_are_not_stored_in_plain_text_on_windows() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path());
+        save_account(&paths, microsoft_secrets("abc")).unwrap();
+        let raw = std::fs::read_to_string(paths.accounts_file()).unwrap();
+        assert_eq!(raw.contains("refresh-secret"), !cfg!(windows));
+        assert_eq!(SecretsFile::load(&paths).unwrap().accounts.keys().collect::<Vec<_>>(), ["ms-abc"]);
+    }
+
+    #[test]
+    fn plain_file_from_an_older_version_is_read_and_protected() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path());
+        let mut file = SecretsFile::default();
+        file.accounts.insert("ms-abc".to_owned(), microsoft_secrets("abc"));
+        std::fs::write(paths.accounts_file(), serde_json::to_vec(&file).unwrap()).unwrap();
+        protect_stored_tokens(&paths).unwrap();
+        let (loaded, plain) = SecretsFile::load_stored(&paths).unwrap();
+        assert_eq!(loaded.accounts.len(), 1);
+        assert_eq!(plain, !cfg!(windows));
+    }
+
+    #[test]
+    fn unreadable_encrypted_file_means_signing_in_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path());
+        std::fs::write(paths.accounts_file(), r#"{"protected":"00ff"}"#).unwrap();
         assert!(SecretsFile::load(&paths).unwrap().accounts.is_empty());
     }
 

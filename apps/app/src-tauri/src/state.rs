@@ -136,6 +136,9 @@ pub struct AppState {
 impl AppState {
     pub fn new(location: DataLocation) -> CommandResult<Self> {
         let paths = Paths::new(location.root.clone());
+        if let Err(error) = k0t1k_core::auth::protect_stored_tokens(&paths) {
+            tracing::warn!("cannot encrypt the stored account tokens: {error}");
+        }
         let http = k0t1k_core::download::http_client();
         let key = CURSEFORGE_API_KEY.filter(|key| !key.is_empty());
         Ok(Self {
