@@ -5,12 +5,14 @@ mod blocked;
 pub mod curseforge;
 mod dropped;
 mod export;
+pub mod ftb;
 mod install;
 mod local;
 mod modpack;
 pub mod modrinth;
 pub mod murmur2;
 pub mod pack_state;
+pub mod pack_url;
 pub mod packwiz;
 mod update;
 
@@ -339,6 +341,7 @@ pub struct Clients {
     pub http: reqwest::Client,
     pub modrinth: modrinth::Client,
     pub curseforge: Option<curseforge::Client>,
+    pub ftb: ftb::Client,
 }
 
 impl Clients {
@@ -346,6 +349,7 @@ impl Clients {
     pub fn new(http: reqwest::Client, curseforge_api_key: Option<&str>) -> Result<Self> {
         Ok(Self {
             modrinth: modrinth::Client::new(http.clone()),
+            ftb: ftb::Client::new(http.clone()),
             curseforge: curseforge_api_key
                 .map(|key| curseforge::Client::new(http.clone(), key))
                 .transpose()?,
