@@ -164,8 +164,11 @@ export interface GlobalSettings {
   commands: CommandSettings
   env: Record<string, string>
   playtime: { record: boolean; show: boolean; totalSecs: number }
-  /** `theme` is a built-in `ThemeId` or the id of one of `customThemes`. */
-  ui: { theme: string; liteMode: boolean; customThemes: CustomTheme[] }
+  /**
+   * `theme` is a built-in `ThemeId`, the id of one of `customThemes` or a theme file (`file:<name>`).
+   * `catPack`: null = no cat, `mascot` = the built-in one, else a `CatPack.id`. `iconSet`: null = built-in icons, else an `IconSet.id`.
+   */
+  ui: { theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
   discord: { enabled: boolean }
   /** Owned by the onboarding commands: `save_settings` never overwrites it. */
@@ -408,6 +411,28 @@ export interface ModpackImport {
   instance: Instance
   blocked: BlockedFile[]
 }
+
+/** A picture or looping video from the launcher's `catpacks` folder, shown behind the library. */
+export interface CatPack {
+  id: string
+  name: string
+  path: string
+  kind: 'image' | 'video'
+}
+
+/** A folder of `iconsets`: its files replace built-in toolbar and menu icons of the same key. */
+export interface IconSet {
+  id: string
+  name: string
+  files: Record<string, string>
+}
+
+export interface ThemeFiles {
+  themes: CustomTheme[]
+  errors: { file: string; error: string }[]
+}
+
+export type LauncherFolder = 'instances' | 'java' | 'cache' | 'icons' | 'catpacks' | 'themes' | 'iconsets' | 'logs'
 
 /** A Java runtime the launcher downloaded, with the instances whose launch would pick it. */
 export interface ManagedJavaUsage {

@@ -12,6 +12,7 @@ import TitleBar from './components/TitleBar.vue'
 import TaskBar from './components/TaskBar.vue'
 import ToastHost from './components/ToastHost.vue'
 import { t } from './i18n/ru'
+import { useCustomizationStore } from './stores/customization'
 import { useInstancesStore } from './stores/instances'
 import { useLayoutStore } from './stores/layout'
 import { useSettingsStore } from './stores/settings'
@@ -22,6 +23,7 @@ const settings = useSettingsStore()
 const instances = useInstancesStore()
 const tasks = useTasksStore()
 const layout = useLayoutStore()
+const customization = useCustomizationStore()
 
 // `undefined` until the backend has said whether the launcher still has to ask where to live
 const onboarding = ref<OnboardingInfo | null | undefined>(undefined)
@@ -33,6 +35,8 @@ onMounted(async () => {
   onboarding.value = (await tasks.guard(getOnboarding)) ?? null
   if (onboarding.value) return
   await tasks.guard(() => Promise.all([settings.load(), instances.init()]))
+  // after the settings: theme files and the chosen cat or icon set apply on top of them
+  await customization.refresh()
   const report = await tasks.guard(getRelocationReport)
   if (!report) return
   if (report.problems.length) relocationReport.value = report

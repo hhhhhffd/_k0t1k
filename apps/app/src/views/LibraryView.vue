@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { openInstanceFolder } from '../api/commands'
 import type { ExportFormat, Instance } from '../api/types'
 import mascot from '../assets/mascot.png'
+import CatBackdrop from '../components/CatBackdrop.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import type { MenuItem } from '../components/ContextMenu.vue'
@@ -74,17 +75,17 @@ const rememberPointer = (e: PointerEvent) => (lastPointer = { x: e.clientX, y: e
 function actionsFor(inst: Instance): MenuItem[] {
   const running = store.stateOf(inst.id) !== 'stopped'
   return [
-    { label: running ? t.library.playAgain : t.panel.launch, icon: Play, iconClass: 'text-ok', action: () => launch(inst) },
-    { label: t.library.stop, icon: Square, iconClass: 'text-danger', disabled: !running, action: () => void tasks.guard(() => store.kill(inst.id)) },
-    { label: t.panel.edit, icon: Pencil, iconClass: 'text-accent', separatorBefore: true, action: () => router.push({ name: 'instance', params: { id: inst.id } }) },
-    { label: t.panel.versions, icon: Puzzle, iconClass: 'text-accent', action: () => router.push({ name: 'instance', params: { id: inst.id }, query: { tab: 'version' } }) },
-    { label: t.library.changeGroup, icon: Tag, iconClass: 'text-warn', action: () => (dialog.value = { kind: 'group', instance: inst }) },
-    { label: t.library.rename, icon: TextCursorInput, iconClass: 'text-muted', action: () => (dialog.value = { kind: 'rename', instance: inst }) },
-    { label: t.panel.folder, icon: FolderOpen, iconClass: 'text-warn', action: () => void tasks.guard(() => openInstanceFolder(inst.id)) },
-    { label: t.transfer.export, icon: Upload, iconClass: 'text-ok', action: () => (exportMenu.value = { ...lastPointer, instance: inst }) },
-    ...(inst.managedPack ? [{ label: t.pack.check, icon: RefreshCw, iconClass: 'text-ok', action: () => (packUpdate.value = inst) }] : []),
-    { label: t.library.copy, icon: Copy, iconClass: 'text-muted', action: () => (dialog.value = { kind: 'copy', instance: inst }) },
-    { label: t.library.delete, icon: Trash2, iconClass: 'text-danger', danger: true, separatorBefore: true, action: () => (dialog.value = { kind: 'delete', instance: inst }) },
+    { label: running ? t.library.playAgain : t.panel.launch, icon: Play, iconKey: 'launch', iconClass: 'text-ok', action: () => launch(inst) },
+    { label: t.library.stop, icon: Square, iconKey: 'stop', iconClass: 'text-danger', disabled: !running, action: () => void tasks.guard(() => store.kill(inst.id)) },
+    { label: t.panel.edit, icon: Pencil, iconKey: 'edit', iconClass: 'text-accent', separatorBefore: true, action: () => router.push({ name: 'instance', params: { id: inst.id } }) },
+    { label: t.panel.versions, icon: Puzzle, iconKey: 'versions', iconClass: 'text-accent', action: () => router.push({ name: 'instance', params: { id: inst.id }, query: { tab: 'version' } }) },
+    { label: t.library.changeGroup, icon: Tag, iconKey: 'group', iconClass: 'text-warn', action: () => (dialog.value = { kind: 'group', instance: inst }) },
+    { label: t.library.rename, icon: TextCursorInput, iconKey: 'rename', iconClass: 'text-muted', action: () => (dialog.value = { kind: 'rename', instance: inst }) },
+    { label: t.panel.folder, icon: FolderOpen, iconKey: 'folder', iconClass: 'text-warn', action: () => void tasks.guard(() => openInstanceFolder(inst.id)) },
+    { label: t.transfer.export, icon: Upload, iconKey: 'export', iconClass: 'text-ok', action: () => (exportMenu.value = { ...lastPointer, instance: inst }) },
+    ...(inst.managedPack ? [{ label: t.pack.check, icon: RefreshCw, iconKey: 'update', iconClass: 'text-ok', action: () => (packUpdate.value = inst) }] : []),
+    { label: t.library.copy, icon: Copy, iconKey: 'copy', iconClass: 'text-muted', action: () => (dialog.value = { kind: 'copy', instance: inst }) },
+    { label: t.library.delete, icon: Trash2, iconKey: 'delete', iconClass: 'text-danger', danger: true, separatorBefore: true, action: () => (dialog.value = { kind: 'delete', instance: inst }) },
   ]
 }
 const panelActions = computed(() => (selected.value ? actionsFor(selected.value) : []))
@@ -94,9 +95,9 @@ const exportItems = computed<MenuItem[]>(() => {
   if (!inst) return []
   const pick = (format: ExportFormat) => () => (exporting.value = { format, instance: inst })
   return [
-    { label: t.transfer.exportInstance, icon: FileArchive, action: pick('instance') },
-    { label: t.transfer.exportModrinth, icon: Package, iconClass: 'text-ok', action: pick('modrinth') },
-    { label: t.transfer.exportCurseForge, icon: Flame, iconClass: 'text-warn', action: pick('curseForge') },
+    { label: t.transfer.exportInstance, icon: FileArchive, iconKey: 'export-instance', action: pick('instance') },
+    { label: t.transfer.exportModrinth, icon: Package, iconKey: 'export-modrinth', iconClass: 'text-ok', action: pick('modrinth') },
+    { label: t.transfer.exportCurseForge, icon: Flame, iconKey: 'export-curseforge', iconClass: 'text-warn', action: pick('curseForge') },
   ]
 })
 
@@ -170,70 +171,73 @@ const { dragging } = useFileDrop(async (paths) => {
 
 <template>
   <div class="flex h-full min-h-0" :class="layout.panel === 'left' ? 'flex-row-reverse' : ''" @pointerdown.capture="rememberPointer">
-    <div class="min-w-0 flex-1 overflow-y-auto px-3 py-2" @click.self="layout.selectedId = null">
-      <div v-if="store.loaded && !store.instances.length && !store.pending.length" class="flex flex-col items-center gap-3 py-24 text-center">
-        <img :src="mascot" alt="" class="pixelated anim-bob size-24 opacity-90" />
-        <p class="text-[16px] font-semibold">{{ t.library.empty }}</p>
-        <p class="text-muted">{{ t.library.emptyHint }}</p>
-      </div>
-      <p v-else-if="store.loaded && !sections.length" class="py-16 text-center text-faint">{{ t.common.nothingFound }}</p>
-
-      <section
-        v-for="[group, items] in sections"
-        :key="group"
-        :data-group="group"
-        class="mb-1 rounded-lg transition-colors"
-        :class="drag?.moved && drag.over === group && group !== (drag.instance.group ?? '') ? 'bg-accent/10 ring-1 ring-accent/50' : ''"
-      >
-        <button class="flex w-full items-center gap-1.5 px-1 py-1.5 text-faint hover:text-fg" :aria-expanded="!collapsed.has(group)" @click="toggle(group)">
-          <component :is="collapsed.has(group) ? ChevronRight : ChevronDown" :size="15" />
-          <span class="text-[12.5px] font-semibold">{{ group || t.library.ungrouped }}</span>
-          <span class="text-[11px]">{{ items.length + pendingIn(group).length }}</span>
-          <span class="ml-1 h-px flex-1 bg-line" />
-        </button>
-        <div v-if="!collapsed.has(group)" class="flex flex-wrap gap-1 px-1 pb-2">
-          <div
-            v-for="inst in items"
-            :key="inst.id"
-            class="tile group flex w-[104px] cursor-pointer flex-col items-center gap-1.5 rounded-lg p-2 outline-none"
-            :class="[layout.selectedId === inst.id ? 'tile-selected' : 'hover:bg-hover', drag?.moved && drag.instance.id === inst.id ? 'opacity-40' : '']"
-            :title="`${minecraftVersionOf(inst)}${loaderOf(inst) ? ` · ${loaderOf(inst)!.label}` : ''}`"
-            tabindex="0"
-            role="button"
-            :aria-pressed="layout.selectedId === inst.id"
-            @pointerdown="tileDown($event, inst)"
-            @click="layout.selectedId = inst.id"
-            @dblclick="launch(inst)"
-            @keydown.enter="launch(inst)"
-            @focus="layout.selectedId = inst.id"
-            @contextmenu.prevent="openMenu($event, inst)"
-          >
-            <span class="relative">
-              <InstanceIcon :icon="inst.icon" :instance-id="inst.id" :size="52" />
-              <span
-                v-if="store.stateOf(inst.id) !== 'stopped'"
-                class="absolute -top-1 -right-1 size-3 rounded-full border-2 border-surface bg-ok shadow-[0_0_8px_var(--c-ok)]"
-                :title="t.library.running"
-              />
-            </span>
-            <span class="line-clamp-2 w-full rounded px-1 text-center text-[12.5px] leading-tight break-words">{{ inst.name }}</span>
-            <span v-if="downloadOf(inst)" class="h-1 w-16 overflow-hidden rounded-full bg-raised" :title="`${t.library.downloading}: ${downloadOf(inst)!.stage}`">
-              <span class="block h-full bg-accent transition-[width]" :style="{ width: `${downloadOf(inst)!.percent}%` }" />
-            </span>
-          </div>
-          <div
-            v-for="p in pendingIn(group)"
-            :key="`pending-${p.key}`"
-            class="flex w-[104px] flex-col items-center gap-1.5 rounded-lg p-2 opacity-80"
-            :title="t.library.creating"
-            aria-busy="true"
-          >
-            <span class="pix flex size-[52px] items-center justify-center bg-raised"><Loader :size="22" class="animate-spin text-accent" /></span>
-            <span class="line-clamp-2 w-full px-1 text-center text-[12.5px] leading-tight break-words">{{ p.name }}</span>
-            <span class="text-[11px] text-faint">{{ t.library.creating }}</span>
-          </div>
+    <div class="relative min-w-0 flex-1">
+      <CatBackdrop />
+      <div class="absolute inset-0 overflow-y-auto px-3 py-2" @click.self="layout.selectedId = null">
+        <div v-if="store.loaded && !store.instances.length && !store.pending.length" class="flex flex-col items-center gap-3 py-24 text-center">
+          <img :src="mascot" alt="" class="pixelated anim-bob size-24 opacity-90" />
+          <p class="text-[16px] font-semibold">{{ t.library.empty }}</p>
+          <p class="text-muted">{{ t.library.emptyHint }}</p>
         </div>
-      </section>
+        <p v-else-if="store.loaded && !sections.length" class="py-16 text-center text-faint">{{ t.common.nothingFound }}</p>
+  
+        <section
+          v-for="[group, items] in sections"
+          :key="group"
+          :data-group="group"
+          class="mb-1 rounded-lg transition-colors"
+          :class="drag?.moved && drag.over === group && group !== (drag.instance.group ?? '') ? 'bg-accent/10 ring-1 ring-accent/50' : ''"
+        >
+          <button class="flex w-full items-center gap-1.5 px-1 py-1.5 text-faint hover:text-fg" :aria-expanded="!collapsed.has(group)" @click="toggle(group)">
+            <component :is="collapsed.has(group) ? ChevronRight : ChevronDown" :size="15" />
+            <span class="text-[12.5px] font-semibold">{{ group || t.library.ungrouped }}</span>
+            <span class="text-[11px]">{{ items.length + pendingIn(group).length }}</span>
+            <span class="ml-1 h-px flex-1 bg-line" />
+          </button>
+          <div v-if="!collapsed.has(group)" class="flex flex-wrap gap-1 px-1 pb-2">
+            <div
+              v-for="inst in items"
+              :key="inst.id"
+              class="tile group flex w-[104px] cursor-pointer flex-col items-center gap-1.5 rounded-lg p-2 outline-none"
+              :class="[layout.selectedId === inst.id ? 'tile-selected' : 'hover:bg-hover', drag?.moved && drag.instance.id === inst.id ? 'opacity-40' : '']"
+              :title="`${minecraftVersionOf(inst)}${loaderOf(inst) ? ` · ${loaderOf(inst)!.label}` : ''}`"
+              tabindex="0"
+              role="button"
+              :aria-pressed="layout.selectedId === inst.id"
+              @pointerdown="tileDown($event, inst)"
+              @click="layout.selectedId = inst.id"
+              @dblclick="launch(inst)"
+              @keydown.enter="launch(inst)"
+              @focus="layout.selectedId = inst.id"
+              @contextmenu.prevent="openMenu($event, inst)"
+            >
+              <span class="relative">
+                <InstanceIcon :icon="inst.icon" :instance-id="inst.id" :size="52" />
+                <span
+                  v-if="store.stateOf(inst.id) !== 'stopped'"
+                  class="absolute -top-1 -right-1 size-3 rounded-full border-2 border-surface bg-ok shadow-[0_0_8px_var(--c-ok)]"
+                  :title="t.library.running"
+                />
+              </span>
+              <span class="line-clamp-2 w-full rounded px-1 text-center text-[12.5px] leading-tight break-words">{{ inst.name }}</span>
+              <span v-if="downloadOf(inst)" class="h-1 w-16 overflow-hidden rounded-full bg-raised" :title="`${t.library.downloading}: ${downloadOf(inst)!.stage}`">
+                <span class="block h-full bg-accent transition-[width]" :style="{ width: `${downloadOf(inst)!.percent}%` }" />
+              </span>
+            </div>
+            <div
+              v-for="p in pendingIn(group)"
+              :key="`pending-${p.key}`"
+              class="flex w-[104px] flex-col items-center gap-1.5 rounded-lg p-2 opacity-80"
+              :title="t.library.creating"
+              aria-busy="true"
+            >
+              <span class="pix flex size-[52px] items-center justify-center bg-raised"><Loader :size="22" class="animate-spin text-accent" /></span>
+              <span class="line-clamp-2 w-full px-1 text-center text-[12.5px] leading-tight break-words">{{ p.name }}</span>
+              <span class="text-[11px] text-faint">{{ t.library.creating }}</span>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
 
     <InstancePanel

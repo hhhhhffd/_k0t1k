@@ -18,6 +18,7 @@ import ServersTab from '../components/instance/ServersTab.vue'
 import VersionTab from '../components/instance/VersionTab.vue'
 import WorldsTab from '../components/instance/WorldsTab.vue'
 import PlayButton from '../components/PlayButton.vue'
+import UiIcon from '../components/UiIcon.vue'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
@@ -123,7 +124,7 @@ const { dragging } = useFileDrop(async (paths) => {
           :class="tab === name ? 'tool-active text-accent' : ''"
           @click="tab = name"
         >
-          <component :is="tabIcons[name].icon" :size="16" :class="tab === name ? '' : tabIcons[name].color" />
+          <UiIcon :name="`tab-${name}`" :icon="tabIcons[name].icon" :size="16" :class="tab === name ? '' : tabIcons[name].color" />
           {{ t.instance.tabs[name] }}
         </button>
       </nav>

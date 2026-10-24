@@ -4,6 +4,8 @@ import type { Component } from 'vue'
 export interface MenuItem {
   label: string
   icon?: Component
+  /** Key under which an icon set can replace `icon`. */
+  iconKey?: string
   /** Colours the icon only, e.g. `text-ok`. */
   iconClass?: string
   danger?: boolean
@@ -15,6 +17,7 @@ export interface MenuItem {
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import UiIcon from './UiIcon.vue'
 
 const props = defineProps<{ x: number; y: number; items: MenuItem[] }>()
 const emit = defineEmits<{ close: [] }>()
@@ -50,7 +53,7 @@ function pick(item: MenuItem) {
             :disabled="item.disabled"
             @click="pick(item)"
           >
-            <component :is="item.icon" v-if="item.icon" :size="15" :class="item.iconClass" />
+            <UiIcon v-if="item.icon" :name="item.iconKey ?? ''" :icon="item.icon" :size="15" :class="item.iconClass" />
             {{ item.label }}
           </button>
         </template>

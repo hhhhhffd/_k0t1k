@@ -3,6 +3,7 @@ import { Check, ChevronDown, FolderOpen, Library, Plus, Search, Settings, User }
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { openDataDir, openLauncherFolder, openSharedFolder } from '../api/commands'
+import type { LauncherFolder } from '../api/types'
 import mascot from '../assets/mascot.png'
 import { t } from '../i18n/ru'
 import { useLayoutStore } from '../stores/layout'
@@ -11,6 +12,7 @@ import { useTasksStore } from '../stores/tasks'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import CreateInstanceDialog from './CreateInstanceDialog.vue'
 import GripHandle from './GripHandle.vue'
+import UiIcon from './UiIcon.vue'
 
 const settings = useSettingsStore()
 const tasks = useTasksStore()
@@ -23,17 +25,29 @@ const folderMenu = ref<{ x: number; y: number } | null>(null)
 const accountsOpen = ref(false)
 const onLibrary = computed(() => route.name === 'library')
 
+// Prism's order: data folders first, then the ones that customize the launcher, then logs.
+const launcherFolder = (folder: LauncherFolder, separatorBefore = false): MenuItem => ({
+  label: t.toolbar.folderNames[folder],
+  icon: FolderOpen,
+  iconKey: `folder-${folder}`,
+  iconClass: 'text-warn',
+  separatorBefore,
+  action: () => void tasks.guard(() => openLauncherFolder(folder)),
+})
 const folderItems: MenuItem[] = [
-  { label: t.toolbar.folderNames.root, icon: FolderOpen, iconClass: 'text-warn', action: () => void tasks.guard(openDataDir) },
-  ...(['instances', 'java', 'cache'] as const).map((folder) => ({
-    label: t.toolbar.folderNames[folder],
-    icon: FolderOpen,
-    iconClass: 'text-warn',
-    action: () => void tasks.guard(() => openLauncherFolder(folder)),
-  })),
+  { label: t.toolbar.folderNames.root, icon: FolderOpen, iconKey: 'folder-root', iconClass: 'text-warn', action: () => void tasks.guard(openDataDir) },
+  launcherFolder('instances', true),
+  launcherFolder('java'),
+  launcherFolder('cache'),
+  launcherFolder('iconsets', true),
+  launcherFolder('themes'),
+  launcherFolder('catpacks'),
+  launcherFolder('icons'),
+  launcherFolder('logs', true),
   ...(['resourcepacks', 'shaderpacks', 'screenshots'] as const).map((folder, i) => ({
     label: t.toolbar.sharedFolder(t.sharedFolder.names[folder]),
     icon: FolderOpen,
+    iconKey: `folder-shared-${folder}`,
     iconClass: 'text-accent',
     separatorBefore: i === 0,
     action: () => void tasks.guard(() => openSharedFolder(folder)),
@@ -47,6 +61,24 @@ function menuBelow(e: MouseEvent) {
 
 const accounts = computed(() => settings.settings?.accounts ?? [])
 const current = computed(() => accounts.value.find((a) => a.id === settings.settings?.selectedAccountId))
+/** The cat button shows or hides the cat, bringing back the last one chosen (the mascot at first). */
+const CAT_KEY = 'k0t1k.lastCat'
+function toggleCat() {
+  const current = settings.settings?.ui.catPack
+  try {
+    if (current) localStorage.setItem(CAT_KEY, current)
+  } catch {
+    // remembering the last cat is a convenience only
+  }
+  let last: string | null = null
+  try {
+    last = localStorage.getItem(CAT_KEY)
+  } catch {
+    last = null
+  }
+  void tasks.guard(() => settings.setUi({ catPack: current ? null : (last ?? 'mascot') }))
+}
+
 async function pickAccount(id: string) {
   accountsOpen.value = false
   await tasks.guard(() => settings.selectAccount(id))
@@ -56,18 +88,27 @@ async function pickAccount(id: string) {
 <template>
   <div class="relative z-30 flex h-11 shrink-0 items-center gap-0.5 bg-surface px-1.5" :class="layout.toolbar === 'top' ? 'border-b border-line' : 'border-t border-line'">
     <GripHandle axis="y" class="mx-1" @dock="layout.toolbar = $event === 'start' ? 'top' : 'bottom'" />
-    <button class="tool" :class="onLibrary ? 'tool-active' : ''" @click="router.push('/')"><Library :size="16" class="text-muted" />{{ t.nav.library }}</button>
+    <button class="tool" :class="onLibrary ? 'tool-active' : ''" @click="router.push('/')"><UiIcon name="library" :icon="Library" :size="16" class="text-muted" />{{ t.nav.library }}</button>
     <div class="mx-1 h-5 w-px bg-line" />
-    <button class="tool" @click="showCreate = true"><Plus :size="17" class="text-ok" />{{ t.toolbar.add }}</button>
-    <button class="tool" @click="folderMenu = menuBelow($event)"><FolderOpen :size="16" class="text-warn" />{{ t.toolbar.folders }}<ChevronDown :size="13" class="text-faint" /></button>
-    <button class="tool" :class="route.name === 'settings' ? 'tool-active' : ''" @click="router.push('/settings')"><Settings :size="16" class="text-muted" />{{ t.nav.settings }}</button>
+    <button class="tool" @click="showCreate = true"><UiIcon name="add" :icon="Plus" :size="17" class="text-ok" />{{ t.toolbar.add }}</button>
+    <button class="tool" @click="folderMenu = menuBelow($event)"><UiIcon name="folders" :icon="FolderOpen" :size="16" class="text-warn" />{{ t.toolbar.folders }}<ChevronDown :size="13" class="text-faint" /></button>
+    <button class="tool" :class="route.name === 'settings' ? 'tool-active' : ''" @click="router.push('/settings')"><UiIcon name="settings" :icon="Settings" :size="16" class="text-muted" />{{ t.nav.settings }}</button>
 
     <div class="flex-1" />
     <div v-if="onLibrary" class="relative mr-1 w-52">
       <Search :size="14" class="pointer-events-none absolute top-2 left-2.5 text-faint" />
       <input v-model="layout.search" class="input h-7.5 !pl-8" :placeholder="t.library.searchPlaceholder" :aria-label="t.common.search" />
     </div>
-    <img :src="mascot" alt="" class="pixelated anim-bob mx-1 size-7" />
+    <button
+      class="tool !px-1.5"
+      :class="settings.settings?.ui.catPack ? 'tool-active' : ''"
+      :title="t.toolbar.cat"
+      :aria-label="t.toolbar.cat"
+      :aria-pressed="!!settings.settings?.ui.catPack"
+      @click="toggleCat"
+    >
+      <img :src="mascot" alt="" class="pixelated size-6" />
+    </button>
 
     <div class="relative">
       <button class="tool" :aria-label="t.account.switch" :aria-expanded="accountsOpen" @click="accountsOpen = !accountsOpen">

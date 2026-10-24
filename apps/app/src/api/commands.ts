@@ -44,7 +44,11 @@
  *   save_settings(settings: GlobalSettings)                  -> void
  *   get_system_info()                                        -> SystemInfo
  *   open_data_dir()                                          -> void
- *   open_launcher_folder(folder: 'instances' | 'java' | 'cache') -> void  (creates the folder if missing)
+ *   open_launcher_folder(folder: LauncherFolder)            -> void  (creates the folder if missing)
+ *   list_icon_library()                                      -> string[]  (images in icons/, for set_instance_icon; allows the asset protocol)
+ *   list_cat_packs()                                         -> CatPack[]  (catpacks/; allows the asset protocol)
+ *   list_icon_sets()                                         -> IconSet[]  (iconsets/<set>/<key>.png|svg|gif|webp; allows the asset protocol)
+ *   list_theme_files()                                       -> ThemeFiles  (themes/*.json, ids `file:<name>`)
  *   open_shared_folder(folder: SharedFolder)                 -> void  (creates shared/<folder> if missing)
  *   set_data_dir(path: string | null)                        -> boolean  (true = restart needed; data is not moved; null = default location)
  * Onboarding / install (Windows; the launcher asks where to live when its exe sits in Desktop, Downloads or Documents,
@@ -131,6 +135,10 @@ import type {
   PackExportReport,
   CreateInstanceRequest,
   FtbPack,
+  CatPack,
+  IconSet,
+  LauncherFolder,
+  ThemeFiles,
   ManagedJavaUsage,
   FtbVersion,
   GameLogBatch,
@@ -259,7 +267,11 @@ export const getSettings = () => call<GlobalSettings>('get_settings')
 export const saveSettings = (settings: GlobalSettings) => call<void>('save_settings', { settings })
 export const getSystemInfo = () => call<SystemInfo>('get_system_info')
 export const openDataDir = () => call<void>('open_data_dir')
-export const openLauncherFolder = (folder: 'instances' | 'java' | 'cache') => call<void>('open_launcher_folder', { folder })
+export const openLauncherFolder = (folder: LauncherFolder) => call<void>('open_launcher_folder', { folder })
+export const listIconLibrary = () => call<string[]>('list_icon_library')
+export const listCatPacks = () => call<CatPack[]>('list_cat_packs')
+export const listIconSets = () => call<IconSet[]>('list_icon_sets')
+export const listThemeFiles = () => call<ThemeFiles>('list_theme_files')
 export const openSharedFolder = (folder: SharedFolder) => call<void>('open_shared_folder', { folder })
 export const setDataDir = (path: string | null) => call<boolean>('set_data_dir', { path })
 

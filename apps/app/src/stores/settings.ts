@@ -55,11 +55,14 @@ export function applyCachedUi() {
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<GlobalSettings | null>(null)
+  /** Themes from the launcher's `themes` folder; chosen like custom themes, edited only as files. */
+  const themeFiles = ref<CustomTheme[]>([])
+  const allThemes = () => [...(settings.value?.ui.customThemes ?? []), ...themeFiles.value]
 
   async function load() {
     const loaded = await api.getSettings()
     settings.value = loaded
-    applyUi(loaded.ui.theme, loaded.ui.liteMode, loaded.ui.customThemes)
+    applyUi(loaded.ui.theme, loaded.ui.liteMode, allThemes())
   }
 
   /** Persist the current (already mutated) settings. */
@@ -76,7 +79,11 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** Re-apply the current theme after its (custom) colors were edited; persisting is up to the caller. */
   function reapply() {
-    if (settings.value) applyUi(settings.value.ui.theme, settings.value.ui.liteMode, settings.value.ui.customThemes)
+    if (settings.value) applyUi(settings.value.ui.theme, settings.value.ui.liteMode, allThemes())
+  }
+  function setThemeFiles(themes: CustomTheme[]) {
+    themeFiles.value = themes
+    reapply()
   }
 
   async function addAccount(name: string) {
@@ -93,5 +100,5 @@ export const useSettingsStore = defineStore('settings', () => {
     await load()
   }
 
-  return { settings, load, save, setUi, reapply, addAccount, removeAccount, selectAccount }
+  return { settings, themeFiles, load, setThemeFiles, save, setUi, reapply, addAccount, removeAccount, selectAccount }
 })

@@ -6,6 +6,7 @@ import { loaderOf, minecraftVersionOf } from '../utils/format'
 import type { MenuItem } from './ContextMenu.vue'
 import GripHandle from './GripHandle.vue'
 import InstanceIcon from './InstanceIcon.vue'
+import UiIcon from './UiIcon.vue'
 
 defineProps<{ instance: Instance | undefined; actions: MenuItem[] }>()
 const emit = defineEmits<{ rename: []; edit: [] }>()
@@ -34,7 +35,7 @@ const layout = useLayoutStore()
         <template v-for="item in actions" :key="item.label">
           <div v-if="item.separatorBefore" class="mx-1.5 my-1 h-px bg-line" />
           <button class="tool h-8 w-full justify-start" :class="item.danger ? 'text-danger' : ''" :disabled="item.disabled" @click="item.action()">
-            <component :is="item.icon" v-if="item.icon" :size="16" :class="item.iconClass" />
+            <UiIcon v-if="item.icon" :name="item.iconKey ?? ''" :icon="item.icon" :size="16" :class="item.iconClass" />
             <span class="truncate">{{ item.label }}</span>
           </button>
         </template>

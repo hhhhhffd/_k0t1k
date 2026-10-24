@@ -5,9 +5,10 @@ import curseforgeLogo from '../assets/brands/curseforge.svg'
 import ftbLogo from '../assets/brands/ftb.svg'
 import modrinthLogo from '../assets/brands/modrinth.svg'
 import { computed, ref } from 'vue'
-import { isTauri } from '../api/commands'
+import { fileUrl, isTauri } from '../api/commands'
 import type { Instance, LoaderId } from '../api/types'
 import { t } from '../i18n/ru'
+import { useCustomizationStore } from '../stores/customization'
 import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
 import { useTasksStore } from '../stores/tasks'
@@ -22,6 +23,7 @@ const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
 const layout = useLayoutStore()
+const customization = useCustomizationStore()
 
 type Page = 'custom' | 'import' | 'modrinth' | 'curseForge' | 'ftb'
 /** Each page shows its platform's own logo; the import page a folder like Prism's. */
@@ -37,6 +39,8 @@ const page = ref<Page>('custom')
 const name = ref('')
 const group = ref('')
 const icon = ref('grass')
+/** A picture from the launcher's icons folder; it is copied into the instance once it exists. */
+const libraryIcon = ref<string | null>(null)
 const iconsOpen = ref(false)
 
 const mcVersion = ref('')
@@ -93,7 +97,11 @@ function create() {
       minecraftVersion: mcVersion.value,
       loader: loader.value ? { id: loader.value, version: loaderVersion.value } : undefined,
     }
-    work = tasks.guard(() => store.create(request))
+    const picture = libraryIcon.value
+    work = tasks.guard(async () => {
+      const created = await store.create(request)
+      return picture ? store.setIcon(created.id, picture) : created
+    })
   } else if (page.value === 'import') {
     const src = source.value.trim()
     work = tasks.guard(() =>
@@ -112,7 +120,8 @@ function create() {
     <div class="flex shrink-0 items-start gap-4 border-b border-line p-4">
       <div class="relative">
         <button class="rounded-lg p-1 hover:bg-hover" :title="t.create.icon" :aria-expanded="iconsOpen" @click="iconsOpen = !iconsOpen">
-          <InstanceIcon :icon="icon" :size="64" />
+          <img v-if="libraryIcon" :src="fileUrl(libraryIcon)" alt="" class="size-16 rounded-md object-cover" />
+          <InstanceIcon v-else :icon="icon" :size="64" />
         </button>
         <template v-if="iconsOpen">
           <div class="fixed inset-0 z-10" @mousedown="iconsOpen = false" />
@@ -121,12 +130,23 @@ function create() {
               v-for="key in Object.keys(INSTANCE_ICONS)"
               :key="key"
               class="rounded-md p-0.5"
-              :class="icon === key ? 'bg-accent/30 ring-2 ring-accent' : 'hover:bg-hover'"
+              :class="!libraryIcon && icon === key ? 'bg-accent/30 ring-2 ring-accent' : 'hover:bg-hover'"
               :aria-label="key"
-              :aria-pressed="icon === key"
-              @click="((icon = key), (iconsOpen = false))"
+              :aria-pressed="!libraryIcon && icon === key"
+              @click="((icon = key), (libraryIcon = null), (iconsOpen = false))"
             >
               <InstanceIcon :icon="key" :size="36" />
+            </button>
+            <button
+              v-for="path in customization.iconLibrary"
+              :key="path"
+              class="rounded-md p-0.5"
+              :class="libraryIcon === path ? 'bg-accent/30 ring-2 ring-accent' : 'hover:bg-hover'"
+              :aria-label="path"
+              :aria-pressed="libraryIcon === path"
+              @click="((libraryIcon = path), (iconsOpen = false))"
+            >
+              <img :src="fileUrl(path)" alt="" class="size-9 rounded object-cover" />
             </button>
           </div>
         </template>

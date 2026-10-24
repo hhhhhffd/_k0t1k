@@ -3,7 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { AppWindow, Check, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openSharedFolder, setDataDir, uninstall } from '../api/commands'
+import { createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openLauncherFolder, openSharedFolder, setDataDir, uninstall } from '../api/commands'
 import { type JavaInstall, type ManagedJavaUsage, SHARED_FOLDERS, type SharedFolder, type SystemInfo, type UninstallPlan } from '../api/types'
 import mascot from '../assets/mascot.png'
 import CommandFields from '../components/fields/CommandFields.vue'
@@ -11,10 +11,12 @@ import MemoryFields from '../components/fields/MemoryFields.vue'
 import WindowFields from '../components/fields/WindowFields.vue'
 import AccountLoginDialog from '../components/AccountLoginDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import SelectMenu from '../components/SelectMenu.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import ThemeEditor from '../components/ThemeEditor.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n/ru'
+import { useCustomizationStore } from '../stores/customization'
 import { useInstancesStore } from '../stores/instances'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
@@ -23,6 +25,16 @@ import { THEMES, themeVars } from '../utils/theme'
 const store = useSettingsStore()
 const tasks = useTasksStore()
 const instances = useInstancesStore()
+const customization = useCustomizationStore()
+const catOptions = computed(() => [
+  { value: '', label: t.settings.noCat },
+  { value: 'mascot', label: t.settings.mascotCat },
+  ...customization.catPacks.map((p) => ({ value: p.id, label: p.name, hint: p.kind === 'video' ? t.settings.video : undefined })),
+])
+const iconSetOptions = computed(() => [
+  { value: '', label: t.settings.builtinIcons },
+  ...customization.iconSets.map((set) => ({ value: set.id, label: set.name, hint: `${Object.keys(set.files).length}` })),
+])
 const route = useRoute()
 const router = useRouter()
 
@@ -77,7 +89,7 @@ const uninstallPlan = ref<UninstallPlan | null>(null)
 const s = computed(() => store.settings)
 const themeTiles = computed(() => [
   ...THEMES.map((th) => ({ id: th.id as string, label: th.label, base: th.id, vars: {} as Record<string, string> })),
-  ...(s.value?.ui.customThemes ?? []).map((c) => ({ id: c.id, label: c.name, base: c.base, vars: themeVars(c.colors) })),
+  ...[...(s.value?.ui.customThemes ?? []), ...store.themeFiles].map((c) => ({ id: c.id, label: c.name, base: c.base, vars: themeVars(c.colors) })),
 ])
 
 const onGameLaunchOptions = Object.entries(t.settings.onGameLaunchOptions).map(([value, label]) => ({ value, label }))
@@ -276,6 +288,24 @@ async function addAccount() {
           </div>
         </section>
         <ThemeEditor />
+        <section class="card flex flex-col gap-4 p-4">
+          <div class="flex items-center justify-between">
+            <h3 class="section-title">{{ t.settings.customization }}</h3>
+            <button class="btn h-7" @click="customization.refresh()"><RotateCcw :size="14" />{{ t.settings.rescanFolders }}</button>
+          </div>
+          <div class="grid grid-cols-[160px_1fr_auto] items-center gap-x-3 gap-y-3">
+            <span class="label">{{ t.settings.catPack }}</span>
+            <SelectMenu :model-value="s.ui.catPack ?? ''" :options="catOptions" :aria-label="t.settings.catPack" @update:model-value="store.setUi({ catPack: $event || null })" />
+            <button class="btn h-8" @click="tasks.guard(() => openLauncherFolder('catpacks'))"><FolderOpen :size="14" />{{ t.settings.openFolder }}</button>
+            <span class="label">{{ t.settings.iconSet }}</span>
+            <SelectMenu :model-value="s.ui.iconSet ?? ''" :options="iconSetOptions" :aria-label="t.settings.iconSet" @update:model-value="store.setUi({ iconSet: $event || null })" />
+            <button class="btn h-8" @click="tasks.guard(() => openLauncherFolder('iconsets'))"><FolderOpen :size="14" />{{ t.settings.openFolder }}</button>
+            <span class="label">{{ t.settings.themeFiles }}</span>
+            <span class="text-[12px] text-faint">{{ t.settings.themeFilesHint(store.themeFiles.length) }}</span>
+            <button class="btn h-8" @click="tasks.guard(() => openLauncherFolder('themes'))"><FolderOpen :size="14" />{{ t.settings.openFolder }}</button>
+          </div>
+          <p class="text-[12px] text-faint">{{ t.settings.customizationHint }}</p>
+        </section>
         <section class="card flex items-center gap-3 p-4">
           <ToggleSwitch :model-value="s.ui.liteMode" :label="t.settings.lite" @update:model-value="store.setUi({ liteMode: $event })" />
           <span><span class="block font-medium">{{ t.settings.lite }}</span><span class="text-[12px] text-faint">{{ t.settings.liteHint }}</span></span>

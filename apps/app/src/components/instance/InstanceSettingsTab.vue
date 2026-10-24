@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
+import { FolderOpen } from '@lucide/vue'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { detectJava, isTauri, listManagedJava } from '../../api/commands'
+import { detectJava, fileUrl, isTauri, listManagedJava, openLauncherFolder } from '../../api/commands'
 import { type Instance, type InstanceSettings, type JavaInstall, SHARED_FOLDERS, type SharedFolder } from '../../api/types'
 import { t } from '../../i18n/ru'
+import { useCustomizationStore } from '../../stores/customization'
 import { useInstancesStore } from '../../stores/instances'
 import { useSettingsStore } from '../../stores/settings'
 import { useTasksStore } from '../../stores/tasks'
 import { clone } from '../../utils/format'
+import { baseName } from '../../utils/useFileDrop'
 import CommandFields from '../fields/CommandFields.vue'
 import MemoryFields from '../fields/MemoryFields.vue'
 import OverrideBlock from '../fields/OverrideBlock.vue'
@@ -20,6 +23,7 @@ const props = defineProps<{ instance: Instance }>()
 const store = useInstancesStore()
 const settings = useSettingsStore()
 const tasks = useTasksStore()
+const customization = useCustomizationStore()
 
 const global = computed(() => settings.settings)
 const draft = reactive({
@@ -71,6 +75,12 @@ async function pickIcon() {
     : 'C:\\Users\\Player\\Pictures\\icon.png'
   if (typeof picked !== 'string') return
   const saved = await tasks.guard(() => store.setIcon(props.instance.id, picked))
+  if (saved) draft.icon = saved.icon
+}
+
+/** Icons from the launcher's icons folder are copied into the instance at once, like a picked file. */
+async function useLibraryIcon(path: string) {
+  const saved = await tasks.guard(() => store.setIcon(props.instance.id, path))
   if (saved) draft.icon = saved.icon
 }
 
@@ -137,6 +147,21 @@ async function save() {
           @click="((draft.icon = key), markDirty())"
         >
           <InstanceIcon :icon="key" :size="32" />
+        </button>
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5" role="group" :aria-label="t.iset.iconLibrary">
+        <button
+          v-for="path in customization.iconLibrary"
+          :key="path"
+          class="rounded-md p-0.5 hover:bg-hover"
+          :title="baseName(path)"
+          :aria-label="baseName(path)"
+          @click="useLibraryIcon(path)"
+        >
+          <img :src="fileUrl(path)" alt="" class="size-8 rounded object-cover" />
+        </button>
+        <button class="btn btn-ghost h-8 text-[12px] text-muted" @click="tasks.guard(() => openLauncherFolder('icons'))">
+          <FolderOpen :size="14" />{{ customization.iconLibrary.length ? t.iset.iconLibrary : t.iset.iconLibraryEmpty }}
         </button>
       </div>
       <label class="flex flex-col gap-1">
