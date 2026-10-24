@@ -8,6 +8,8 @@ mod types;
 use std::cmp::Reverse;
 use std::path::{Path, PathBuf};
 
+use serde::Deserialize;
+use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
 
@@ -17,16 +19,13 @@ use crate::error::{Error, IoContext, Result};
 use crate::paths::Paths;
 
 pub use types::{
-    AssetIndexRef, LoggingConfig, LoggingFile, PackageEntry, PackageIndex, Requirement, VersionEntry, VersionFile,
-    VersionList,
+    AssetIndexRef, LoggingConfig, LoggingFile, MojangLaunch, PackageEntry, PackageIndex, Requirement, VersionEntry,
+    VersionFile, VersionList,
 };
 
 const META_URL: &str = "https://meta.prismlauncher.org/v1/";
 
-/// Release time of Minecraft 1.6.1. Older versions use the legacy launch path (applet-based
-/// launchers, `legacyLaunch`/`alphaLaunch` traits in Prism meta) that this launcher cannot start.
-/// The version index carries no traits, so the release time is the cheapest correct signal.
-const FIRST_LAUNCHABLE_RELEASE: &str = "2013-06-25T00:00:00Z";
+const MOJANG_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Loader {
@@ -53,6 +52,18 @@ pub struct MetaClient {
     offline: bool,
     /// Fetched once per client; create a new client to refresh it.
     packages: OnceCell<PackageIndex>,
+}
+
+#[derive(Deserialize)]
+struct MojangManifest {
+    versions: Vec<MojangManifestEntry>,
+}
+
+#[derive(Deserialize)]
+struct MojangManifestEntry {
+    id: String,
+    url: String,
+    sha1: String,
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -174,12 +185,33 @@ impl MetaClient {
         Ok(self.version_list(MINECRAFT_UID).await?.versions)
     }
 
-    /// Minecraft versions this launcher can start (1.6 and newer), newest first.
-    pub async fn launchable_minecraft_versions(&self) -> Result<Vec<VersionEntry>> {
-        let first: chrono::DateTime<chrono::Utc> = FIRST_LAUNCHABLE_RELEASE.parse().expect("valid constant");
-        let mut versions = self.minecraft_versions().await?;
-        versions.retain(|entry| entry.release_time >= first);
-        Ok(versions)
+    /// The launch parts of Mojang's own version JSON. Prism starts pre-1.6 versions through a launcher
+    /// jar of its own; Mojang's JSON starts them through `launchwrapper` and its tweakers instead.
+    /// The JSON of a version never changes, so a cached copy is used without a request.
+    pub async fn mojang_launch(&self, version: &str) -> Result<MojangLaunch> {
+        check_path_component(version)?;
+        let cache_path = self.dir.join("mojang").join(format!("{version}.json"));
+        if let Some(bytes) = read_cached(&cache_path).await? {
+            return Ok(serde_json::from_slice(&bytes)?);
+        }
+        if self.offline {
+            return Err(Error::Other(format!("Mojang's version file for {version} is not cached and offline mode is on")));
+        }
+
+        let manifest: MojangManifest = serde_json::from_slice(&self.download(MOJANG_MANIFEST_URL).await?)?;
+        let entry = manifest
+            .versions
+            .into_iter()
+            .find(|entry| entry.id == version)
+            .ok_or_else(|| Error::Other(format!("Mojang's version manifest has no version {version}")))?;
+        let bytes = self.download(&entry.url).await?;
+        let actual = hex::encode(Sha1::digest(&bytes));
+        if actual != entry.sha1 {
+            return Err(Error::HashMismatch { url: entry.url, expected: entry.sha1, actual });
+        }
+        let launch = serde_json::from_slice(&bytes)?;
+        write_cached(&cache_path, &bytes).await?;
+        Ok(launch)
     }
 
     /// Loader versions usable with `mc_version`, best default first: recommended, then releases
@@ -227,20 +259,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn pre_1_6_versions_are_not_launchable() {
-        let (_root, client) = client_with_list(
-            "net.minecraft",
-            &[
-                entry("1.21.4", Some("release"), false, "2024-12-03T00:00:00+00:00", None),
-                entry("1.6.1", Some("release"), false, "2013-06-25T00:00:00+00:00", None),
-                entry("1.5.2", Some("release"), false, "2013-04-25T00:00:00+00:00", None),
-                entry("b1.7.3", Some("old_beta"), false, "2011-07-08T00:00:00+00:00", None),
-            ],
-        )
-        .await;
-        let versions: Vec<_> =
-            client.launchable_minecraft_versions().await.unwrap().into_iter().map(|entry| entry.version).collect();
-        assert_eq!(versions, ["1.21.4", "1.6.1"]);
+    async fn cached_mojang_launch_is_used_offline() {
+        let root = tempfile::tempdir().unwrap();
+        let paths = Paths::new(root.path());
+        let json = r#"{"id":"b1.7.3","mainClass":"net.minecraft.launchwrapper.Launch",
+            "minecraftArguments":"${auth_player_name} ${auth_session}","libraries":[{"name":"net.minecraft:launchwrapper:1.5"}]}"#;
+        write_cached(&paths.meta_dir().join("mojang/b1.7.3.json"), json.as_bytes()).await.unwrap();
+        let client = MetaClient::new(&paths, true);
+
+        let launch = client.mojang_launch("b1.7.3").await.unwrap();
+        assert_eq!(launch.main_class, "net.minecraft.launchwrapper.Launch");
+        assert_eq!(launch.minecraft_arguments, "${auth_player_name} ${auth_session}");
+        assert_eq!(launch.libraries[0].name.to_string(), "net.minecraft:launchwrapper:1.5");
+        assert!(client.mojang_launch("a1.2.6").await.is_err());
     }
 
     #[tokio::test]

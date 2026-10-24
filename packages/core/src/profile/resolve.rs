@@ -23,8 +23,22 @@ struct Needed {
     dependee: String,
 }
 
+/// Main class of versions Prism starts the regular way; the 1.6 pre-releases carry `legacyLaunch` too.
+const MODERN_MAIN_CLASS: &str = "net.minecraft.client.main.Main";
+
 async fn load(meta: &MetaClient, spec: ComponentSpec) -> Result<ResolvedComponent> {
-    let file = meta.version_file(&spec.uid, &spec.version).await?;
+    let mut file = meta.version_file(&spec.uid, &spec.version).await?;
+    // Prism starts pre-1.6 versions through a launcher jar it ships itself. Mojang's own JSON
+    // starts them through `launchwrapper` and needs nothing else.
+    if spec.uid == MINECRAFT_UID
+        && file.traits.iter().any(|name| name == "legacyLaunch")
+        && file.main_class.as_deref() != Some(MODERN_MAIN_CLASS)
+    {
+        let launch = meta.mojang_launch(&spec.version).await?;
+        file.main_class = Some(launch.main_class);
+        file.minecraft_arguments = Some(launch.minecraft_arguments);
+        file.libraries.extend(launch.libraries);
+    }
     Ok(ResolvedComponent { spec, file })
 }
 
@@ -132,5 +146,57 @@ pub async fn resolve_components(meta: &MetaClient, specs: Vec<ComponentSpec>) ->
         if !changed {
             return Ok(components);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::paths::Paths;
+
+    use super::*;
+
+    fn write(paths: &Paths, relative: &str, json: &str) {
+        let path = paths.meta_dir().join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, json).unwrap();
+    }
+
+    async fn minecraft(paths: &Paths, version: &str) -> VersionFile {
+        let spec = ComponentSpec { uid: MINECRAFT_UID.to_owned(), version: version.to_owned(), dependency_only: false };
+        load(&MetaClient::new(paths, true), spec).await.unwrap().file
+    }
+
+    #[tokio::test]
+    async fn legacy_launch_versions_take_the_launch_parts_from_mojang() {
+        let root = tempfile::tempdir().unwrap();
+        let paths = Paths::new(root.path());
+        write(
+            &paths,
+            "net.minecraft/b1.7.3.json",
+            r#"{"uid":"net.minecraft","version":"b1.7.3","+traits":["legacyLaunch"],"libraries":[{"name":"g:own:1"}],
+                "minecraftArguments":"${auth_player_name} ${auth_session} --gameDir ${game_directory}"}"#,
+        );
+        write(
+            &paths,
+            "net.minecraft/1.6.4.json",
+            r#"{"uid":"net.minecraft","version":"1.6.4","+traits":["legacyLaunch"],"mainClass":"net.minecraft.client.main.Main"}"#,
+        );
+        write(
+            &paths,
+            "mojang/b1.7.3.json",
+            r#"{"mainClass":"net.minecraft.launchwrapper.Launch","minecraftArguments":"mojang args",
+                "libraries":[{"name":"net.minecraft:launchwrapper:1.5"}]}"#,
+        );
+
+        let legacy = minecraft(&paths, "b1.7.3").await;
+        assert_eq!(legacy.main_class.as_deref(), Some("net.minecraft.launchwrapper.Launch"));
+        assert_eq!(legacy.minecraft_arguments.as_deref(), Some("mojang args"));
+        let names: Vec<_> = legacy.libraries.iter().map(|library| library.name.to_string()).collect();
+        assert_eq!(names, ["g:own:1", "net.minecraft:launchwrapper:1.5"]);
+
+        // 1.6 pre-releases also carry the trait but start through the regular main class.
+        let modern = minecraft(&paths, "1.6.4").await;
+        assert_eq!(modern.main_class.as_deref(), Some("net.minecraft.client.main.Main"));
+        assert!(modern.libraries.is_empty());
     }
 }

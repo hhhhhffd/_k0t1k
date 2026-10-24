@@ -115,3 +115,13 @@ pub struct VersionFile {
     #[serde(default)]
     pub logging: Option<LoggingConfig>,
 }
+
+/// The launch-relevant fields of a version JSON from Mojang's launcher manifest.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MojangLaunch {
+    pub main_class: String,
+    pub minecraft_arguments: String,
+    #[serde(default)]
+    pub libraries: Vec<Library>,
+}
