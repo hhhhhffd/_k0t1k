@@ -44,6 +44,7 @@
  *   save_settings(settings: GlobalSettings)                  -> void
  *   get_system_info()                                        -> SystemInfo
  *   open_data_dir()                                          -> void
+ *   open_launcher_folder(folder: 'instances' | 'java' | 'cache') -> void  (creates the folder if missing)
  *   open_shared_folder(folder: SharedFolder)                 -> void  (creates shared/<folder> if missing)
  *   set_data_dir(path: string | null)                        -> boolean  (true = restart needed; data is not moved; null = default location)
  * Onboarding / install (Windows; the launcher asks where to live when its exe sits in Desktop, Downloads or Documents,
@@ -129,6 +130,8 @@ import type {
   ExportRequest,
   PackExportReport,
   CreateInstanceRequest,
+  FtbPack,
+  FtbVersion,
   GameLogBatch,
   GameCrashed,
   GameLogLine,
@@ -253,6 +256,7 @@ export const getSettings = () => call<GlobalSettings>('get_settings')
 export const saveSettings = (settings: GlobalSettings) => call<void>('save_settings', { settings })
 export const getSystemInfo = () => call<SystemInfo>('get_system_info')
 export const openDataDir = () => call<void>('open_data_dir')
+export const openLauncherFolder = (folder: 'instances' | 'java' | 'cache') => call<void>('open_launcher_folder', { folder })
 export const openSharedFolder = (folder: SharedFolder) => call<void>('open_shared_folder', { folder })
 export const setDataDir = (path: string | null) => call<boolean>('set_data_dir', { path })
 
@@ -316,6 +320,11 @@ export const installModpackVersion = (version: ProjectVersion, name?: string) =>
   })
 
 // ---- worlds ----
+export const importModpackUrl = (url: string, name?: string) => call<ModpackImport>('import_modpack_url', { url, name })
+export const ftbSearchPacks = (query: string) => call<FtbPack[]>('ftb_search_packs', { query })
+export const ftbPackVersions = (packId: number) => call<FtbVersion[]>('ftb_pack_versions', { packId })
+export const installFtbPack = (packId: number, versionId: number, name?: string) =>
+  call<ModpackImport>('install_ftb_pack', { packId, versionId, name })
 export const listWorlds = (instanceId: string) => call<World[]>('list_worlds', { instanceId })
 export const renameWorld = (instanceId: string, dirName: string, name: string, renameFolder: boolean) =>
   call<string>('rename_world', { instanceId, dirName, name, renameFolder })

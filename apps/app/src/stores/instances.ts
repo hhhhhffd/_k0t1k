@@ -84,7 +84,9 @@ export const useInstancesStore = defineStore('instances', () => {
     tasks.showBlocked(result.blocked, result.instance.id)
     return upsert(result.instance)
   }
-  const importModpack = async (path: string) => upsertImport(await api.importModpackFile(path))
+  const importModpack = async (path: string, name?: string) => upsertImport(await api.importModpackFile(path, name))
+  const importModpackUrl = async (url: string, name?: string) => upsertImport(await api.importModpackUrl(url, name))
+  const installFtbPack = async (...args: Parameters<typeof api.installFtbPack>) => upsertImport(await api.installFtbPack(...args))
   const installModpack = async (...args: Parameters<typeof api.installModpackVersion>) =>
     upsertImport(await api.installModpackVersion(...args))
 
@@ -201,6 +203,6 @@ export const useInstancesStore = defineStore('instances', () => {
 
   return {
     instances, loaded, crashes, instancesDir, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setIcon, resetIcon, setGroup,
-    updateSettings, changeVersions, remove, importModpack, installModpack, updateModpack, launch, kill, killSession, dismissCrash, clearLog, init,
+    updateSettings, changeVersions, remove, importModpack, importModpackUrl, installFtbPack, installModpack, updateModpack, launch, kill, killSession, dismissCrash, clearLog, init,
   }
 })

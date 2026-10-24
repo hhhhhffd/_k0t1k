@@ -2,7 +2,6 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { ArrowLeft, Eye, EyeOff, Globe, Plus, Search, Trash2 } from '@lucide/vue'
 import { onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import * as api from '../../api/commands'
 import { isTauri } from '../../api/commands'
 import type { LocalResource, World } from '../../api/types'
@@ -10,11 +9,12 @@ import { t } from '../../i18n/ru'
 import { useTasksStore } from '../../stores/tasks'
 import { formatBytes, formatRelative, originPlatform } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
+import ContentDialog from '../ContentDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
 const props = defineProps<{ instanceId: string; world: World }>()
 const emit = defineEmits<{ back: [] }>()
-const router = useRouter()
+const showContent = ref(false)
 const tasks = useTasksStore()
 
 const packs = ref<LocalResource[]>([])
@@ -62,8 +62,9 @@ async function addFile() {
   if (fileName) tasks.toast(t.worlds.datapackAdded(fileName), 'ok')
 }
 
-function browse() {
-  void router.push({ name: 'browse', query: { instance: props.instanceId, kind: 'dataPack', world: props.world.dirName } })
+function closeContent() {
+  showContent.value = false
+  void load()
 }
 
 async function copySeed() {
@@ -107,7 +108,7 @@ async function copySeed() {
       <h3 class="section-title mr-auto">{{ t.worlds.datapacks }}</h3>
       <span class="text-faint">{{ packs.length }}</span>
       <button class="btn" @click="addFile"><Plus :size="15" />{{ t.worlds.addDatapack }}</button>
-      <button class="btn btn-primary" @click="browse"><Search :size="15" />{{ t.worlds.findDatapacks }}</button>
+      <button class="btn btn-primary" @click="showContent = true"><Search :size="15" />{{ t.worlds.findDatapacks }}</button>
     </div>
     <p class="text-[12px] text-faint">{{ t.worlds.datapacksHint }}</p>
 
@@ -133,5 +134,6 @@ async function copySeed() {
     </ul>
 
     <ConfirmDialog v-if="toDelete" :title="t.worlds.deleteDatapack" :text="toDelete.fileName" @confirm="confirmDelete" @close="toDelete = null" />
+    <ContentDialog v-if="showContent" :instance-id="instanceId" kind="dataPack" :world="world.dirName" @close="closeContent" />
   </div>
 </template>

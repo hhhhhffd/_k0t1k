@@ -130,14 +130,14 @@ function removeLoader() {
       </div>
     </div>
 
-    <ModalDialog v-if="editing" :title="t.version.dialogTitle" :width="760" @close="editing = false">
-      <div class="grid grid-cols-[1fr_1fr] gap-5">
-        <div class="flex flex-col gap-3">
+    <ModalDialog v-if="editing" :title="t.version.dialogTitle" large @close="editing = false">
+      <div class="flex min-h-0 flex-1 flex-col gap-3 p-4">
+        <div class="flex min-h-0 flex-[3] flex-col"><McVersionList v-model="draftMc" /></div>
+        <div class="flex min-h-0 flex-[2] flex-col border-t border-line pt-3">
           <LoaderPicker v-model:loader="draftLoader" v-model:loader-version="draftLoaderVersion" :mc-version="draftMc" />
-          <p v-if="loaderChanges && loader" class="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] text-warn">{{ t.version.loaderWarning }}</p>
-          <p class="text-[12px] text-faint">{{ t.version.dialogHint }}</p>
         </div>
-        <McVersionList v-model="draftMc" />
+        <p v-if="loaderChanges && loader" class="shrink-0 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] text-warn">{{ t.version.loaderWarning }}</p>
+        <p class="shrink-0 text-[12px] text-faint">{{ t.version.dialogHint }}</p>
       </div>
       <template #footer>
         <button class="btn" @click="editing = false">{{ t.common.cancel }}</button>

@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { open } from '@tauri-apps/plugin-dialog'
-import { Check, ChevronDown, Compass, FileUp, FolderOpen, Library, Plus, Search, Settings, User } from '@lucide/vue'
+import { Check, ChevronDown, FolderOpen, Library, Plus, Search, Settings, User } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { isTauri, openDataDir, openSharedFolder } from '../api/commands'
+import { openDataDir, openLauncherFolder, openSharedFolder } from '../api/commands'
 import mascot from '../assets/mascot.png'
 import { t } from '../i18n/ru'
-import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
@@ -14,7 +12,6 @@ import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import CreateInstanceDialog from './CreateInstanceDialog.vue'
 import GripHandle from './GripHandle.vue'
 
-const store = useInstancesStore()
 const settings = useSettingsStore()
 const tasks = useTasksStore()
 const layout = useLayoutStore()
@@ -27,10 +24,17 @@ const accountsOpen = ref(false)
 const onLibrary = computed(() => route.name === 'library')
 
 const folderItems: MenuItem[] = [
-  { label: t.toolbar.dataFolder, icon: FolderOpen, action: () => void tasks.guard(openDataDir) },
+  { label: t.toolbar.folderNames.root, icon: FolderOpen, iconClass: 'text-warn', action: () => void tasks.guard(openDataDir) },
+  ...(['instances', 'java', 'cache'] as const).map((folder) => ({
+    label: t.toolbar.folderNames[folder],
+    icon: FolderOpen,
+    iconClass: 'text-warn',
+    action: () => void tasks.guard(() => openLauncherFolder(folder)),
+  })),
   ...(['resourcepacks', 'shaderpacks', 'screenshots'] as const).map((folder, i) => ({
     label: t.toolbar.sharedFolder(t.sharedFolder.names[folder]),
     icon: FolderOpen,
+    iconClass: 'text-accent',
     separatorBefore: i === 0,
     action: () => void tasks.guard(() => openSharedFolder(folder)),
   })),
@@ -39,15 +43,6 @@ const folderItems: MenuItem[] = [
 function menuBelow(e: MouseEvent) {
   const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
   return { x: box.left, y: layout.toolbar === 'top' ? box.bottom + 4 : box.top - folderItems.length * 34 - 16 }
-}
-
-async function importPack() {
-  const path = isTauri
-    ? await open({ multiple: false, filters: [{ name: t.transfer.importFilter, extensions: ['mrpack', 'zip'] }] })
-    : 'C:\\Downloads\\Example Pack.mrpack'
-  if (typeof path !== 'string') return
-  const imported = await tasks.guard(() => store.importModpack(path))
-  if (imported) layout.selectedId = imported.id
 }
 
 const accounts = computed(() => settings.settings?.accounts ?? [])
@@ -64,9 +59,7 @@ async function pickAccount(id: string) {
     <button class="tool" :class="onLibrary ? 'tool-active' : ''" @click="router.push('/')"><Library :size="16" class="text-muted" />{{ t.nav.library }}</button>
     <div class="mx-1 h-5 w-px bg-line" />
     <button class="tool" @click="showCreate = true"><Plus :size="17" class="text-ok" />{{ t.toolbar.add }}</button>
-    <button class="tool" @click="importPack"><FileUp :size="16" class="text-accent" />{{ t.library.import }}</button>
     <button class="tool" @click="folderMenu = menuBelow($event)"><FolderOpen :size="16" class="text-warn" />{{ t.toolbar.folders }}<ChevronDown :size="13" class="text-faint" /></button>
-    <button class="tool" :class="route.name === 'browse' ? 'tool-active' : ''" @click="router.push('/browse')"><Compass :size="16" class="text-accent" />{{ t.nav.browse }}</button>
     <button class="tool" :class="route.name === 'settings' ? 'tool-active' : ''" @click="router.push('/settings')"><Settings :size="16" class="text-muted" />{{ t.nav.settings }}</button>
 
     <div class="flex-1" />

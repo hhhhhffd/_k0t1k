@@ -409,6 +409,27 @@ export interface ModpackImport {
   blocked: BlockedFile[]
 }
 
+/** A Feed The Beast modpack (api.feed-the-beast.com). */
+export interface FtbPack {
+  id: number
+  name: string
+  summary: string
+  authors: string[]
+  iconUrl: string | null
+  installs: number
+  updated: string
+  tags: string[]
+}
+
+export interface FtbVersion {
+  id: number
+  name: string
+  type: string
+  updated: string
+  minecraftVersion: string
+  loader: { id: LoaderId; version: string } | null
+}
+
 export type ExportFormat = 'instance' | 'modrinth' | 'curseForge'
 
 export interface ExportRequest {

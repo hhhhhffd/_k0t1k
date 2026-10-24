@@ -13,6 +13,8 @@ import type {
   ExportRequest,
   PackExportReport,
   CreateInstanceRequest,
+  FtbPack,
+  FtbVersion,
   GameLogBatch,
   GameLogLine,
   GlobalSettings,
@@ -81,11 +83,19 @@ const MC: [string, string, string][] = [
   ['1.18.2', 'release', '2022-02-28'], ['1.17.1', 'release', '2021-07-06'], ['1.16.5', 'release', '2021-01-15'],
   ['1.12.2', 'release', '2017-09-18'], ['1.8.9', 'release', '2015-12-09'], ['1.7.10', 'release', '2014-06-26'],
   ['25w06a', 'snapshot', '2025-02-05'], ['25w05a', 'snapshot', '2025-01-29'], ['24w46a', 'snapshot', '2024-11-13'],
-  ['b1.7.3', 'old_beta', '2011-07-08'], ['a1.2.6', 'old_alpha', '2010-12-03'],
+  ['1.19_deep_dark_experimental_snapshot-1', 'experiment', '2022-02-16'],
+  ['1.5.2', 'release', '2013-04-25'], ['b1.7.3', 'old_beta', '2011-07-08'], ['b1.6.6', 'old_beta', '2011-05-31'],
+  ['a1.2.6', 'old_alpha', '2010-12-03'], ['a1.1.2_01', 'old_alpha', '2010-09-23'],
 ]
+const ftbPacks: FtbPack[] = [
+  { id: 126, name: 'FTB StoneBlock 3', summary: 'Выживание в мире из камня', authors: ['FTB'], iconUrl: null, installs: 4_200_000, updated: daysAgo(12), tags: ['Skyblock'] },
+  { id: 125, name: 'FTB Evolution', summary: 'Кухня из технических и магических модов', authors: ['FTB'], iconUrl: null, installs: 1_900_000, updated: daysAgo(40), tags: ['Tech', 'Magic'] },
+  { id: 105, name: 'FTB OceanBlock', summary: 'Выживание посреди океана', authors: ['FTB'], iconUrl: null, installs: 2_600_000, updated: daysAgo(200), tags: ['Survival'] },
+]
+
 const minecraftVersions: MinecraftVersion[] = MC.map(([version, type, t], i) => ({
   version, type, releaseTime: new Date(t).toISOString(), recommended: i === 0,
-}))
+})).sort((a, b) => b.releaseTime.localeCompare(a.releaseTime))
 
 function loaderVersions(mc: string, loader: LoaderId): LoaderVersion[] {
   const seeds: Record<LoaderId, string[]> = {
@@ -603,6 +613,7 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       return { totalRamMib: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir, portable: false, exeDir: 'C:\\Program Files\\_k0t1k' } satisfies SystemInfo
     case 'set_data_dir': dataDir = (a.path as string | null) ?? '%APPDATA%\\_k0t1k'; return true
     case 'open_data_dir': return undefined
+    case 'open_launcher_folder': return undefined
     // `?onboarding` in the URL previews the first-run screen (`?onboarding=temp` for the zip variant)
     case 'get_onboarding': {
       const reason = new URLSearchParams(location.search).get('onboarding')
@@ -792,6 +803,36 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
         icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'fabric', version: '0.16.10' }),
       })
       await fakeTask(`import-${inst.id}`, `Импорт ${inst.name}`, ['Чтение манифеста', 'Скачивание модов', 'Применение overrides'], 450)
+      instances.push(inst)
+      return clone({ instance: inst, blocked: [] } satisfies ModpackImport)
+    }
+    case 'import_modpack_url': {
+      const url = a.url as string
+      const inst = newInstance({
+        id: nextId('inst'), name: (a.name as string | undefined) || decodeURIComponent(url.split(/[/?#]/).filter(Boolean).pop() ?? 'Модпак').replace(/\.(mrpack|zip)$/i, ''),
+        icon: 'gem', components: components('1.20.1', { id: 'fabric', version: '0.16.10' }),
+      })
+      await fakeTask(`import-${inst.id}`, `Импорт ${inst.name}`, ['Скачивание файла', 'Чтение манифеста', 'Скачивание модов'], 450)
+      instances.push(inst)
+      return clone({ instance: inst, blocked: [] } satisfies ModpackImport)
+    }
+    case 'ftb_search_packs': {
+      await sleep(300)
+      const needle = (a.query as string).toLowerCase()
+      return ftbPacks.filter((p) => p.name.toLowerCase().includes(needle))
+    }
+    case 'ftb_pack_versions': {
+      await sleep(200)
+      const pack = ftbPacks.find((p) => p.id === a.packId)!
+      return [3, 2, 1].map((n, i): FtbVersion => ({
+        id: pack.id * 100 + n, name: `1.${n}.0`, type: i === 1 ? 'beta' : 'release', updated: daysAgo(i * 30),
+        minecraftVersion: '1.21.1', loader: { id: 'neoForge', version: '21.1.172' },
+      }))
+    }
+    case 'install_ftb_pack': {
+      const pack = ftbPacks.find((p) => p.id === a.packId)!
+      const inst = newInstance({ id: nextId('inst'), name: (a.name as string | undefined) || pack.name, icon: 'flame', components: components('1.21.1', { id: 'neoForge', version: '21.1.172' }) })
+      await fakeTask(`ftb-${inst.id}`, `Установка ${inst.name}`, ['Манифест', 'Скачивание модов', 'Конфиги'], 450)
       instances.push(inst)
       return clone({ instance: inst, blocked: [] } satisfies ModpackImport)
     }

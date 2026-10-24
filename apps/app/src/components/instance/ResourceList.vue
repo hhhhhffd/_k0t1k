@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { ArrowUpCircle, ArrowUpFromLine, Lock, LockOpen, Plus, RefreshCw, Search, Trash2 } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import * as api from '../../api/commands'
 import type { AvailableUpdate, BlockedFile, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n/ru'
 import { useTasksStore } from '../../stores/tasks'
 import { errorMessage, formatBytes, originPlatform } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
+import ContentDialog from '../ContentDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
 const props = defineProps<{ instanceId: string; kind: LocalResourceKind; sharedNote?: string }>()
-const router = useRouter()
+const showContent = ref(false)
 const tasks = useTasksStore()
 
 const resources = ref<LocalResource[]>([])
@@ -115,8 +115,9 @@ async function toggleLock(r: LocalResource) {
   }
 }
 
-function browse() {
-  void router.push({ name: 'browse', query: { instance: props.instanceId, kind: props.kind } })
+function closeContent() {
+  showContent.value = false
+  void load()
 }
 </script>
 
@@ -137,7 +138,7 @@ function browse() {
       <button class="btn" :disabled="checking || !!bulk || !resources.length" @click="checkUpdates">
         <RefreshCw :size="15" :class="checking ? 'animate-spin' : ''" />{{ checking ? t.instance.checking : t.instance.checkUpdates }}
       </button>
-      <button class="btn btn-primary" @click="browse"><Plus :size="16" />{{ t.instance.addContent }}</button>
+      <button class="btn btn-primary" @click="showContent = true"><Plus :size="16" />{{ t.instance.addContent }}</button>
     </div>
 
     <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
@@ -183,5 +184,6 @@ function browse() {
       @confirm="confirmDelete"
       @close="toDelete = null"
     />
+    <ContentDialog v-if="showContent" :instance-id="instanceId" :kind="kind" @close="closeContent" />
   </div>
 </template>

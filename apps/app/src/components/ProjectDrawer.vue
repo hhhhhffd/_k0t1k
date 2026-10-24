@@ -2,7 +2,7 @@
 import { ArrowUpRight, Download, ExternalLink, ShieldAlert, TriangleAlert, X } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getProjectVersions, installDatapack, installVersion, listWorlds } from '../api/commands'
-import type { LoaderId, ProjectVersion, ResourceKind, SearchHit, VersionFilter } from '../api/types'
+import type { LocalResourceKind, ProjectVersion, SearchHit, VersionFilter } from '../api/types'
 import { t } from '../i18n/ru'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
@@ -12,7 +12,7 @@ import ProjectIcon from './ProjectIcon.vue'
 import SelectMenu from './SelectMenu.vue'
 import ToggleSwitch from './ToggleSwitch.vue'
 
-const props = defineProps<{ hit: SearchHit; kind: ResourceKind; instanceId: string; world?: string; gameVersion?: string; loader?: LoaderId }>()
+const props = defineProps<{ hit: SearchHit; kind: LocalResourceKind; instanceId: string; world?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
@@ -20,11 +20,9 @@ const tasks = useTasksStore()
 const versions = ref<ProjectVersion[]>([])
 const loading = ref(true)
 const target = ref(props.instanceId || store.instances[0]?.id || '')
-const packName = ref(props.hit.title)
 const busy = ref<string | null>(null)
 const installedIds = ref(new Set<string>())
 
-const isPack = computed(() => props.kind === 'modpack')
 // A data pack lives in one world of the target instance, so that world is chosen too.
 const isDatapack = computed(() => props.kind === 'dataPack')
 const worldOptions = ref<{ value: string; label: string }[]>([])
@@ -32,9 +30,8 @@ const targetWorld = ref(props.world ?? '')
 const showAll = ref(false)
 const targetOptions = computed(() => store.instances.map((i) => ({ value: i.id, label: i.name })))
 
-/** What a version must match to be installable into the target instance (a modpack creates its own instance). */
+/** What a version must match to be installable into the target instance */
 const requirement = computed<VersionFilter>(() => {
-  if (isPack.value) return { gameVersion: props.gameVersion, loader: props.loader }
   const inst = store.byId(target.value)
   if (!inst) return {}
   // resource packs and shaders do not depend on a loader
@@ -61,7 +58,8 @@ async function loadVersions() {
 }
 
 onMounted(() => {
-  window.addEventListener('keydown', onKey)
+  // capture, so Escape closes only the drawer and not the dialog it was opened from
+  window.addEventListener('keydown', onKey, true)
   void loadVersions()
 })
 // the modpack filter is fixed for the drawer's lifetime, so only the target and the toggle matter
@@ -75,28 +73,25 @@ async function loadWorlds() {
 }
 onMounted(loadWorlds)
 watch(target, loadWorlds)
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key !== 'Escape') return
+  e.stopPropagation()
+  emit('close')
 }
 
 async function install(v: ProjectVersion) {
   busy.value = v.id
-  if (isPack.value) {
-    const inst = await tasks.guard(() => store.installModpack(v, packName.value.trim() || undefined))
-    if (inst) tasks.toast(t.browse.installedOk(inst.name), 'ok')
-  } else if (props.kind !== 'modpack' && props.kind !== 'world') {
-    const kind = props.kind
-    const report = await tasks.guard(() =>
-      kind === 'dataPack' ? installDatapack(target.value, targetWorld.value, v) : installVersion(target.value, v, kind),
-    )
-    if (report) {
-      tasks.showBlocked(report.blocked, target.value)
-      const installed = report.installed.find((i) => !i.isDependency)
-      if (installed) {
-        installedIds.value = new Set(installedIds.value).add(v.id)
-        tasks.toast(t.browse.installedOk(installed.fileName), 'ok')
-      }
+  const kind = props.kind
+  const report = await tasks.guard(() =>
+    kind === 'dataPack' ? installDatapack(target.value, targetWorld.value, v) : installVersion(target.value, v, kind),
+  )
+  if (report) {
+    tasks.showBlocked(report.blocked, target.value)
+    const installed = report.installed.find((i) => !i.isDependency)
+    if (installed) {
+      installedIds.value = new Set(installedIds.value).add(v.id)
+      tasks.toast(t.browse.installedOk(installed.fileName), 'ok')
     }
   }
   busy.value = null
@@ -108,8 +103,8 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
 
 <template>
   <Teleport to="body">
-    <div class="anim-fade fixed inset-0 z-40 bg-black/50" @mousedown="emit('close')" />
-    <aside class="anim-slide fixed top-0 right-0 bottom-0 z-40 flex w-[480px] max-w-full flex-col border-l border-line bg-surface shadow-[var(--shadow-pop)]" role="dialog" :aria-label="hit.title">
+    <div class="anim-fade fixed inset-0 z-[55] bg-black/50" @mousedown="emit('close')" />
+    <aside class="anim-slide fixed top-0 right-0 bottom-0 z-[55] flex w-[480px] max-w-full flex-col border-l border-line bg-surface shadow-[var(--shadow-pop)]" role="dialog" :aria-label="hit.title">
       <header class="flex items-start gap-3 border-b border-line p-4">
         <ProjectIcon :hit="hit" :size="56" />
         <div class="min-w-0 flex-1">
@@ -125,11 +120,7 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
 
       <div class="flex flex-col gap-3 border-b border-line p-4">
         <p class="text-muted">{{ hit.description }}</p>
-        <label v-if="isPack" class="flex flex-col gap-1">
-          <span class="label">{{ t.browse.packName }}</span>
-          <input v-model="packName" class="input" />
-        </label>
-        <div v-else class="flex flex-col gap-1">
+        <div class="flex flex-col gap-1">
           <span class="label">{{ t.browse.target }}</span>
           <SelectMenu v-model="target" :options="targetOptions" :disabled="!store.instances.length" :aria-label="t.browse.target" />
           <span v-if="!store.instances.length" class="text-warn">{{ t.browse.noInstance }}</span>
@@ -179,10 +170,10 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
               <button
                 v-else
                 class="btn btn-primary h-7"
-                :disabled="busy !== null || (!isPack && !target) || (isDatapack && !targetWorld)"
+                :disabled="busy !== null || !target || (isDatapack && !targetWorld)"
                 @click="install(v)"
               >
-                <Download :size="14" />{{ installedIds.has(v.id) ? t.browse.installed : isPack ? t.browse.createFromPack : t.browse.install }}
+                <Download :size="14" />{{ installedIds.has(v.id) ? t.browse.installed : t.browse.install }}
               </button>
             </div>
             <p v-if="v.files.some((f) => f.url === null)" class="mt-2 flex items-start gap-1.5 rounded-md bg-warn/10 p-2 text-[12px] text-warn">

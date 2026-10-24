@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import type { SearchHit } from '../api/types'
 
-const props = withDefaults(defineProps<{ hit: SearchHit; size?: number }>(), { size: 48 })
+/** Only the icon, title and slug are used, so FTB packs can be shown too. */
+const props = withDefaults(defineProps<{ hit: Pick<SearchHit, 'iconUrl' | 'title' | 'slug'>; size?: number }>(), { size: 48 })
 // no icon URL (or mock data): stable colored tile from the project slug
 const hue = computed(() => [...props.hit.slug].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7))
 </script>
