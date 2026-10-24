@@ -12,6 +12,7 @@ use crate::error::{Error, Result};
 use crate::paths::Paths;
 
 const AUTH_URL: &str = "https://authserver.ely.by/auth";
+const INJECTOR_HOST: &str = "authlib-injector.yushi.moe";
 const INJECTOR_LATEST_URL: &str = "https://authlib-injector.yushi.moe/artifact/latest.json";
 
 pub const RELOGIN_MESSAGE: &str = "Сессия ely.by истекла: войдите в аккаунт заново";
@@ -179,7 +180,9 @@ async fn latest_release(http: &reqwest::Client) -> Result<InjectorRelease> {
     // The version becomes a folder name and the URL is fetched as is, so both are checked.
     let version_ok = !release.version.is_empty()
         && release.version.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_');
-    if !version_ok || !release.download_url.starts_with("https://") {
+    let host_ok = reqwest::Url::parse(&release.download_url)
+        .is_ok_and(|url| url.scheme() == "https" && url.host_str() == Some(INJECTOR_HOST));
+    if !version_ok || !host_ok {
         return Err(Error::Other("authlib-injector: неожиданный ответ сервера обновлений".to_owned()));
     }
     Ok(release)
