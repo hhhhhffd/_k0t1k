@@ -152,7 +152,7 @@ export interface ElybyLoginResult {
 }
 
 /** What the window does while a game runs: destroy it (frees the web view's memory), hide it, or leave it. */
-export type OnGameLaunch = 'free_memory' | 'hide_to_tray' | 'keep_open'
+export type OnGameLaunch = 'hide_to_tray' | 'keep_open'
 /** What the window's close button does: close to the tray or exit the launcher. */
 export type OnClose = 'tray' | 'exit'
 

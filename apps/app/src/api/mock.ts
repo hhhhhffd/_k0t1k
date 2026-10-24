@@ -125,7 +125,7 @@ const defaultSettings: GlobalSettings = {
   env: {},
   playtime: { record: true, show: true, totalSecs: 0 },
   ui: { theme: 'k0t1k', liteMode: false, customThemes: [] },
-  behavior: { onGameLaunch: 'free_memory', onClose: 'tray' },
+  behavior: { onGameLaunch: 'hide_to_tray', onClose: 'tray' },
   discord: { enabled: true },
   onboarding: { keepPortableAt: null, createdShortcuts: [] },
   sharedFoldersDefault: ['resourcepacks', 'shaderpacks'],

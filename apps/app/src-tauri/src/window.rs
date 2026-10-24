@@ -4,7 +4,7 @@
 //! Rules:
 //! - Closing the window (title bar button, Alt+F4) follows `behavior.on_close`: `tray` destroys the
 //!   window and keeps the launcher in the tray, `exit` quits (asking first when a game is running).
-//! - When a game starts (any session of any instance), `behavior.on_game_launch` destroys (`free_memory`) or hides (`hide_to_tray`)
+//! - When a game starts (any session of any instance), `behavior.on_game_launch` = `hide_to_tray` destroys
 //!   the window, if there is one, and marks it as released for the game.
 //! - When the last session of all instances ends, a released window is created or shown again. Opening the window yourself
 //!   (tray click, second launch) clears the mark, so a window you closed afterwards stays closed.
@@ -157,8 +157,7 @@ pub fn on_game_started(app: &AppHandle, mode: OnGameLaunch) {
             return;
         };
         state.window_released.store(true, Ordering::SeqCst);
-        let result = if mode == OnGameLaunch::FreeMemory { destroy_window(&window) } else { window.hide() };
-        if let Err(error) = result {
+        if let Err(error) = destroy_window(&window) {
             tracing::error!("cannot release the launcher window: {error}");
         }
     });

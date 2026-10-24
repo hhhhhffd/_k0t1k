@@ -168,10 +168,10 @@ impl Default for UiSettings {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OnGameLaunch {
-    /// Destroy the window, so the web view's processes exit; it is recreated when the game ends.
+    /// Leave only the tray icon: the window is destroyed, so the web view's processes exit, and it is
+    /// recreated when the game ends. `free_memory` is the name of the same choice in older settings.
     #[default]
-    FreeMemory,
-    /// Hide the window; it is shown again when the game ends.
+    #[serde(alias = "free_memory")]
     HideToTray,
     KeepOpen,
 }
@@ -401,7 +401,7 @@ mod tests {
         assert!(!settings.window.maximized);
         assert_eq!(settings.ui.theme, "k0t1k");
         assert!(settings.playtime.record && settings.playtime.show);
-        assert_eq!(settings.behavior.on_game_launch, OnGameLaunch::FreeMemory);
+        assert_eq!(settings.behavior.on_game_launch, OnGameLaunch::HideToTray);
         assert_eq!(settings.behavior.on_close, OnClose::Tray);
     }
 
@@ -426,6 +426,8 @@ mod tests {
         assert_eq!(settings.behavior, BehaviorSettings { on_game_launch: OnGameLaunch::HideToTray, on_close: OnClose::Exit });
         let json = serde_json::to_value(&settings).unwrap();
         assert_eq!(json["behavior"]["onGameLaunch"], "hide_to_tray");
+        let old: GlobalSettings = serde_json::from_str(r#"{"behavior":{"onGameLaunch":"free_memory"}}"#).unwrap();
+        assert_eq!(old.behavior.on_game_launch, OnGameLaunch::HideToTray);
     }
 
     fn theme(id: &str, colors: &[(&str, &str)]) -> CustomTheme {
