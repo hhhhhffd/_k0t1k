@@ -226,9 +226,37 @@ fn redacted_display_masks_the_access_token() {
         args: ["--username", "Notch", "--accessToken", "secret", "--uuid", "u"].map(str::to_owned).to_vec(),
         cwd: PathBuf::new(),
         env: BTreeMap::new(),
+        secrets: Vec::new(),
     };
     let shown = command.display_redacted();
     assert_eq!(shown, "java --username Notch --accessToken *** --uuid u");
+}
+
+async fn redacted_command_line(minecraft_arguments: &str) -> String {
+    let root = tempfile::tempdir().unwrap();
+    let paths = Paths::new(root.path());
+    let mut profile = profile("linux", "");
+    profile.minecraft_arguments = minecraft_arguments.to_owned();
+    let mut options = options(root.path());
+    options.java_major = 8;
+    options.account = Account::authenticated("Notch", "0123456789abcdef0123456789abcdef", "secret-access-token", "msa");
+    let command = build_command(&paths, &profile, &assets(), &options).await.unwrap();
+    assert!(command.args.iter().any(|arg| arg.contains("secret-access-token")));
+    command.display_redacted()
+}
+
+#[tokio::test]
+async fn redacted_display_masks_the_token_inside_session() {
+    let shown = redacted_command_line("--username ${auth_player_name} --session ${auth_session}").await;
+    assert!(!shown.contains("secret-access-token"), "{shown}");
+    assert!(shown.contains("--session token:***:0123456789abcdef0123456789abcdef"), "{shown}");
+}
+
+#[tokio::test]
+async fn redacted_display_masks_the_token_in_legacy_positional_arguments() {
+    let shown = redacted_command_line("${auth_player_name} ${auth_session}").await;
+    assert!(!shown.contains("secret-access-token"), "{shown}");
+    assert!(shown.contains(" Notch token:***:0123456789abcdef0123456789abcdef "), "{shown}");
 }
 
 #[cfg(unix)]
@@ -241,6 +269,7 @@ async fn spawn_streams_both_outputs_and_reports_the_exit_code() {
         args: ["-c", "echo out; echo err >&2; exit 3"].map(str::to_owned).to_vec(),
         cwd: std::env::temp_dir(),
         env: BTreeMap::new(),
+        secrets: Vec::new(),
     };
     let lines = Arc::new(Mutex::new(BTreeSet::new()));
     let sink = lines.clone();
@@ -262,6 +291,7 @@ async fn kill_stops_a_running_process() {
         args: vec!["60".to_owned()],
         cwd: std::env::temp_dir(),
         env: BTreeMap::new(),
+        secrets: Vec::new(),
     };
     let handle = spawn_game(&command, Arc::new(|_| {})).unwrap();
     handle.kill();
@@ -280,6 +310,7 @@ async fn spawn_drops_java_env_vars_and_applies_custom_ones() {
         args: ["-c", "echo \"[$JAVA_TOOL_OPTIONS][$K0T1K_TEST]\""].map(str::to_owned).to_vec(),
         cwd: std::env::temp_dir(),
         env: BTreeMap::from([("K0T1K_TEST".to_owned(), "yes".to_owned())]),
+        secrets: Vec::new(),
     };
     let seen = Arc::new(Mutex::new(Vec::new()));
     let sink = seen.clone();
