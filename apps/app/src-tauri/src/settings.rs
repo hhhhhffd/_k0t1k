@@ -84,6 +84,11 @@ pub enum LauncherFolder {
     Instances,
     Java,
     Cache,
+    Icons,
+    Catpacks,
+    Themes,
+    Iconsets,
+    Logs,
 }
 
 /// Opens a folder of the data directory, creating it first so the menu works on a fresh install.
@@ -93,6 +98,11 @@ pub async fn open_launcher_folder(app: AppHandle, state: State<'_, AppState>, fo
         LauncherFolder::Instances => state.paths.instances_dir(),
         LauncherFolder::Java => state.paths.java_dir(),
         LauncherFolder::Cache => state.paths.cache_dir(),
+        LauncherFolder::Icons => state.paths.icons_dir(),
+        LauncherFolder::Catpacks => state.paths.catpacks_dir(),
+        LauncherFolder::Themes => state.paths.themes_dir(),
+        LauncherFolder::Iconsets => state.paths.iconsets_dir(),
+        LauncherFolder::Logs => state.paths.logs_dir(),
     };
     let created = dir.clone();
     blocking(move || std::fs::create_dir_all(&created).map_err(|source| k0t1k_core::Error::Io { path: created, source })).await?;

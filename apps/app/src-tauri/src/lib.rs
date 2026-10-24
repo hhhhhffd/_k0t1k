@@ -1,6 +1,7 @@
 mod accounts;
 mod cmdline;
 mod content;
+mod customization;
 mod datadir;
 mod discord;
 mod error;
@@ -10,6 +11,7 @@ mod game;
 mod instances;
 mod java;
 mod launch;
+mod logging;
 mod onboarding;
 mod platform;
 mod screenshots;
@@ -53,11 +55,17 @@ pub fn run() {
         })
         .setup(move |app| {
             let state = datadir::resolve(portable_here).and_then(state::AppState::new).map_err(|error| error.to_string())?;
+            // The data directory is final only now; an onboarding root is temporary and removed on exit.
+            let onboarding = state.location.source == datadir::DataDirSource::Onboarding;
+            if !onboarding {
+                logging::init(&state.paths);
+                state.instances.remove_leftover_staging();
+                k0t1k_core::java::remove_leftover_staging(&state.paths);
+            }
             let webview_dir = state.location.webview_dir();
             std::fs::create_dir_all(&webview_dir)?;
             onboarding::sweep_stale_roots(state.paths.root());
             record_created_shortcuts(app.handle(), &state);
-            let onboarding = state.location.source == datadir::DataDirSource::Onboarding;
             app.manage(state);
             window::create(app.handle())?;
             if !onboarding {
@@ -90,6 +98,12 @@ pub fn run() {
             versions::list_loader_versions,
             java::detect_java,
             java::list_managed_java,
+            java::list_managed_java_usage,
+            java::delete_managed_java,
+            customization::list_icon_library,
+            customization::list_cat_packs,
+            customization::list_icon_sets,
+            customization::list_theme_files,
             settings::get_settings,
             settings::save_settings,
             settings::get_system_info,
