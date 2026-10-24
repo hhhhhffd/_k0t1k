@@ -146,47 +146,52 @@ async function save() {
       </label>
     </section>
 
-    <OverrideBlock v-model="javaOn" :title="t.iset.java" :override-label="t.iset.overrideJava">
-      <div class="flex gap-2">
-        <input
-          class="input flex-1 font-mono"
-          :value="javaView.path ?? ''"
-          :placeholder="t.iset.javaPathPlaceholder"
-          @input="draft.settings.java && ((draft.settings.java.path = ($event.target as HTMLInputElement).value || null), markDirty())"
-        />
-        <button class="btn" @click="pickJava">{{ t.iset.browse }}</button>
-      </div>
-    </OverrideBlock>
+    <section class="card divide-y divide-line p-4">
+      <OverrideBlock v-model="javaOn" :title="t.iset.java">
+        <template #default="{ disabled }">
+          <div class="flex gap-2">
+            <input
+              class="input flex-1 font-mono"
+              :value="javaView.path ?? ''"
+              :disabled="disabled"
+              :placeholder="t.iset.javaPathPlaceholder"
+              @input="draft.settings.java && ((draft.settings.java.path = ($event.target as HTMLInputElement).value || null), markDirty())"
+            />
+            <button class="btn" :disabled="disabled" @click="pickJava">{{ t.iset.browse }}</button>
+          </div>
+        </template>
+      </OverrideBlock>
 
-    <OverrideBlock v-model="memoryOn" :title="t.iset.memory" :override-label="t.iset.overrideMemory">
-      <template #default="{ disabled }">
-        <MemoryFields
-          :model-value="memoryView"
-          :disabled="disabled"
-          @update:model-value="((draft.settings.memory = $event), markDirty())"
-        />
-      </template>
-    </OverrideBlock>
+      <OverrideBlock v-model="memoryOn" :title="t.iset.memory">
+        <template #default="{ disabled }">
+          <MemoryFields
+            :model-value="memoryView"
+            :disabled="disabled"
+            @update:model-value="((draft.settings.memory = $event), markDirty())"
+          />
+        </template>
+      </OverrideBlock>
 
-    <OverrideBlock v-model="jvmOn" :title="t.iset.jvmArgs" :override-label="t.iset.overrideJvm">
-      <template #default="{ disabled }">
-        <textarea
-          class="input font-mono"
-          rows="2"
-          :disabled="disabled"
-          :value="draft.settings.jvmArgs ?? global.jvmArgs"
-          @input="draft.settings.jvmArgs = ($event.target as HTMLTextAreaElement).value"
-        />
-      </template>
-    </OverrideBlock>
+      <OverrideBlock v-model="jvmOn" :title="t.iset.jvmArgs">
+        <template #default="{ disabled }">
+          <textarea
+            class="input font-mono"
+            rows="2"
+            :disabled="disabled"
+            :value="draft.settings.jvmArgs ?? global.jvmArgs"
+            @input="draft.settings.jvmArgs = ($event.target as HTMLTextAreaElement).value"
+          />
+        </template>
+      </OverrideBlock>
 
-    <OverrideBlock v-model="windowOn" :title="t.iset.window" :override-label="t.iset.overrideWindow">
-      <template #default="{ disabled }"><WindowFields :model-value="windowView" :disabled="disabled" /></template>
-    </OverrideBlock>
+      <OverrideBlock v-model="windowOn" :title="t.iset.window">
+        <template #default="{ disabled }"><WindowFields :model-value="windowView" :disabled="disabled" /></template>
+      </OverrideBlock>
 
-    <OverrideBlock v-model="commandsOn" :title="t.iset.commands" :override-label="t.iset.overrideCommands">
-      <template #default="{ disabled }"><CommandFields :model-value="commandsView" :disabled="disabled" /></template>
-    </OverrideBlock>
+      <OverrideBlock v-model="commandsOn" :title="t.iset.commands">
+        <template #default="{ disabled }"><CommandFields :model-value="commandsView" :disabled="disabled" /></template>
+      </OverrideBlock>
+    </section>
 
     <div class="sticky bottom-4 flex justify-end">
       <button class="btn btn-primary btn-lg shadow-[var(--shadow-pop)]" :disabled="!dirty" @click="save">{{ t.common.save }}</button>

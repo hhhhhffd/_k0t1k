@@ -296,6 +296,17 @@ textarea.input {
   color: var(--c-faint);
 }
 
+/* Number fields are typed into; the native spinners are hidden. */
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 input[type='range'] {
   accent-color: var(--c-accent);
   width: 100%;

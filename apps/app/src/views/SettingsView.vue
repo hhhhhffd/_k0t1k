@@ -2,7 +2,7 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { Check, FolderOpen, Link, RefreshCw, RotateCcw, Trash2, UserPlus } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { createShortcuts, detectJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, openDataDir, openSharedFolder, setDataDir, uninstall } from '../api/commands'
 import { type JavaInstall, SHARED_FOLDERS, type SharedFolder, type SystemInfo, type UninstallPlan } from '../api/types'
 import mascot from '../assets/mascot.png'
@@ -11,7 +11,6 @@ import MemoryFields from '../components/fields/MemoryFields.vue'
 import WindowFields from '../components/fields/WindowFields.vue'
 import AccountLoginDialog from '../components/AccountLoginDialog.vue'
 import ModalDialog from '../components/ModalDialog.vue'
-import SelectMenu from '../components/SelectMenu.vue'
 import ThemeEditor from '../components/ThemeEditor.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { t } from '../i18n/ru'
@@ -22,11 +21,33 @@ import { THEMES, themeVars } from '../utils/theme'
 const store = useSettingsStore()
 const tasks = useTasksStore()
 const route = useRoute()
+const router = useRouter()
 
 const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'behavior', 'sharedFolders', 'appearance', 'accounts', 'storage', 'about'] as const
 type Section = (typeof sectionIds)[number]
-const hashSection = route.hash.slice(1) as Section
-const section = ref<Section>(sectionIds.includes(hashSection) ? hashSection : 'java')
+const SECTION_KEY = 'k0t1k.settingsSection'
+const asSection = (v: string | null | undefined) => (sectionIds.includes(v as Section) ? (v as Section) : null)
+function storedSection() {
+  try {
+    return asSection(localStorage.getItem(SECTION_KEY))
+  } catch {
+    return null
+  }
+}
+// The hash survives a reload of the window; localStorage covers opening Settings without one.
+const section = ref<Section>(asSection(route.hash.slice(1)) ?? storedSection() ?? 'java')
+watch(
+  section,
+  (id) => {
+    try {
+      localStorage.setItem(SECTION_KEY, id)
+    } catch {
+      // storage unavailable: the hash alone keeps the section
+    }
+    if (route.hash !== `#${id}`) void router.replace({ hash: `#${id}` })
+  },
+  { immediate: true },
+)
 
 const system = ref<SystemInfo | null>(null)
 const detected = ref<JavaInstall[]>([])
@@ -223,13 +244,33 @@ async function addAccount() {
       </template>
 
       <section v-else-if="section === 'behavior'" class="card flex flex-col gap-4 p-4">
-        <div class="flex items-center gap-4">
-          <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.onGameLaunch }}</span><span class="text-[12px] text-faint">{{ t.settings.onGameLaunchHint }}</span></span>
-          <SelectMenu v-model="s.behavior.onGameLaunch" class="w-52" :options="onGameLaunchOptions" :aria-label="t.settings.onGameLaunch" />
+        <div class="flex flex-col gap-2">
+          <span><span class="block font-medium">{{ t.settings.onGameLaunch }}</span><span class="text-[12px] text-faint">{{ t.settings.onGameLaunchHint }}</span></span>
+          <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.onGameLaunch">
+            <button
+              v-for="o in onGameLaunchOptions"
+              :key="o.value"
+              role="radio"
+              :aria-checked="s.behavior.onGameLaunch === o.value"
+              class="h-8 flex-1 rounded-md px-2 font-medium transition-colors"
+              :class="s.behavior.onGameLaunch === o.value ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
+              @click="s.behavior.onGameLaunch = o.value as typeof s.behavior.onGameLaunch"
+            >{{ o.label }}</button>
+          </div>
         </div>
-        <div class="flex items-center gap-4">
-          <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.onClose }}</span><span class="text-[12px] text-faint">{{ t.settings.onCloseHint }}</span></span>
-          <SelectMenu v-model="s.behavior.onClose" class="w-52" :options="onCloseOptions" :aria-label="t.settings.onClose" />
+        <div class="flex flex-col gap-2">
+          <span><span class="block font-medium">{{ t.settings.onClose }}</span><span class="text-[12px] text-faint">{{ t.settings.onCloseHint }}</span></span>
+          <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.onClose">
+            <button
+              v-for="o in onCloseOptions"
+              :key="o.value"
+              role="radio"
+              :aria-checked="s.behavior.onClose === o.value"
+              class="h-8 flex-1 rounded-md px-2 font-medium transition-colors"
+              :class="s.behavior.onClose === o.value ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
+              @click="s.behavior.onClose = o.value as typeof s.behavior.onClose"
+            >{{ o.label }}</button>
+          </div>
         </div>
         <div class="flex items-center gap-4">
           <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.discord }}</span><span class="text-[12px] text-faint">{{ t.settings.discordHint }}</span></span>
