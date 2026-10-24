@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use super::fsutil::is_link;
+use super::icon::{MAX_ICON_BYTES, custom_file_name};
 use super::{INSTANCE_FILE, Instance, InstanceSettings, ManagedPack};
 use crate::component::{ComponentSpec, MINECRAFT_UID};
 use crate::content::PackState;
@@ -191,6 +192,12 @@ pub fn export_instance(
         if state.is_file() {
             add_file(&mut writer, PACK_STATE_FILE, &state)?;
         }
+        if let Some(icon) = custom_file_name(&instance.icon) {
+            let icon_path = instance_dir.join(icon);
+            if icon_path.is_file() {
+                add_file(&mut writer, icon, &icon_path)?;
+            }
+        }
         for (index, file) in files.iter().enumerate() {
             add_file(&mut writer, &format!("{GAME_DIR_IN_ZIP}/{}", file.path), &file.absolute)?;
             report(index as u64 + 1);
@@ -258,6 +265,25 @@ pub fn read_k0t1k_zip(archive: &mut zip::ZipArchive<impl Read + Seek>) -> Result
             pack_state,
         },
     }))
+}
+
+/// The custom icon image of one of our zips, which keeps it at the root under the name `instance.json` gives.
+/// `None` when `icon` is not a custom icon or the archive lacks the file.
+pub fn read_custom_icon(zip_path: &Path, icon: &str) -> Result<Option<Vec<u8>>> {
+    let Some(name) = custom_file_name(icon) else {
+        return Ok(None);
+    };
+    let mut archive = zip::ZipArchive::new(File::open(zip_path).at(zip_path)?)?;
+    let Some(entry) = archive.index_for_name(name) else {
+        return Ok(None);
+    };
+    let entry = archive.by_index(entry)?;
+    if entry.size() > MAX_ICON_BYTES {
+        return Err(Error::Other(format!("the icon {name} in the archive is too big")));
+    }
+    let mut bytes = Vec::new();
+    entry.take(MAX_ICON_BYTES).read_to_end(&mut bytes).at(name)?;
+    Ok(Some(bytes))
 }
 
 /// A Prism or MultiMC zip: the shallowest `instance.cfg` marks the instance root. `None` when absent.
@@ -477,5 +503,29 @@ mod tests {
         let linked: Vec<_> = listed.iter().filter(|entry| entry.linked).map(|entry| entry.name.as_str()).collect();
         assert_eq!(linked, ["resourcepacks"]);
         assert!(listed.iter().find(|entry| entry.name == "logs").unwrap().default_excluded);
+    }
+
+    #[test]
+    fn custom_icon_travels_in_our_zip() {
+        use crate::instance::{InstanceManager, NewInstance};
+        use crate::paths::Paths;
+
+        let dir = tempfile::tempdir().unwrap();
+        let manager = InstanceManager::new(Paths::new(dir.path().join("data")));
+        let new = NewInstance { name: "Pack".into(), icon: None, group: None, components: Vec::new(), managed_pack: None };
+        let id = manager.create(new).unwrap().id;
+        let png = b"\x89PNG\r\n\x1a\nimage";
+        let instance = manager.set_custom_icon(&id, png).unwrap();
+
+        let zip_path = dir.path().join("out.zip");
+        let filter = ExportFilter::new(default_excluded());
+        let (instance_dir, game_dir) = (instance.dir(manager.paths()), instance.game_dir(manager.paths()));
+        export_instance(&instance, &instance_dir, &game_dir, &zip_path, &filter, &crate::progress::no_progress()).unwrap();
+
+        let imported = read_k0t1k_zip(&mut open(&zip_path)).unwrap().unwrap();
+        let icon = imported.source.icon.unwrap();
+        assert_eq!(icon, instance.icon);
+        assert_eq!(read_custom_icon(&zip_path, &icon).unwrap().as_deref(), Some(&png[..]));
+        assert_eq!(read_custom_icon(&zip_path, "grass").unwrap(), None);
     }
 }
