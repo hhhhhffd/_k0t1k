@@ -5,7 +5,7 @@ use k0t1k_core::launch::offline_uuid;
 use k0t1k_core::settings::{Account, AccountKind, GlobalSettings, total_memory_mib};
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -75,6 +75,28 @@ pub fn get_system_info(app: AppHandle, state: State<'_, AppState>) -> SystemInfo
 #[tauri::command]
 pub fn open_data_dir(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
     app.opener().open_path(state.paths.root().display().to_string(), None::<&str>)?;
+    Ok(())
+}
+
+#[derive(Deserialize, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub enum LauncherFolder {
+    Instances,
+    Java,
+    Cache,
+}
+
+/// Opens a folder of the data directory, creating it first so the menu works on a fresh install.
+#[tauri::command]
+pub async fn open_launcher_folder(app: AppHandle, state: State<'_, AppState>, folder: LauncherFolder) -> CommandResult<()> {
+    let dir = match folder {
+        LauncherFolder::Instances => state.paths.instances_dir(),
+        LauncherFolder::Java => state.paths.java_dir(),
+        LauncherFolder::Cache => state.paths.cache_dir(),
+    };
+    let created = dir.clone();
+    blocking(move || std::fs::create_dir_all(&created).map_err(|source| k0t1k_core::Error::Io { path: created, source })).await?;
+    app.opener().open_path(dir.display().to_string(), None::<&str>)?;
     Ok(())
 }
 

@@ -95,6 +95,7 @@ pub fn run() {
             settings::get_system_info,
             settings::set_data_dir,
             settings::open_data_dir,
+            settings::open_launcher_folder,
             onboarding::get_onboarding,
             onboarding::get_relocation_report,
             onboarding::relocate,
