@@ -5,6 +5,7 @@ import { getOnboarding, getRelocationReport } from './api/commands'
 import type { OnboardingInfo, RelocationReport } from './api/types'
 import AppSidebar from './components/AppSidebar.vue'
 import BlockedFilesDialog from './components/BlockedFilesDialog.vue'
+import CrashDialog from './components/CrashDialog.vue'
 import RelocationNotice from './components/RelocationNotice.vue'
 import TitleBar from './components/TitleBar.vue'
 import TaskBar from './components/TaskBar.vue'
@@ -49,6 +50,7 @@ onMounted(async () => {
     <TaskBar v-if="onboarding === null" />
     <RelocationNotice v-if="relocationReport" :report="relocationReport" @close="relocationReport = null" />
     <BlockedFilesDialog v-if="tasks.blocked.length" :files="tasks.blocked" :instance-id="tasks.blockedInstanceId" @close="tasks.blocked = []" />
+    <CrashDialog v-if="onboarding === null" />
     <ToastHost />
   </div>
 </template>

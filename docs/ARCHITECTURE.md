@@ -169,7 +169,28 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
 - A second launch of the exe shows the running launcher (`tauri-plugin-single-instance`: a named mutex and a
   hidden window on Windows, nothing on disk).
 
+## Crash reports, join server, automatic tuning
+
+- Crash: when the game exits on its own with a code other than 0 (or by a signal), `run_session` looks for the newest
+  `crash-reports/crash-*.txt` or `hs_err_pid*.log` in the game dir modified since the spawn
+  (`core::launch::crash`). The result (`CrashInfo`: exit code, report path) is stored with the session log,
+  emitted as `game-crashed` after `instance-state: stopped` and also returned by `list_run_states` (`crash`) until
+  the UI calls `dismiss_crash`, so a window recreated after the crash still shows the dialog.
+- Log upload (`core::mclogs`, commands `upload_game_log`, `open_crash_report`): only on a user click. Content =
+  session log lines plus the crash report after a separator; `--accessToken <x>` and the session's account token are
+  masked; oldest lines are dropped over mclo.gs's 25000 lines / 10 MiB. POST JSON `{content, source}` to
+  `https://api.mclo.gs/1/log`.
+- Join server: `Instance.joinServer` (instance.json, set through `update_instance_settings`) or the `server` argument
+  of `launch_instance` (the "Играть" button of the servers tab; wins). `LaunchOptions.join_server` becomes
+  `--quickPlayMultiplayer host:port` when the profile has the `feature:is_quick_play_multiplayer` trait (1.20+),
+  else `--server host --port port`; the port defaults to 25565.
+- Tuning: `MemorySettings.auto` (default false, global or per-instance override). At launch `core::launch::tuning::tune`
+  picks the heap from total RAM, the number of enabled `mods/*.jar` and whether a loader component exists:
+  2048 MiB vanilla; 3072 + 40 per mod over 50 with a loader; capped at 8192 and at RAM minus 3072 (never below 1024);
+  min heap = half of max (at least 512). G1 flags (Aikar subset valid for Java 8-21+) are added unless the JVM
+  arguments already contain a `-XX:+Use...GC`. The choice is written to the session log ("Автоподбор: ...").
+
 ## Later (ideas already accounted for)
 
-Themes and a lightweight mode for low-end PCs, automatic JVM argument tuning, ely.by skins,
+Themes and a lightweight mode for low-end PCs, ely.by skins,
 Windows 10 1607 support (WebView2 bootstrapper is embedded), custom clients (Lunar, LabyMod).

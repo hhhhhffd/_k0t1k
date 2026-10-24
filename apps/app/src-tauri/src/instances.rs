@@ -55,6 +55,8 @@ pub struct InstanceSettingsUpdate {
     icon: String,
     notes: String,
     shared_folders: BTreeSet<SharedFolder>,
+    #[serde(default)]
+    join_server: Option<String>,
     settings: InstanceSettings,
 }
 
@@ -137,6 +139,7 @@ pub async fn update_instance_settings(
         manager.update(&instance_id, |instance| {
             instance.icon = settings.icon;
             instance.notes = settings.notes;
+            instance.join_server = settings.join_server.map(|server| server.trim().to_owned()).filter(|server| !server.is_empty());
             instance.settings = settings.settings;
         })
     })

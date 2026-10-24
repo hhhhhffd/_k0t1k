@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref, shallowReactive } from 'vue'
 import * as api from '../api/commands'
-import type { GameLogBatch, GameLogLine, Instance, InstanceRunState, ModpackImport, RunSession, RunState, SessionId } from '../api/types'
+import type { GameCrashed, GameLogBatch, GameLogLine, Instance, InstanceRunState, ModpackImport, RunSession, RunState, SessionId } from '../api/types'
 import { t } from '../i18n/ru'
 import { useTasksStore } from './tasks'
 
@@ -29,6 +29,8 @@ export const useInstancesStore = defineStore('instances', () => {
   const sessions = reactive(new Map<SessionId, RunSession>())
   // Buffers are replaced (never mutated) once per flush, so a flood of lines costs one reactive update per flush.
   const logs = shallowReactive(new Map<SessionId, LogBuffer>())
+  /** Crashes whose dialog is waiting to be shown, oldest first. */
+  const crashes = ref<GameCrashed[]>([])
   const pendingLogs = new Map<SessionId, LogBuffer>()
   // newest line seen per session: a line can arrive both live and in the backfill of a fresh window
   const lastSeq = new Map<SessionId, number>()
@@ -86,9 +88,9 @@ export const useInstancesStore = defineStore('instances', () => {
 
   const updateModpack = async (instanceId: string, versionId: string) => upsertImport(await api.updateModpack(instanceId, versionId))
 
-  async function launch(id: string, accountId?: string) {
+  async function launch(id: string, accountId?: string, server?: string) {
     const alreadyRunning = liveSessionsOf(id).length > 0
-    const sessionId = await api.launchInstance(id, accountId)
+    const sessionId = await api.launchInstance(id, accountId, server)
     // Minecraft locks a world while it is open, so a second copy cannot open the same one.
     if (alreadyRunning && !localStorage.getItem(MULTI_LAUNCH_HINT_KEY)) {
       localStorage.setItem(MULTI_LAUNCH_HINT_KEY, '1')
@@ -99,6 +101,14 @@ export const useInstancesStore = defineStore('instances', () => {
   /** Stops every session of the instance. */
   const kill = (id: string) => api.killInstance(id)
   const killSession = (sessionId: SessionId) => api.killSession(sessionId)
+  function addCrash(crash: GameCrashed) {
+    if (!crashes.value.some((c) => c.sessionId === crash.sessionId)) crashes.value.push(crash)
+  }
+  /** Closes the crash dialog of the session for good, also in windows opened later. */
+  function dismissCrash(sessionId: SessionId) {
+    crashes.value = crashes.value.filter((c) => c.sessionId !== sessionId)
+    void api.dismissCrash(sessionId).catch((e: unknown) => console.warn('dismiss_crash failed', e))
+  }
   function clearLog(sessionId: SessionId) {
     pendingLogs.delete(sessionId)
     logs.set(sessionId, { lines: [], dropped: 0 })
@@ -174,16 +184,21 @@ export const useInstancesStore = defineStore('instances', () => {
         }
       }),
       api.onGameLog(pushLogs),
+      api.onGameCrashed(addCrash),
     ])
     // a state event that arrived while the request was in flight is newer than the listing
-    for (const s of await api.listRunStates()) if (!sessions.has(s.sessionId)) sessions.set(s.sessionId, s)
+    for (const s of await api.listRunStates()) {
+      if (!sessions.has(s.sessionId)) sessions.set(s.sessionId, s)
+      // a window created after the crash never saw the event
+      if (s.crash) addCrash({ ...s.crash, sessionId: s.sessionId, instanceId: s.instanceId })
+    }
     instancesDir.value = await api.getInstancesDir()
     await refresh()
     await Promise.all([...sessions.keys()].map(backfillLogs))
   }
 
   return {
-    instances, loaded, instancesDir, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setIcon, resetIcon, setGroup,
-    updateSettings, remove, importModpack, installModpack, updateModpack, launch, kill, killSession, clearLog, init,
+    instances, loaded, crashes, instancesDir, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setIcon, resetIcon, setGroup,
+    updateSettings, remove, importModpack, installModpack, updateModpack, launch, kill, killSession, dismissCrash, clearLog, init,
   }
 })

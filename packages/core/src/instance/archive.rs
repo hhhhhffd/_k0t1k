@@ -322,7 +322,7 @@ pub fn read_prism_zip(archive: &mut zip::ZipArchive<impl Read + Seek>) -> Result
         && let Some(max_mib) = number("MaxMemAlloc")
     {
         let min_mib = number("MinMemAlloc").unwrap_or(MemorySettings::default().min_mib).min(max_mib);
-        settings.memory = Some(MemorySettings { min_mib, max_mib });
+        settings.memory = Some(MemorySettings { min_mib, max_mib, auto: false });
     }
     if flag("OverrideJavaArgs") {
         settings.jvm_args = config.get("JvmArgs").cloned();
@@ -446,7 +446,7 @@ mod tests {
         assert_eq!(components, [("net.minecraft", "1.20.1"), ("net.fabricmc.fabric-loader", "0.15.11")]);
         assert_eq!(imported.source.game_prefix, "My Pack/.minecraft/");
         assert_eq!(imported.source.notes, "line one\nline two");
-        assert_eq!(imported.source.settings.memory, Some(MemorySettings { min_mib: 1024, max_mib: 6144 }));
+        assert_eq!(imported.source.settings.memory, Some(MemorySettings { min_mib: 1024, max_mib: 6144, auto: false }));
         assert_eq!(imported.source.settings.jvm_args.as_deref(), Some("-Xss2M"));
         assert!(imported.source.settings.java.is_none(), "a Java path is machine-specific");
     }

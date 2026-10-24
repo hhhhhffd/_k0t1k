@@ -46,6 +46,7 @@ fn options(root: &std::path::Path) -> LaunchOptions {
         account: Account::offline("Notch"),
         env: BTreeMap::new(),
         wrapper: Vec::new(),
+        join_server: None,
     }
 }
 
@@ -285,4 +286,47 @@ async fn spawn_drops_java_env_vars_and_applies_custom_ones() {
     let on_log: LogFn = Arc::new(move |line| sink.lock().unwrap().push(line.line));
     spawn_game(&command, on_log).unwrap().wait().await.unwrap();
     assert_eq!(*seen.lock().unwrap(), ["[][yes]"]);
+}
+
+fn game_args_with_server(extra: &str, server: Option<&str>) -> Vec<String> {
+    let root = tempfile::tempdir().unwrap();
+    let paths = Paths::new(root.path().join("data"));
+    let mut options = options(root.path());
+    options.join_server = server.map(str::to_owned);
+    launch_args(&paths, &profile("linux", extra), &assets(), &options).game
+}
+
+#[test]
+fn quick_play_trait_selects_quick_play_multiplayer() {
+    let extra = r#","+traits":["feature:is_quick_play_multiplayer"]"#;
+    let game = game_args_with_server(extra, Some("play.example.org:25570"));
+    assert_eq!(&game[game.len() - 2..], ["--quickPlayMultiplayer", "play.example.org:25570"]);
+    let game = game_args_with_server(extra, Some(" play.example.org "));
+    assert_eq!(&game[game.len() - 2..], ["--quickPlayMultiplayer", "play.example.org:25565"]);
+    let game = game_args_with_server(extra, Some("::1"));
+    assert_eq!(&game[game.len() - 2..], ["--quickPlayMultiplayer", "[::1]:25565"]);
+}
+
+#[test]
+fn old_versions_use_server_and_port() {
+    let game = game_args_with_server("", Some("mc.example.org:1234"));
+    assert_eq!(&game[game.len() - 4..], ["--server", "mc.example.org", "--port", "1234"]);
+    let game = game_args_with_server("", Some("mc.example.org"));
+    assert_eq!(&game[game.len() - 4..], ["--server", "mc.example.org", "--port", "25565"]);
+}
+
+#[test]
+fn blank_or_missing_server_adds_nothing() {
+    for server in [None, Some(""), Some("  ")] {
+        let game = game_args_with_server("", server);
+        assert!(!game.iter().any(|arg| arg == "--server" || arg == "--quickPlayMultiplayer"));
+    }
+}
+
+#[test]
+fn server_address_forms() {
+    assert_eq!(split_server_address("a.b:99"), Some(("a.b".to_owned(), 99)));
+    assert_eq!(split_server_address("[::1]:99"), Some(("::1".to_owned(), 99)));
+    assert_eq!(split_server_address("a.b:notaport"), Some(("a.b:notaport".to_owned(), 25565)));
+    assert_eq!(split_server_address(""), None);
 }

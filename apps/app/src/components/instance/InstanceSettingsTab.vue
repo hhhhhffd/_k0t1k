@@ -24,6 +24,7 @@ const global = computed(() => settings.settings)
 const draft = reactive({
   icon: props.instance.icon,
   notes: props.instance.notes,
+  joinServer: props.instance.joinServer ?? '',
   sharedFolders: [...props.instance.sharedFolders],
   settings: clone(props.instance.settings) as InstanceSettings,
 })
@@ -79,7 +80,7 @@ const commandsOn = overrideModel('commands', () => clone(global.value!.commands)
 
 // Views of each group: the override when set, otherwise the (read-only) global value.
 const javaView = computed(() => draft.settings.java ?? global.value?.java ?? { path: null, autoSelect: true, autoDownload: true })
-const memoryView = computed(() => draft.settings.memory ?? global.value?.memory ?? { minMib: 512, maxMib: 4096 })
+const memoryView = computed(() => draft.settings.memory ?? global.value?.memory ?? { minMib: 512, maxMib: 4096, auto: false })
 const windowView = computed(() => draft.settings.window ?? global.value?.window ?? { width: 854, height: 480, maximized: false })
 const commandsView = computed(() => draft.settings.commands ?? global.value?.commands ?? { preLaunch: '', postExit: '', wrapper: '' })
 
@@ -88,6 +89,7 @@ async function save() {
     store.updateSettings(props.instance.id, {
       icon: draft.icon,
       notes: draft.notes,
+      joinServer: draft.joinServer.trim() || null,
       sharedFolders: draft.sharedFolders,
       settings: clone(draft.settings),
     }),
@@ -123,6 +125,11 @@ async function save() {
       <label class="flex flex-col gap-1">
         <span class="label">{{ t.iset.notes }}</span>
         <textarea v-model="draft.notes" class="input" rows="2" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="label">{{ t.iset.joinServer }}</span>
+        <input v-model="draft.joinServer" class="input font-mono" placeholder="play.example.org:25565" />
+        <span class="text-[12px] text-faint">{{ t.iset.joinServerHint }}</span>
       </label>
     </section>
 

@@ -1,7 +1,9 @@
 //! Builds the Java command line for a [`LaunchProfile`] and runs the game.
 
 mod account;
+pub mod crash;
 mod process;
+pub mod tuning;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -54,6 +56,8 @@ pub struct LaunchOptions {
     /// Wrapper command (program and arguments) that is started instead of Java and gets the Java
     /// command line appended. Empty for none.
     pub wrapper: Vec<String>,
+    /// Server to connect to on start, `host` or `host:port`; blank for none.
+    pub join_server: Option<String>,
 }
 
 #[derive(Clone)]
@@ -100,6 +104,28 @@ fn substitute(arg: &str, tokens: &HashMap<&str, String>) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// Splits `host`, `host:port` or `[ipv6]:port`; the port defaults to 25565. `None` for a blank address.
+fn split_server_address(address: &str) -> Option<(String, u16)> {
+    const DEFAULT_PORT: u16 = 25565;
+    let address = address.trim();
+    if address.is_empty() {
+        return None;
+    }
+    if let Some(rest) = address.strip_prefix('[') {
+        let (host, tail) = rest.split_once(']')?;
+        let port = tail.strip_prefix(':').and_then(|port| port.parse().ok()).unwrap_or(DEFAULT_PORT);
+        return Some((host.to_owned(), port));
+    }
+    // More than one colon without brackets is a bare IPv6 address.
+    if address.matches(':').count() == 1 {
+        let (host, port) = address.split_once(':')?;
+        if let Ok(port) = port.parse() {
+            return Some((host.to_owned(), port));
+        }
+    }
+    Some((address.to_owned(), DEFAULT_PORT))
 }
 
 fn path_string(path: &std::path::Path) -> String {
@@ -160,6 +186,15 @@ fn launch_args(paths: &Paths, profile: &LaunchProfile, assets: &AssetIndex, opti
     let mut game: Vec<String> = game.iter().map(|arg| substitute(arg, &tokens)).collect();
     if let Some(window) = options.window {
         game.extend(["--width".to_owned(), window.width.to_string(), "--height".to_owned(), window.height.to_string()]);
+    }
+    if let Some((host, port)) = options.join_server.as_deref().and_then(split_server_address) {
+        // Minecraft 1.20+ (the meta marks it with a trait) has Quick Play; older versions only know `--server`.
+        if profile.has_trait("feature:is_quick_play_multiplayer") {
+            let host = if host.contains(':') { format!("[{host}]") } else { host };
+            game.extend(["--quickPlayMultiplayer".to_owned(), format!("{host}:{port}")]);
+        } else {
+            game.extend(["--server".to_owned(), host, "--port".to_owned(), port.to_string()]);
+        }
     }
 
     LaunchArgs { jvm, game }
