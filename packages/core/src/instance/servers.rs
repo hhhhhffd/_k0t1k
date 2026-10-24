@@ -3,7 +3,7 @@
 //! favicon, `hidden` and tags of newer versions survive. The game rewrites the file when it exits, so
 //! callers must refuse to edit while the instance is running.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -11,8 +11,11 @@ use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+use super::Instance;
+use super::links::SharedFolder;
 use super::nbt::{self, Compound, Tag};
 use crate::error::{Error, IoContext, Result};
+use crate::paths::Paths;
 
 const SERVERS_FILE: &str = "servers.dat";
 const DEFAULT_PORT: u16 = 25565;
@@ -158,6 +161,105 @@ pub fn reorder(game_dir: &Path, from: usize, to: usize) -> Result<()> {
     let entry = entries.remove(from);
     entries.insert(to, entry);
     write_root(game_dir, &root)
+}
+
+// ---- Shared list ----
+//
+// `shared/servers.dat` is a copy kept in sync with the game dirs of the instances that share the list.
+// It cannot be a link: the game saves by writing a temporary file and renaming it over `servers.dat`,
+// which breaks hardlinks and replaces symlinks. So the shared file is copied into the game dir before
+// each launch (`pull_shared`) and merged back after the game exits (`push_shared`). Sessions that
+// overlap are resolved on exit: the session that exits last keeps its own order and deletions, and
+// entries another session added to the shared file meanwhile are appended, so none are lost.
+
+/// Appends the entries of `extra` whose address (case-insensitive) is not in `base` yet.
+fn merge_missing(base: &mut Compound, extra: &mut Compound) -> Result<()> {
+    let key = |tag: &Tag| parse_entry(tag).address.trim().to_lowercase();
+    let mut known: std::collections::HashSet<String> = entries_mut(base)?.iter().map(key).collect();
+    let extra = std::mem::take(entries_mut(extra)?);
+    let entries = entries_mut(base)?;
+    for tag in extra {
+        if known.insert(key(&tag)) {
+            entries.push(tag);
+        }
+    }
+    Ok(())
+}
+
+fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).at(path),
+    }
+}
+
+/// Starts sharing the list: the entries of the game dir that the shared file lacks are appended to it
+/// (keeping order), then the game dir gets the shared file. Calling it again is harmless.
+pub fn enable_shared_list(paths: &Paths, game_dir: &Path) -> Result<()> {
+    let shared_dir = paths.shared_dir();
+    let mut shared = read_root(&shared_dir)?;
+    let mut local = read_root(game_dir)?;
+    merge_missing(&mut shared, &mut local)?;
+    write_root(&shared_dir, &shared)?;
+    write_root(game_dir, &shared)
+}
+
+/// The directory whose `servers.dat` is the list of the instance: the shared one when the instance
+/// shares its list, the game dir otherwise.
+pub fn list_dir(paths: &Paths, instance: &Instance) -> PathBuf {
+    if instance.shared_folders.contains(&SharedFolder::Servers) {
+        paths.shared_dir()
+    } else {
+        instance.game_dir(paths)
+    }
+}
+
+/// Runs an edit on the instance's list and, for a shared list, copies the result into the game dir.
+pub fn edit_list<T>(paths: &Paths, instance: &Instance, edit: impl FnOnce(&Path) -> Result<T>) -> Result<T> {
+    let result = edit(&list_dir(paths, instance))?;
+    if instance.shared_folders.contains(&SharedFolder::Servers) {
+        pull_shared(paths, &instance.game_dir(paths))?;
+    }
+    Ok(result)
+}
+
+/// Copies the shared file over the game dir's `servers.dat` (before a launch). Returns what the game
+/// dir holds afterwards (`None`: no file), to be given to [`push_shared`] when the game exits.
+pub fn pull_shared(paths: &Paths, game_dir: &Path) -> Result<Option<Vec<u8>>> {
+    let local = game_dir.join(SERVERS_FILE);
+    let Some(shared) = read_bytes(&paths.shared_dir().join(SERVERS_FILE))? else {
+        return read_bytes(&local);
+    };
+    std::fs::create_dir_all(game_dir).at(game_dir)?;
+    std::fs::write(&local, &shared).at(&local)?;
+    Ok(Some(shared))
+}
+
+/// Stores the game dir's list in the shared file when the game changed it since [`pull_shared`]
+/// returned `snapshot`. If the shared file changed meanwhile too, the shared-only entries are appended.
+pub fn push_shared(paths: &Paths, game_dir: &Path, snapshot: Option<&[u8]>) -> Result<()> {
+    let Some(local) = read_bytes(&game_dir.join(SERVERS_FILE))? else {
+        return Ok(());
+    };
+    if Some(local.as_slice()) == snapshot {
+        return Ok(());
+    }
+    let shared_dir = paths.shared_dir();
+    match read_bytes(&shared_dir.join(SERVERS_FILE))? {
+        Some(current) if Some(current.as_slice()) != snapshot => {
+            let corrupt = |error: Error| Error::Other(format!("servers.dat: {error}"));
+            let mut root = nbt::parse(&local).map_err(corrupt)?.1;
+            let mut theirs = nbt::parse(&current).map_err(corrupt)?.1;
+            merge_missing(&mut root, &mut theirs)?;
+            write_root(&shared_dir, &root)
+        }
+        _ => {
+            std::fs::create_dir_all(&shared_dir).at(&shared_dir)?;
+            let target = shared_dir.join(SERVERS_FILE);
+            std::fs::write(&target, local).at(&target)
+        }
+    }
 }
 
 /// What a server answered to the status request.
@@ -357,6 +459,91 @@ pub async fn ping(address: &str) -> Result<ServerStatus> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn shared_setup() -> (tempfile::TempDir, Paths, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path().join("data"));
+        let game = dir.path().join("data/instances/a/minecraft");
+        std::fs::create_dir_all(&game).unwrap();
+        (dir, paths, game)
+    }
+
+    fn addresses(dir: &Path) -> Vec<String> {
+        list(dir).unwrap().into_iter().map(|server| server.address).collect()
+    }
+
+    fn put(dir: &Path, address: &str) {
+        add(dir, &server(address, address, ResourcePackPolicy::Prompt)).unwrap();
+    }
+
+    #[test]
+    fn enabling_merges_new_addresses_in_order_and_copies_back() {
+        let (_dir, paths, game) = shared_setup();
+        put(&paths.shared_dir(), "one.example");
+        put(&paths.shared_dir(), "two.example");
+        put(&game, "TWO.example");
+        put(&game, "mine.example");
+
+        enable_shared_list(&paths, &game).unwrap();
+        enable_shared_list(&paths, &game).unwrap();
+
+        let expected = ["one.example", "two.example", "mine.example"];
+        assert_eq!(addresses(&paths.shared_dir()), expected);
+        assert_eq!(addresses(&game), expected);
+    }
+
+    #[test]
+    fn pull_then_push_stores_only_game_changes() {
+        let (_dir, paths, game) = shared_setup();
+        put(&paths.shared_dir(), "one.example");
+
+        let snapshot = pull_shared(&paths, &game).unwrap();
+        assert_eq!(addresses(&game), ["one.example"]);
+        push_shared(&paths, &game, snapshot.as_deref()).unwrap();
+        assert_eq!(std::fs::read(paths.shared_dir().join("servers.dat")).unwrap(), snapshot.clone().unwrap());
+
+        // The game removes a server and adds another: the instance wins over the unchanged shared file.
+        remove(&game, 0).unwrap();
+        put(&game, "new.example");
+        push_shared(&paths, &game, snapshot.as_deref()).unwrap();
+        assert_eq!(addresses(&paths.shared_dir()), ["new.example"]);
+    }
+
+    #[test]
+    fn push_keeps_entries_another_session_added() {
+        let (_dir, paths, game) = shared_setup();
+        put(&paths.shared_dir(), "one.example");
+        let snapshot = pull_shared(&paths, &game).unwrap();
+
+        put(&game, "mine.example");
+        // Another session exits first and adds its own server (and the same one this session added).
+        put(&paths.shared_dir(), "other.example");
+        put(&paths.shared_dir(), "mine.example");
+        push_shared(&paths, &game, snapshot.as_deref()).unwrap();
+
+        assert_eq!(addresses(&paths.shared_dir()), ["one.example", "mine.example", "other.example"]);
+    }
+
+    #[test]
+    fn pull_without_shared_file_keeps_the_game_copy_and_edits_follow_the_shared_one() {
+        let (_dir, paths, game) = shared_setup();
+        put(&game, "local.example");
+        let snapshot = pull_shared(&paths, &game).unwrap();
+        assert_eq!(addresses(&game), ["local.example"]);
+        push_shared(&paths, &game, snapshot.as_deref()).unwrap();
+        assert!(!paths.shared_dir().join("servers.dat").exists());
+
+        let mut instance = crate::instance::Instance::from_json(
+            br#"{"name":"A","components":[],"created":"2026-01-01T00:00:00Z","sharedFolders":["servers"]}"#,
+        )
+        .unwrap();
+        instance.id = "a".into();
+        enable_shared_list(&paths, &game).unwrap();
+        edit_list(&paths, &instance, |dir| add(dir, &server("n", "added.example", ResourcePackPolicy::Prompt))).unwrap();
+        assert_eq!(addresses(&paths.shared_dir()), ["local.example", "added.example"]);
+        assert_eq!(addresses(&game), ["local.example", "added.example"]);
+        assert_eq!(list_dir(&paths, &instance), paths.shared_dir());
+    }
 
     fn server(name: &str, address: &str, resource_pack: ResourcePackPolicy) -> Server {
         Server { name: name.into(), address: address.into(), resource_pack }

@@ -184,6 +184,19 @@ pub struct BehaviorSettings {
     pub on_close: OnClose,
 }
 
+/// Discord Rich Presence: shows the running game as the user's Discord activity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DiscordSettings {
+    pub enabled: bool,
+}
+
+impl Default for DiscordSettings {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
 /// Decisions made when the launcher was first started (see `placement`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -207,6 +220,7 @@ pub struct GlobalSettings {
     pub playtime: PlaytimeSettings,
     pub ui: UiSettings,
     pub behavior: BehaviorSettings,
+    pub discord: DiscordSettings,
     pub onboarding: OnboardingSettings,
     /// Folders that new instances (including imported modpacks) share with other instances.
     pub shared_folders_default: BTreeSet<SharedFolder>,
@@ -226,6 +240,7 @@ impl Default for GlobalSettings {
             playtime: PlaytimeSettings::default(),
             ui: UiSettings::default(),
             behavior: BehaviorSettings::default(),
+            discord: DiscordSettings::default(),
             onboarding: OnboardingSettings::default(),
             shared_folders_default: BTreeSet::from([SharedFolder::Resourcepacks, SharedFolder::Shaderpacks]),
             accounts: Vec::new(),
@@ -421,6 +436,9 @@ mod tests {
         assert_eq!((settings.window.width, settings.window.height), (1000, 480));
         assert!(settings.ui.lite_mode);
         assert_eq!(settings.ui.theme, "k0t1k");
+        assert!(settings.discord.enabled);
+        let off: GlobalSettings = serde_json::from_str(r#"{"discord":{"enabled":false}}"#).unwrap();
+        assert!(!off.discord.enabled);
     }
 
     #[test]
