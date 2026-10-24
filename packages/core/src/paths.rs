@@ -64,4 +64,9 @@ impl Paths {
     pub fn settings_file(&self) -> PathBuf {
         self.root.join("settings.json")
     }
+
+    /// Account tokens; kept apart from `settings.json`, which is sent to the UI as a whole.
+    pub fn accounts_file(&self) -> PathBuf {
+        self.root.join("accounts.json")
+    }
 }

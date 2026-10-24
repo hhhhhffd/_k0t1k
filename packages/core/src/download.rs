@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use futures::{StreamExt, TryStreamExt, stream};
 use sha1::{Digest, Sha1};
-use sha2::Sha512;
+use sha2::{Sha256, Sha512};
 use tokio::io::AsyncWriteExt;
 
 use crate::error::{Error, IoContext, Result};
@@ -51,6 +51,8 @@ pub async fn sha1_file(path: &Path) -> Result<String> {
 pub enum Checksum {
     /// Lowercase hex SHA-1.
     Sha1(String),
+    /// Lowercase hex SHA-256.
+    Sha256(String),
     /// Lowercase hex SHA-512.
     Sha512(String),
 }
@@ -58,13 +60,14 @@ pub enum Checksum {
 impl Checksum {
     fn expected(&self) -> &str {
         match self {
-            Checksum::Sha1(hex) | Checksum::Sha512(hex) => hex,
+            Checksum::Sha1(hex) | Checksum::Sha256(hex) | Checksum::Sha512(hex) => hex,
         }
     }
 
     fn hasher(&self) -> Hasher {
         match self {
             Checksum::Sha1(_) => Hasher::Sha1(Sha1::new()),
+            Checksum::Sha256(_) => Hasher::Sha256(Sha256::new()),
             Checksum::Sha512(_) => Hasher::Sha512(Sha512::new()),
         }
     }
@@ -72,6 +75,7 @@ impl Checksum {
 
 enum Hasher {
     Sha1(Sha1),
+    Sha256(Sha256),
     Sha512(Sha512),
 }
 
@@ -79,6 +83,7 @@ impl Hasher {
     fn update(&mut self, data: &[u8]) {
         match self {
             Hasher::Sha1(hasher) => hasher.update(data),
+            Hasher::Sha256(hasher) => hasher.update(data),
             Hasher::Sha512(hasher) => hasher.update(data),
         }
     }
@@ -86,6 +91,7 @@ impl Hasher {
     fn finish(self) -> String {
         match self {
             Hasher::Sha1(hasher) => hex::encode(hasher.finalize()),
+            Hasher::Sha256(hasher) => hex::encode(hasher.finalize()),
             Hasher::Sha512(hasher) => hex::encode(hasher.finalize()),
         }
     }

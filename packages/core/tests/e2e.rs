@@ -61,6 +61,7 @@ async fn install_vanilla_and_fabric_and_build_commands() {
             profile_name: name.to_owned(),
             min_memory_mb: 512,
             max_memory_mb: 2048,
+            java_agent_args: Vec::new(),
             extra_jvm_args: Vec::new(),
             window: Some(WindowSize { width: 854, height: 480 }),
             account: Account::offline("Player"),
