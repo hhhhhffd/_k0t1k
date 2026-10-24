@@ -46,6 +46,16 @@ impl RunEntry {
     }
 }
 
+/// How a session ended when the game crashed.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrashInfo {
+    /// `None` when a signal ended the process.
+    pub exit_code: Option<i32>,
+    /// A Minecraft crash report or JVM crash log written during the session.
+    pub crash_report: Option<String>,
+}
+
 /// Log and identity of a session, kept after the game exits (see [`KEPT_FINISHED_SESSIONS`]).
 struct SessionLog {
     instance_id: String,
@@ -53,6 +63,11 @@ struct SessionLog {
     started_at: DateTime<Utc>,
     finished: bool,
     lines: VecDeque<LogLine>,
+    crash: Option<CrashInfo>,
+    /// The UI showed or dismissed the crash; a window opened later does not show it again.
+    crash_dismissed: bool,
+    /// Values that must not leave the machine in an uploaded log.
+    secrets: Vec<String>,
 }
 
 #[derive(Default)]
@@ -71,6 +86,9 @@ pub struct SessionInfo {
     pub number: u32,
     pub state: RunState,
     pub started_at: DateTime<Utc>,
+    /// Set for a crashed session until the UI dismisses it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crash: Option<CrashInfo>,
 }
 
 /// A background install of an instance's game files.
@@ -156,7 +174,16 @@ impl AppState {
         let number = *launches;
         logs.sessions.insert(
             session_id,
-            SessionLog { instance_id: instance_id.to_owned(), number, started_at, finished: false, lines: VecDeque::new() },
+            SessionLog {
+                instance_id: instance_id.to_owned(),
+                number,
+                started_at,
+                finished: false,
+                lines: VecDeque::new(),
+                crash: None,
+                crash_dismissed: false,
+                secrets: Vec::new(),
+            },
         );
         drop(logs);
         let (cancel, killed) = watch::channel(false);
@@ -187,6 +214,7 @@ impl AppState {
                 number: log.number,
                 state: running.get(&session_id).map_or(RunState::Stopped, |entry| entry.state),
                 started_at: log.started_at,
+                crash: log.crash.clone().filter(|_| !log.crash_dismissed),
             })
             .collect();
         sessions.sort_by_key(|session| session.session_id);
@@ -225,6 +253,32 @@ impl AppState {
             log.lines.push_back(entry.clone());
         }
         entry
+    }
+
+    pub fn set_crash(&self, session_id: SessionId, crash: CrashInfo) {
+        if let Some(log) = self.logs().sessions.get_mut(&session_id) {
+            log.crash = Some(crash);
+        }
+    }
+
+    pub fn dismiss_crash(&self, session_id: SessionId) {
+        if let Some(log) = self.logs().sessions.get_mut(&session_id) {
+            log.crash_dismissed = true;
+        }
+    }
+
+    pub fn add_log_secret(&self, session_id: SessionId, secret: &str) {
+        if let Some(log) = self.logs().sessions.get_mut(&session_id) {
+            log.secrets.push(secret.to_owned());
+        }
+    }
+
+    /// Log lines, the crash report path and the secrets to mask, for an upload; `None` once the session is gone.
+    pub fn upload_material(&self, session_id: SessionId) -> Option<(Vec<String>, Option<String>, Vec<String>)> {
+        let logs = self.logs();
+        let log = logs.sessions.get(&session_id)?;
+        let lines = log.lines.iter().map(|entry| entry.line.clone()).collect();
+        Some((lines, log.crash.as_ref().and_then(|crash| crash.crash_report.clone()), log.secrets.clone()))
     }
 
     pub fn log_lines(&self, session_id: SessionId) -> Vec<LogLine> {

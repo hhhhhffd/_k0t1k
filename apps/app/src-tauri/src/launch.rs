@@ -4,22 +4,28 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 
+use std::time::SystemTime;
+
 use chrono::Utc;
 use k0t1k_core::install::{check_installed, extract_natives, install_game, reconstruct_assets};
 use k0t1k_core::instance::{EffectiveSettings, Instance};
 use k0t1k_core::java::ensure_java;
+use k0t1k_core::launch::crash::find_crash_report;
+use k0t1k_core::launch::tuning::{count_mods, has_mod_loader, tune};
 use k0t1k_core::launch::{Account, LaunchCommand, LaunchOptions, LogFn, LogStream, WindowSize, build_command, spawn_game};
 use k0t1k_core::profile::LaunchProfile;
 use k0t1k_core::progress::ProgressFn;
 use k0t1k_core::profile::library::RuntimeContext;
-use k0t1k_core::settings::{GlobalSettings, OnGameLaunch};
+use k0t1k_core::mclogs::{self, UploadedLog};
+use k0t1k_core::settings::{GlobalSettings, OnGameLaunch, total_memory_mib};
 use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
 use tokio::process::Command;
 use tokio::sync::watch;
 
 use crate::error::{AppError, CommandResult, blocking};
 use crate::events::{self, GameLog, LogLine, RunState, progress_fn, tracked};
-use crate::state::{AppState, SessionId, SessionInfo};
+use crate::state::{AppState, CrashInfo, SessionId, SessionInfo};
 use crate::{cmdline, game, window};
 
 #[cfg(windows)]
@@ -31,6 +37,7 @@ pub async fn launch_instance(
     state: State<'_, AppState>,
     instance_id: String,
     account_id: Option<String>,
+    server: Option<String>,
 ) -> CommandResult<SessionId> {
     let state = state.inner().clone();
     let manager = state.instances.clone();
@@ -43,6 +50,8 @@ pub async fn launch_instance(
     }
     .ok_or_else(|| AppError::new("no account selected: add an offline account in the settings"))?;
     let account = Account::offline(&account.name);
+    // An explicit server wins over the one stored with the instance.
+    let join_server = server.or_else(|| instance.join_server.clone());
     let settings = instance.effective_settings(&global);
 
     // Every launch is its own session: the instance may already be running, and concurrent
@@ -50,7 +59,17 @@ pub async fn launch_instance(
     let (session_id, kill_requests) = state.reserve(&instance_id, &instance.name);
     let number = state.session_number(session_id).unwrap_or(1);
     events::instance_state(&app, session_id, &instance_id, number, RunState::Preparing, None);
-    tauri::async_runtime::spawn(run_session(app, state, session_id, instance, settings, account, global.behavior.on_game_launch, kill_requests));
+    tauri::async_runtime::spawn(run_session(
+        app,
+        state,
+        session_id,
+        instance,
+        settings,
+        account,
+        join_server,
+        global.behavior.on_game_launch,
+        kill_requests,
+    ));
     Ok(session_id)
 }
 
@@ -99,6 +118,38 @@ pub fn list_run_states(state: State<'_, AppState>) -> Vec<SessionInfo> {
 #[tauri::command]
 pub fn get_game_logs(state: State<'_, AppState>, session_id: SessionId) -> Vec<LogLine> {
     state.log_lines(session_id)
+}
+
+/// The crash dialog of the session was shown or closed; a window opened later does not show it again.
+#[tauri::command]
+pub fn dismiss_crash(state: State<'_, AppState>, session_id: SessionId) {
+    state.dismiss_crash(session_id);
+}
+
+/// Opens the crash report of a crashed session with the system's default program.
+#[tauri::command]
+pub fn open_crash_report(app: AppHandle, state: State<'_, AppState>, session_id: SessionId) -> CommandResult<()> {
+    let (_, report, _) = state.upload_material(session_id).ok_or_else(|| AppError::new("the session is gone"))?;
+    let report = report.ok_or_else(|| AppError::new("the session left no crash report"))?;
+    app.opener().open_path(report, None::<&str>)?;
+    Ok(())
+}
+
+/// Uploads the session's log (and its crash report, if any) to mclo.gs. Only runs on the user's request.
+#[tauri::command]
+pub async fn upload_game_log(state: State<'_, AppState>, session_id: SessionId) -> CommandResult<UploadedLog> {
+    let (lines, report, secrets) = state.upload_material(session_id).ok_or_else(|| AppError::new("the session is gone"))?;
+    let report = match report {
+        Some(path) => {
+            let bytes = tokio::fs::read(&path).await.map_err(|error| AppError::new(format!("cannot read {path}: {error}")))?;
+            Some(String::from_utf8_lossy(&bytes).into_owned())
+        }
+        None => None,
+    };
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let secrets: Vec<&str> = secrets.iter().map(String::as_str).collect();
+    let content = mclogs::prepare_content(&lines, report.as_deref(), &secrets);
+    Ok(mclogs::upload(&state.http, &content).await?)
 }
 
 /// Clears the run entry and tells the UI the session stopped when the session task ends without
@@ -189,6 +240,7 @@ async fn run_session(
     instance: Instance,
     settings: EffectiveSettings,
     account: Account,
+    join_server: Option<String>,
     on_game_launch: OnGameLaunch,
     mut kill_requests: watch::Receiver<bool>,
 ) {
@@ -199,6 +251,8 @@ async fn run_session(
     let progress = progress_fn(&app, &task, &title);
     let log = GameLog::new(&app, &state, session_id);
     let dir = instance.sessions_dir(&state.paths).join(session_id.to_string());
+    // Scrubbed from an uploaded log; mclogs ignores tokens too short to be real (offline placeholders).
+    state.add_log_secret(session_id, &account.access_token);
     let mut session = SessionGuard {
         app: app.clone(),
         state: state.clone(),
@@ -213,7 +267,7 @@ async fn run_session(
     // Dropping `prepare` on a kill also stops its downloads and kills a running pre-launch hook.
     let preparation = async {
         tokio::select! {
-            prepared = prepare(&state, &log, &instance, &settings, account, &dir, &task, &progress) => prepared,
+            prepared = prepare(&state, &log, &instance, &settings, account, join_server, &dir, &task, &progress) => prepared,
             () = wait_killed(&mut kill_requests) => Err(AppError::new("запуск отменён")),
         }
     };
@@ -241,6 +295,7 @@ async fn run_session(
         Err(error) => return session.end(&format!("Не удалось запустить игру: {}", AppError::from(error)), None),
     };
     let started_at = Utc::now();
+    let spawned_at = SystemTime::now();
     let killed_at_spawn = {
         let mut running = state.running();
         match running.get_mut(&session_id) {
@@ -284,7 +339,18 @@ async fn run_session(
         }
     }
     // Windows reports a killed process as exit code 1, so the code alone cannot tell a kill apart.
-    let message = if state.kill_requested(session_id) {
+    let killed = state.kill_requested(session_id);
+    let crash = if killed || exit_code == Some(0) {
+        None
+    } else {
+        let game_dir = instance.game_dir(&state.paths);
+        let report = blocking(move || Ok(find_crash_report(&game_dir, spawned_at))).await.ok().flatten();
+        if let Some(report) = &report {
+            log.line("launcher", &format!("Найден отчёт о сбое: {}", report.display()));
+        }
+        Some(CrashInfo { exit_code, crash_report: report.map(|path| path.display().to_string()) })
+    };
+    let message = if killed {
         "Игра была завершена принудительно".to_owned()
     } else {
         match exit_code {
@@ -292,7 +358,13 @@ async fn run_session(
             None => "Игра была завершена сигналом".to_owned(),
         }
     };
+    if let Some(crash) = &crash {
+        state.set_crash(session_id, crash.clone());
+    }
     session.end(&message, exit_code);
+    if let Some(crash) = &crash {
+        events::game_crashed(&app, session_id, &id, crash);
+    }
 
     if !post_exit.is_empty() {
         let game_dir = instance.game_dir(&state.paths);
@@ -309,6 +381,7 @@ async fn prepare(
     instance: &Instance,
     settings: &EffectiveSettings,
     account: Account,
+    join_server: Option<String>,
     session_dir: &Path,
     task: &str,
     progress: &ProgressFn,
@@ -356,6 +429,19 @@ async fn prepare(
         run_hook("pre-launch", &settings.commands.pre_launch, &game_dir).await?;
     }
 
+    let mut extra_jvm_args = cmdline::split(&settings.jvm_args)?;
+    let (min_memory_mb, max_memory_mb) = if settings.memory.auto {
+        let mods = count_mods(&game_dir.join("mods"));
+        let modded = has_mod_loader(&instance.components);
+        let tuning = tune(total_memory_mib(), modded, mods, &extra_jvm_args);
+        let gc = if tuning.gc_args.is_empty() { "сборщик мусора задан вручную" } else { "GC: G1" };
+        let kind = if modded { format!("с загрузчиком, модов: {mods}") } else { "без загрузчика".to_owned() };
+        log.line("launcher", &format!("Автоподбор: память {}-{} МиБ ({kind}), {gc}", tuning.min_mib, tuning.max_mib));
+        extra_jvm_args.extend(tuning.gc_args);
+        (tuning.min_mib, tuning.max_mib)
+    } else {
+        (settings.memory.min_mib, settings.memory.max_mib)
+    };
     let window = (!settings.window.maximized).then_some(WindowSize { width: settings.window.width, height: settings.window.height });
     let options = LaunchOptions {
         java_path: java.path,
@@ -363,13 +449,14 @@ async fn prepare(
         game_dir,
         natives_dir,
         profile_name: instance.name.clone(),
-        min_memory_mb: settings.memory.min_mib,
-        max_memory_mb: settings.memory.max_mib,
-        extra_jvm_args: cmdline::split(&settings.jvm_args)?,
+        min_memory_mb,
+        max_memory_mb,
+        extra_jvm_args,
         window,
         account,
         env: settings.env.clone(),
         wrapper: cmdline::split(&settings.commands.wrapper)?,
+        join_server,
     };
     let command = build_command(paths, &profile, &assets, &options).await?;
     log.line("launcher", &format!("Команда запуска: {}", command.display_redacted()));

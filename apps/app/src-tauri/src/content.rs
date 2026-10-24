@@ -381,7 +381,7 @@ async fn create_from_pack(
             .update(&instance.id, |instance| {
                 if let Some(max_mib) = recommended_ram {
                     let min_mib = MemorySettings::default().min_mib.min(max_mib);
-                    instance.settings.memory = Some(MemorySettings { min_mib, max_mib });
+                    instance.settings.memory = Some(MemorySettings { min_mib, max_mib, auto: false });
                 }
                 if let Some(source) = from_zip {
                     instance.notes = source.notes;

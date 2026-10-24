@@ -1,4 +1,4 @@
-//! Events sent to the UI: `progress`, `game-log` (batched) and `instance-state`.
+//! Events sent to the UI: `progress`, `game-log` (batched), `instance-state` and `game-crashed`.
 
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 
 use crate::error::CommandResult;
-use crate::state::{AppState, SessionId};
+use crate::state::{AppState, CrashInfo, SessionId};
 use crate::{tray, window};
 
 /// Core reports every downloaded file; the UI does not need more than a few updates per second.
@@ -62,6 +62,15 @@ pub struct InstanceStatePayload {
     pub state: RunState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GameCrashedPayload<'a> {
+    session_id: SessionId,
+    instance_id: &'a str,
+    #[serde(flatten)]
+    crash: &'a CrashInfo,
 }
 
 fn emit<P: Serialize + Clone>(app: &AppHandle, event: &str, payload: P) {
@@ -166,4 +175,9 @@ impl GameLog {
 pub fn instance_state(app: &AppHandle, session_id: SessionId, instance_id: &str, number: u32, state: RunState, exit_code: Option<i32>) {
     emit(app, "instance-state", InstanceStatePayload { session_id, instance_id: instance_id.to_owned(), number, state, exit_code });
     tray::refresh(app);
+}
+
+/// The game of the session crashed. Also kept in the session's info (`list_run_states`) for a window created later.
+pub fn game_crashed(app: &AppHandle, session_id: SessionId, instance_id: &str, crash: &CrashInfo) {
+    emit(app, "game-crashed", GameCrashedPayload { session_id, instance_id, crash });
 }
