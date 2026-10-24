@@ -2,6 +2,7 @@
 
 pub mod archive;
 pub(crate) mod fsutil;
+pub mod icon;
 mod links;
 mod manager;
 mod nbt;

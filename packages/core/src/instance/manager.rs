@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 use super::fsutil::{copy_dir, is_link};
+use super::icon::custom_file_name as custom_icon_file;
 use super::links::{SharedFolder, detach_all, disable_shared, enable_shared};
 use super::{INSTANCE_FILE, Instance, InstanceSettings, ManagedPack, Playtime};
 use crate::component::ComponentSpec;
@@ -180,9 +181,21 @@ impl InstanceManager {
     pub fn update(&self, id: &str, change: impl FnOnce(&mut Instance)) -> Result<Instance> {
         let _guard = self.guard();
         let mut instance = self.get(id)?;
+        let previous_icon = instance.icon.clone();
         change(&mut instance);
         instance.id = id.to_owned();
         self.save(&instance)?;
+        // A custom icon file nothing refers to any more is garbage.
+        if instance.icon != previous_icon
+            && let Some(file_name) = custom_icon_file(&previous_icon)
+        {
+            let path = self.instance_dir(id)?.join(file_name);
+            if let Err(error) = std::fs::remove_file(&path)
+                && error.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!("could not remove the old instance icon {}: {error}", path.display());
+            }
+        }
         Ok(instance)
     }
 
@@ -222,6 +235,14 @@ impl InstanceManager {
                         excluded.contains(&name.as_str()) || linked.contains(&name.as_str())
                     })
             })?;
+
+            if let Some(file_name) = custom_icon_file(&source.icon) {
+                let from = source.dir(&self.paths).join(file_name);
+                if from.is_file() {
+                    let to = staging.join(file_name);
+                    std::fs::copy(&from, &to).at(&to)?;
+                }
+            }
 
             let mut instance = source.clone();
             instance.name = new_name.to_owned();

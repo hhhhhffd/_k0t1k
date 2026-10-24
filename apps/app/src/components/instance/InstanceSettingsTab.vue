@@ -44,6 +44,23 @@ async function pickJava() {
   }
 }
 
+const isCustomIcon = computed(() => draft.icon.startsWith('custom:'))
+
+/** The picture is stored at once (like the file itself); the built-in choices below only change the draft until saved. */
+async function pickIcon() {
+  const picked = isTauri
+    ? await open({ multiple: false, directory: false, title: t.iset.pickIconTitle, filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }] })
+    : 'C:\\Users\\Player\\Pictures\\icon.png'
+  if (typeof picked !== 'string') return
+  const saved = await tasks.guard(() => store.setIcon(props.instance.id, picked))
+  if (saved) draft.icon = saved.icon
+}
+
+async function resetIcon() {
+  const saved = await tasks.guard(() => store.resetIcon(props.instance.id))
+  if (saved) draft.icon = saved.icon
+}
+
 /** Toggle for one override group: off -> inherit (group removed), on -> start from the global value. */
 function overrideModel<K extends keyof InstanceSettings>(key: K, fromGlobal: () => InstanceSettings[K]) {
   return computed({
@@ -86,6 +103,11 @@ async function save() {
   <div v-if="global" class="flex max-w-3xl flex-col gap-3 pb-16" @input.capture="markDirty" @change.capture="markDirty">
     <section class="card flex flex-col gap-3 p-4">
       <h3 class="text-[14px] font-semibold">{{ t.iset.general }}</h3>
+      <div class="flex items-center gap-2">
+        <InstanceIcon :icon="draft.icon" :instance-id="instance.id" :size="48" />
+        <button class="btn" @click="pickIcon">{{ t.iset.pickIcon }}</button>
+        <button v-if="isCustomIcon" class="btn btn-ghost" @click="resetIcon">{{ t.iset.resetIcon }}</button>
+      </div>
       <div class="flex flex-wrap gap-1.5" role="group" :aria-label="t.iset.icon">
         <button
           v-for="key in Object.keys(INSTANCE_ICONS)"

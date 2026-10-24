@@ -62,6 +62,13 @@ apps/app/src           Vue 3 UI
   conventions are the same as for mods.
 - Screenshots are shown through Tauri's asset protocol (`convertFileSrc`). The scope is empty in config and the
   backend allows only the listed instance's `screenshots/` folder at runtime (the data dir is not known statically).
+- Custom instance icons (`instance/icon.rs`): `instance.json` keeps `icon: "custom:<file>"` (any other value is a built-in
+  key, so old files stay valid) and the image is `instances/<id>/icon-<millis>.<ext>` (PNG/JPEG/GIF/WebP by magic bytes,
+  at most 5 MB). The name changes with every icon, so no cache busting is needed, and `InstanceManager::update` deletes
+  the previous custom file whenever the icon value changes. Copy and our own export zip carry the file (import stores
+  it as a new icon); Prism zips and mrpack/CurseForge imports keep the default icon. The UI loads it through the asset
+  protocol; `get_instances_dir` allows the instances folder (recursively) at startup, and the icon component joins
+  `<instances dir>/<id>/<file>` itself.
 - Server status is a Server List Ping over TCP in `instance/servers.rs` (5 s timeout, no SRV lookup).
 
 ## Data directory (portable)

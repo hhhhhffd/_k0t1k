@@ -24,7 +24,7 @@ const loader = () => loaderOf(props.instance)
     @contextmenu.prevent="emit('menu', $event)"
   >
     <div class="flex min-w-0 items-center gap-3" :class="list ? 'flex-1' : ''">
-      <InstanceIcon :icon="instance.icon" :size="list ? 40 : 52" />
+      <InstanceIcon :icon="instance.icon" :instance-id="instance.id" :size="list ? 40 : 52" />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
           <span class="truncate text-[14px] font-semibold">{{ instance.name }}</span>

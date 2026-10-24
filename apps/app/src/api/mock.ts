@@ -536,6 +536,9 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       Object.assign(i, { icon, notes, sharedFolders, settings: groups })
       return clone(i)
     }
+    case 'get_instances_dir': return 'C:\\mock\\instances'
+    case 'set_instance_icon': { const i = findInstance(a.instanceId); i.icon = `custom:icon-${Date.now()}.png`; return clone(i) }
+    case 'reset_instance_icon': { const i = findInstance(a.instanceId); i.icon = 'default'; return clone(i) }
     case 'open_instance_folder': return undefined
     case 'launch_instance': return launch(a.instanceId as string)
     case 'kill_session': await killSession(a.sessionId as SessionId); return undefined
