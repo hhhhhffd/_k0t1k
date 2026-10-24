@@ -110,6 +110,10 @@ pub struct UiSettings {
     /// Lightweight mode for low-end PCs.
     pub lite_mode: bool,
     pub custom_themes: Vec<CustomTheme>,
+    /// Cat shown in the UI: `None` for no cat, `"mascot"` for the built-in one, otherwise a cat pack id.
+    pub cat_pack: Option<String>,
+    /// Folder name of the icon set under `iconsets/`; `None` for the built-in icons.
+    pub icon_set: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -154,6 +158,8 @@ impl Default for UiSettings {
             theme: "k0t1k".to_owned(),
             lite_mode: false,
             custom_themes: Vec::new(),
+            cat_pack: None,
+            icon_set: None,
         }
     }
 }
@@ -465,9 +471,18 @@ mod tests {
         assert_eq!((settings.window.width, settings.window.height), (1000, 480));
         assert!(settings.ui.lite_mode);
         assert_eq!(settings.ui.theme, "k0t1k");
+        assert_eq!((settings.ui.cat_pack, settings.ui.icon_set), (None, None));
         assert!(settings.discord.enabled);
         let off: GlobalSettings = serde_json::from_str(r#"{"discord":{"enabled":false}}"#).unwrap();
         assert!(!off.discord.enabled);
+    }
+
+    #[test]
+    fn cat_pack_and_icon_set_are_optional() {
+        let old: GlobalSettings = serde_json::from_str(r#"{"ui":{"theme":"k0t1k","liteMode":false,"customThemes":[]}}"#).unwrap();
+        assert_eq!((old.ui.cat_pack, old.ui.icon_set), (None, None));
+        let new: GlobalSettings = serde_json::from_str(r#"{"ui":{"catPack":"mascot","iconSet":"flat"}}"#).unwrap();
+        assert_eq!((new.ui.cat_pack.as_deref(), new.ui.icon_set.as_deref()), (Some("mascot"), Some("flat")));
     }
 
     #[test]

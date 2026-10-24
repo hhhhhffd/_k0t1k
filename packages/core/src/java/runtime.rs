@@ -133,6 +133,7 @@ pub async fn install_runtime(
         return Err(error);
     }
 
+    remove_empty_dir(&java_dir.join(".tmp"));
     managed_java_path(paths, component).ok_or_else(|| {
         Error::Other(format!(
             "Java runtime {component} was installed but contains no java executable"
@@ -213,6 +214,24 @@ fn remove_staging(staging: &Path) {
         && error.kind() != std::io::ErrorKind::NotFound
     {
         tracing::warn!("could not remove Java staging dir {}: {error}", staging.display());
+    }
+    if let Some(root) = staging.parent() {
+        remove_empty_dir(root);
+    }
+}
+
+/// `remove_dir` only succeeds on an empty folder, so the staging dir of another install is never touched.
+fn remove_empty_dir(dir: &Path) {
+    let _ = std::fs::remove_dir(dir);
+}
+
+/// Startup cleanup: installs are never resumed, so whatever `java/.tmp` holds is an interrupted one.
+pub fn remove_leftover_staging(paths: &Paths) {
+    let staging = paths.java_dir().join(".tmp");
+    if let Err(error) = std::fs::remove_dir_all(&staging)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!("could not remove leftover Java staging dir {}: {error}", staging.display());
     }
 }
 

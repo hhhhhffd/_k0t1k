@@ -7,7 +7,7 @@ mod version;
 
 pub use detect::detect_java;
 pub use probe::{JavaInstall, POISONED_ENV, probe};
-pub use runtime::{component_for_major, install_runtime, managed_java_path, mojang_platform};
+pub use runtime::{component_for_major, install_runtime, managed_java_path, mojang_platform, remove_leftover_staging};
 pub use version::JavaVersion;
 
 use crate::error::{Error, Result};
@@ -21,6 +21,13 @@ const FALLBACK_MAJOR: u32 = 8;
 /// File name of the game executable: `javaw.exe` has no console window, unlike `java.exe`.
 pub const fn game_executable() -> &'static str {
     if cfg!(windows) { "javaw.exe" } else { "java" }
+}
+
+/// Mojang runtime component a launch with these requirements uses when Java is picked automatically.
+/// Without requirement info Java 8 is assumed.
+pub fn required_component<'a>(required_majors: &[u32], component: Option<&'a str>) -> Option<&'a str> {
+    let majors = if required_majors.is_empty() { &[FALLBACK_MAJOR][..] } else { required_majors };
+    component.or_else(|| majors.iter().find_map(|&major| component_for_major(major)))
 }
 
 /// Choose the Java for a launch, in this order:
@@ -56,7 +63,7 @@ pub async fn ensure_java(
     } else {
         required_majors
     };
-    let component = component.or_else(|| majors.iter().find_map(|&major| component_for_major(major)));
+    let component = required_component(required_majors, component);
 
     if let Some(component) = component
         && let Some(path) = managed_java_path(paths, component)

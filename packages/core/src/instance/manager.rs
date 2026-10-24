@@ -359,7 +359,23 @@ impl InstanceManager {
                 tracing::warn!("could not remove instance staging dir: {error}");
             }
         }
+        // Succeeds only when no other staging dir is left in it.
+        let _ = std::fs::remove_dir(instances_dir.join(".tmp"));
         committed
+    }
+
+    /// Startup cleanup: a staging dir that outlived its process is an interrupted build, never an instance.
+    pub fn remove_leftover_staging(&self) {
+        let root = self.paths.instances_dir().join(".tmp");
+        let Ok(entries) = std::fs::read_dir(&root) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let removed = detach_all(&path.join("minecraft")).and_then(|()| std::fs::remove_dir_all(&path).at(&path));
+            if let Err(error) = removed {
+                tracing::warn!("could not remove leftover instance staging dir: {error}");
+            }
+        }
+        let _ = std::fs::remove_dir(&root);
     }
 }
 
@@ -458,6 +474,17 @@ mod tests {
     }
 
     #[test]
+    fn leftover_staging_is_removed_and_not_listed() {
+        let (_dir, manager) = manager();
+        let leftover = manager.paths().instances_dir().join(".tmp").join("abc").join("minecraft");
+        std::fs::create_dir_all(&leftover).unwrap();
+        std::fs::write(leftover.join(INSTANCE_FILE), b"{}").unwrap();
+        assert!(manager.list().unwrap().instances.is_empty());
+        manager.remove_leftover_staging();
+        assert!(!manager.paths().instances_dir().join(".tmp").exists());
+    }
+
+    #[test]
     fn create_list_get_rename_delete() {
         let (_dir, manager) = manager();
         assert!(manager.list().unwrap().instances.is_empty());
@@ -466,7 +493,7 @@ mod tests {
         let second = manager.create(new_instance("Vanilla")).unwrap();
         assert_eq!((first.id.as_str(), second.id.as_str()), ("Vanilla", "Vanilla (2)"));
         assert!(first.game_dir(manager.paths()).is_dir());
-        assert!(!manager.paths().instances_dir().join(".tmp").read_dir().unwrap().any(|_| true));
+        assert!(!manager.paths().instances_dir().join(".tmp").exists());
 
         let list = manager.list().unwrap();
         assert_eq!(list.instances.len(), 2);

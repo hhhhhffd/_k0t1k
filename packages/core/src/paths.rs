@@ -61,6 +61,29 @@ impl Paths {
         self.root.join("cache")
     }
 
+    /// Pictures the user can pick as instance icons.
+    pub fn icons_dir(&self) -> PathBuf {
+        self.root.join("icons")
+    }
+
+    pub fn catpacks_dir(&self) -> PathBuf {
+        self.root.join("catpacks")
+    }
+
+    /// Custom theme files (`*.json`).
+    pub fn themes_dir(&self) -> PathBuf {
+        self.root.join("themes")
+    }
+
+    /// Icon sets: one subfolder per set.
+    pub fn iconsets_dir(&self) -> PathBuf {
+        self.root.join("iconsets")
+    }
+
+    pub fn logs_dir(&self) -> PathBuf {
+        self.root.join("logs")
+    }
+
     pub fn settings_file(&self) -> PathBuf {
         self.root.join("settings.json")
     }
