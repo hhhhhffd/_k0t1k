@@ -6,6 +6,8 @@ import type {
   AvailableUpdate,
   BlockedFile,
   BlockedScan,
+  DeviceCodeInfo,
+  ElybyLoginResult,
   DragDropEvent,
   ExportEntry,
   ExportRequest,
@@ -125,6 +127,20 @@ function loadSettings(): GlobalSettings {
   return clone(defaultSettings)
 }
 let settings = loadSettings()
+let mockLoginCancelled = false
+
+/** Adds (or updates) a fake premium account, like the backend does after a successful sign-in. */
+function mockPremiumAccount(kind: 'microsoft' | 'elyby', name: string): Account {
+  const id = `${kind === 'microsoft' ? 'ms' : 'elyby'}-${name.toLowerCase()}`
+  const existing = settings.accounts.find((x) => x.id === id)
+  if (existing) return existing
+  const acc: Account = { id, name, kind }
+  settings.accounts.push(acc)
+  settings.selectedAccountId ??= acc.id
+  persistSettings()
+  return acc
+}
+
 function persistSettings() {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
@@ -573,7 +589,22 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       persistSettings()
       return acc
     }
-    case 'remove_offline_account':
+    case 'start_microsoft_login':
+      mockLoginCancelled = false
+      return { userCode: 'MOCK1234', verificationUri: 'https://www.microsoft.com/link', expiresIn: 900 } satisfies DeviceCodeInfo
+    case 'finish_microsoft_login': {
+      for (let i = 0; i < 30 && !mockLoginCancelled; i++) await sleep(100)
+      if (mockLoginCancelled) throw 'вход через Microsoft отменён'
+      return mockPremiumAccount('microsoft', 'MockSteve')
+    }
+    case 'cancel_microsoft_login': mockLoginCancelled = true; return undefined
+    case 'elyby_login': {
+      await sleep(400)
+      if (a.password === 'wrong') throw 'Неверный логин или пароль ely.by'
+      if ((a.username as string).includes('2fa') && !a.totp) return { account: null, twoFactorRequired: true } satisfies ElybyLoginResult
+      return { account: mockPremiumAccount('elyby', (a.username as string).split('@')[0]), twoFactorRequired: false } satisfies ElybyLoginResult
+    }
+    case 'remove_account':
       settings.accounts = settings.accounts.filter((x) => x.id !== a.accountId)
       if (settings.selectedAccountId === a.accountId) settings.selectedAccountId = settings.accounts[0]?.id ?? null
       persistSettings()

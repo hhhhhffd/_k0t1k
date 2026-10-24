@@ -1,8 +1,7 @@
 # _k0t1k architecture
 
 Goal: a Minecraft launcher that matches Prism Launcher's functionality, built on the Modrinth App stack
-(Tauri 2 + Rust core + Vue 3/TypeScript/Tailwind). Windows first. Microsoft auth comes later; until then
-launches use offline accounts.
+(Tauri 2 + Rust core + Vue 3/TypeScript/Tailwind). Windows first. Accounts: offline, Microsoft and ely.by.
 
 Reference guides distilled from Prism's source live in `docs/prism/`:
 - `launch-pipeline.md`: meta, components, libraries, assets, the launch command line, Forge/NeoForge via ForgeWrapper.
@@ -47,6 +46,25 @@ apps/app/src           Vue 3 UI
   ends; leftovers (crash, Windows file locks) are removed by the next launch of the instance. Deleting an
   instance is refused while any of its sessions is live. Preparations run concurrently; `install_lock`
   serialises the installs.
+
+## Accounts (`core/src/auth`)
+
+- `settings.json` holds only the public list `{id, name, kind}` (`offline` | `microsoft` | `elyby`); ids are the offline
+  UUID, `ms-<uuid>` and `elyby-<uuid>`, so kinds cannot collide. Tokens live in `accounts.json` (`auth::Secrets`, own
+  lock, never sent to the UI; both names are in `placement::OWNED_NAMES`). Saving an account that exists updates it;
+  `auth::remove_account` drops its tokens.
+- **Microsoft**: OAuth device code flow (client id baked in by build.rs from `K0T1K_MSA_CLIENT_ID`, env or `.env`, like the
+  CurseForge key), then Xbox Live, XSTS and Minecraft services. `start_microsoft_login` returns the code at once,
+  `finish_microsoft_login` polls until it is entered, `cancel_microsoft_login` stops it (the dialog closing). The
+  Minecraft token is refreshed from the stored refresh token (which Microsoft rotates) when it expires within 5 minutes;
+  a refresh lock keeps concurrent launches from racing. User type `msa`.
+- **ely.by**: Yggdrasil at authserver.ely.by (password never stored; two-factor accounts are asked for the code and sent
+  as `password:code`). Before a launch the token is validated and refreshed. The game gets authlib-injector as
+  `-javaagent:<jar>=ely.by` (`LaunchOptions::java_agent_args`, placed first); the jar is downloaded from the
+  authlib-injector artifact index, sha256-checked and cached in `libraries/moe/yushi/authlib-injector/<version>`, the
+  newest cached one is used offline. User type `mojang`.
+- `launch_instance` resolves the account inside the session's preparation (`auth::resolve_launch_identity`), so refresh
+  errors fail the launch with a readable message in the session log.
 
 ## Worlds, data packs, screenshots, servers
 

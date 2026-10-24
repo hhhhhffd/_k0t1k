@@ -7,9 +7,9 @@ pub struct Account {
     /// 32 hex characters, no dashes.
     pub uuid: String,
     pub access_token: String,
-    /// `${auth_session}`: `-` for offline accounts.
+    /// `${auth_session}`: `-` for offline accounts, `token:<access token>:<uuid>` otherwise.
     pub session: String,
-    /// `${user_type}`: `offline` or `msa`.
+    /// `${user_type}`: `offline`, `msa` or `mojang`.
     pub user_type: String,
 }
 
@@ -21,6 +21,19 @@ impl Account {
             access_token: "0".to_owned(),
             session: "-".to_owned(),
             user_type: "offline".to_owned(),
+        }
+    }
+}
+
+impl Account {
+    /// A signed-in account; `user_type` is `msa` for Microsoft and `mojang` for Yggdrasil servers.
+    pub fn authenticated(name: &str, uuid: &str, access_token: &str, user_type: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            uuid: uuid.to_owned(),
+            access_token: access_token.to_owned(),
+            session: format!("token:{access_token}:{uuid}"),
+            user_type: user_type.to_owned(),
         }
     }
 }

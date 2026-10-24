@@ -85,7 +85,7 @@ export const useSettingsStore = defineStore('settings', () => {
     return acc
   }
   async function removeAccount(id: string) {
-    await api.removeOfflineAccount(id)
+    await api.removeAccount(id)
     await load()
   }
   async function selectAccount(id: string) {

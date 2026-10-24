@@ -238,6 +238,8 @@ impl Default for GlobalSettings {
 #[serde(rename_all = "lowercase")]
 pub enum AccountKind {
     Offline,
+    Microsoft,
+    Elyby,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -124,10 +124,26 @@ export interface CustomTheme {
   colors: Record<string, string>
 }
 
+export type AccountKind = 'offline' | 'microsoft' | 'elyby'
+
+/** The public account list; tokens never reach the UI. */
 export interface Account {
   id: string
   name: string
-  kind: 'offline'
+  kind: AccountKind
+}
+
+/** Microsoft device code the user enters at `verificationUri`. */
+export interface DeviceCodeInfo {
+  userCode: string
+  verificationUri: string
+  expiresIn: number
+}
+
+/** `twoFactorRequired`: ask for the TOTP code and call elyby_login again with it. */
+export interface ElybyLoginResult {
+  account: Account | null
+  twoFactorRequired: boolean
 }
 
 /** What the window does while a game runs: destroy it (frees the web view's memory), hide it, or leave it. */

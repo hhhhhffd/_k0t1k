@@ -1,30 +1,30 @@
 use std::path::Path;
 
-const CURSEFORGE_KEY_VAR: &str = "K0T1K_CURSEFORGE_API_KEY";
-
 fn main() {
-    embed_curseforge_key();
+    embed_from_env("K0T1K_CURSEFORGE_API_KEY", "CurseForge will be unavailable");
+    embed_from_env("K0T1K_MSA_CLIENT_ID", "Microsoft sign-in will be unavailable");
     tauri_build::build()
 }
 
-/// Bakes the CurseForge API key into the binary at build time, taken from the environment or from the
-/// gitignored `.env` at the repository root, so the key never lives in source control.
-/// The file is parsed directly rather than through a shell because CurseForge keys start with `$2a$10$`.
-fn embed_curseforge_key() {
+/// Bakes a value (the CurseForge API key, the Azure application id) into the binary at build time,
+/// taken from the environment or from the gitignored `.env` at the repository root, so it never lives
+/// in source control. The file is parsed directly rather than through a shell because CurseForge keys
+/// start with `$2a$10$`.
+fn embed_from_env(var: &str, missing: &str) {
     let env_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.env");
-    println!("cargo:rerun-if-env-changed={CURSEFORGE_KEY_VAR}");
+    println!("cargo:rerun-if-env-changed={var}");
     println!("cargo:rerun-if-changed={}", env_file.display());
 
-    let key = std::env::var(CURSEFORGE_KEY_VAR).ok().or_else(|| {
+    let value = std::env::var(var).ok().or_else(|| {
         let contents = std::fs::read_to_string(&env_file).ok()?;
         contents.lines().find_map(|line| {
-            let value = line.trim().strip_prefix(CURSEFORGE_KEY_VAR)?.strip_prefix('=')?;
+            let value = line.trim().strip_prefix(var)?.strip_prefix('=')?;
             Some(value.trim().trim_matches(['"', '\'']).to_owned())
         })
     });
 
-    match key.filter(|key| !key.is_empty()) {
-        Some(key) => println!("cargo:rustc-env={CURSEFORGE_KEY_VAR}={key}"),
-        None => println!("cargo:warning={CURSEFORGE_KEY_VAR} is not set; CurseForge will be unavailable"),
+    match value.filter(|value| !value.is_empty()) {
+        Some(value) => println!("cargo:rustc-env={var}={value}"),
+        None => println!("cargo:warning={var} is not set; {missing}"),
     }
 }

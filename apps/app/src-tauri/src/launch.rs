@@ -5,21 +5,22 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use chrono::Utc;
+use k0t1k_core::auth;
 use k0t1k_core::install::{check_installed, extract_natives, install_game, reconstruct_assets};
 use k0t1k_core::instance::{EffectiveSettings, Instance};
 use k0t1k_core::java::ensure_java;
-use k0t1k_core::launch::{Account, LaunchCommand, LaunchOptions, LogFn, LogStream, WindowSize, build_command, spawn_game};
+use k0t1k_core::launch::{LaunchCommand, LaunchOptions, LogFn, LogStream, WindowSize, build_command, spawn_game};
 use k0t1k_core::profile::LaunchProfile;
 use k0t1k_core::progress::ProgressFn;
 use k0t1k_core::profile::library::RuntimeContext;
-use k0t1k_core::settings::{GlobalSettings, OnGameLaunch};
+use k0t1k_core::settings::{Account, GlobalSettings, OnGameLaunch};
 use tauri::{AppHandle, State};
 use tokio::process::Command;
 use tokio::sync::watch;
 
 use crate::error::{AppError, CommandResult, blocking};
 use crate::events::{self, GameLog, LogLine, RunState, progress_fn, tracked};
-use crate::state::{AppState, SessionId, SessionInfo};
+use crate::state::{AppState, MSA_CLIENT_ID, SessionId, SessionInfo};
 use crate::{cmdline, game, window};
 
 #[cfg(windows)]
@@ -41,8 +42,8 @@ pub async fn launch_instance(
         Some(id) => global.accounts.iter().find(|account| &account.id == id),
         None => global.selected_account(),
     }
-    .ok_or_else(|| AppError::new("no account selected: add an offline account in the settings"))?;
-    let account = Account::offline(&account.name);
+    .ok_or_else(|| AppError::new("no account selected: add an account in the settings"))?
+    .clone();
     let settings = instance.effective_settings(&global);
 
     // Every launch is its own session: the instance may already be running, and concurrent
@@ -315,6 +316,10 @@ async fn prepare(
 ) -> CommandResult<LaunchCommand> {
     let paths = &state.paths;
 
+    // Refreshes expiring tokens; a failure (for example an expired sign-in) fails the launch with its message.
+    let identity = auth::resolve_launch_identity(paths, &state.http, MSA_CLIENT_ID, &account).await?;
+    log.line("launcher", &format!("Аккаунт: {} ({})", account.name, identity.account.user_type));
+
     let (components, online) = game::resolve(paths, instance.components.clone()).await?;
     // Only the Java requirements are needed from this profile; natives depend on the chosen Java.
     let preliminary = LaunchProfile::build(&components, RuntimeContext::host(game::host_java_arch()))?;
@@ -365,9 +370,10 @@ async fn prepare(
         profile_name: instance.name.clone(),
         min_memory_mb: settings.memory.min_mib,
         max_memory_mb: settings.memory.max_mib,
+        java_agent_args: identity.java_agent_args,
         extra_jvm_args: cmdline::split(&settings.jvm_args)?,
         window,
-        account,
+        account: identity.account,
         env: settings.env.clone(),
         wrapper: cmdline::split(&settings.commands.wrapper)?,
     };

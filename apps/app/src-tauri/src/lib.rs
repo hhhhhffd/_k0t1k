@@ -1,3 +1,4 @@
+mod accounts;
 mod cmdline;
 mod content;
 mod datadir;
@@ -97,7 +98,11 @@ pub fn run() {
             onboarding::uninstall,
             settings::open_shared_folder,
             settings::add_offline_account,
-            settings::remove_offline_account,
+            settings::remove_account,
+            accounts::start_microsoft_login,
+            accounts::finish_microsoft_login,
+            accounts::cancel_microsoft_login,
+            accounts::elyby_login,
             settings::select_account,
             content::search_content,
             content::get_project_versions,

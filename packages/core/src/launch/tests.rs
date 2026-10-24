@@ -40,6 +40,7 @@ fn options(root: &std::path::Path) -> LaunchOptions {
         profile_name: "My Instance".to_owned(),
         min_memory_mb: 512,
         max_memory_mb: 4096,
+        java_agent_args: Vec::new(),
         extra_jvm_args: vec!["-XX:+UseG1GC".to_owned()],
         window: Some(WindowSize { width: 854, height: 480 }),
         account: Account::offline("Notch"),

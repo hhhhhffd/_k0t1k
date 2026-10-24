@@ -41,7 +41,10 @@ pub struct LaunchOptions {
     pub profile_name: String,
     pub min_memory_mb: u32,
     pub max_memory_mb: u32,
-    /// Placed after `-Duser.language=en` and before the profile's own JVM arguments.
+    /// `-javaagent:...` arguments (authlib-injector); placed right after `-Duser.language=en`, before
+    /// everything else.
+    pub java_agent_args: Vec<String>,
+    /// Placed after the Java agents and before the profile's own JVM arguments.
     pub extra_jvm_args: Vec<String>,
     /// Passed as `--width`/`--height`; `None` leaves the game's default window.
     pub window: Option<WindowSize>,
@@ -123,6 +126,7 @@ fn launch_args(paths: &Paths, profile: &LaunchProfile, assets: &AssetIndex, opti
     ]);
 
     let mut jvm = vec!["-Duser.language=en".to_owned()];
+    jvm.extend(options.java_agent_args.iter().cloned());
     jvm.extend(options.extra_jvm_args.iter().cloned());
     jvm.extend(profile.jvm_args.iter().map(|arg| substitute(arg, &tokens)));
     if profile.runtime.system == "windows" {

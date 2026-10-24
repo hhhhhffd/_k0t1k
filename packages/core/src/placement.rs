@@ -24,6 +24,8 @@ pub const OWNED_NAMES: &[&str] = &[
     "webview",
     "settings.json",
     "settings.json.tmp",
+    "accounts.json",
+    "accounts.json.tmp",
     "data-dir.txt",
 ];
 
