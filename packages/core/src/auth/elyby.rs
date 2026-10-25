@@ -9,13 +9,17 @@ use serde_json::json;
 use super::{Secrets, http_error};
 use crate::download::{Checksum, download_checked};
 use crate::error::{Error, Result};
+use crate::i18n::tr;
 use crate::paths::Paths;
+use crate::tr_fmt;
 
 const AUTH_URL: &str = "https://authserver.ely.by/auth";
 const INJECTOR_HOST: &str = "authlib-injector.yushi.moe";
 const INJECTOR_LATEST_URL: &str = "https://authlib-injector.yushi.moe/artifact/latest.json";
 
-pub const RELOGIN_MESSAGE: &str = "Сессия ely.by истекла: войдите в аккаунт заново";
+pub fn relogin_message() -> &'static str {
+    tr("The ely.by session has expired: sign in again", "Сессия ely.by истекла: войдите в аккаунт заново")
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,7 +77,7 @@ pub async fn authenticate(http: &reqwest::Client, username: &str, password: &str
         };
     }
     let auth: AuthResponse = response.json().await.map_err(|source| http_error(&url, source))?;
-    let profile = auth.selected_profile.ok_or_else(|| Error::Other("На аккаунте ely.by нет профиля игрока".to_owned()))?;
+    let profile = auth.selected_profile.ok_or_else(|| Error::Other(tr("This ely.by account has no player profile", "На аккаунте ely.by нет профиля игрока").to_owned()))?;
     Ok(Login::Done(Secrets::Elyby(ElybySecrets {
         uuid: profile.id,
         name: profile.name,
@@ -92,21 +96,21 @@ fn classify_error(status: reqwest::StatusCode, body: &str, sent_totp: bool) -> F
     let lower = message.to_ascii_lowercase();
     if lower.contains("two factor") || lower.contains("two-factor") {
         // A second "protected" answer after the code was sent means the code was not accepted.
-        return if sent_totp { Failure::Message("Неверный код двухфакторной защиты".to_owned()) } else { Failure::TwoFactor };
+        return if sent_totp { Failure::Message(tr("Wrong two-factor code", "Неверный код двухфакторной защиты").to_owned()) } else { Failure::TwoFactor };
     }
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         let text = if lower.contains("invalid credentials") || lower.contains("password") {
-            "Неверный логин или пароль ely.by".to_owned()
+            tr("Wrong ely.by login or password", "Неверный логин или пароль ely.by").to_owned()
         } else if lower.contains("temporarily") || lower.contains("too many") {
-            "ely.by временно блокирует вход: слишком много попыток, подождите".to_owned()
+            tr("ely.by is temporarily blocking sign-in: too many attempts, wait a bit", "ely.by временно блокирует вход: слишком много попыток, подождите").to_owned()
         } else if lower.contains("banned") {
-            "Аккаунт ely.by заблокирован".to_owned()
+            tr("This ely.by account is banned", "Аккаунт ely.by заблокирован").to_owned()
         } else {
-            format!("ely.by отказал во входе: {message}")
+            tr_fmt!("ely.by refused the sign-in: {message}", "ely.by отказал во входе: {message}")
         };
         return Failure::Message(text);
     }
-    Failure::Message(format!("ely.by вернул ошибку {status}"))
+    Failure::Message(tr_fmt!("ely.by returned error {status}", "ely.by вернул ошибку {status}"))
 }
 
 /// Makes sure the stored access token works before a launch: validates it and refreshes it when
@@ -125,7 +129,7 @@ pub async fn ensure_valid(http: &reqwest::Client, secrets: &ElybySecrets) -> Res
         return Ok(None);
     }
     if !matches!(response.status(), reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN) {
-        return Err(Error::Other(format!("ely.by вернул ошибку {} при проверке токена", response.status())));
+        return Err(Error::Other(tr_fmt!("ely.by returned error {} while checking the token", "ely.by вернул ошибку {} при проверке токена", response.status())));
     }
 
     let url = format!("{AUTH_URL}/refresh");
@@ -133,10 +137,10 @@ pub async fn ensure_valid(http: &reqwest::Client, secrets: &ElybySecrets) -> Res
     let response = http.post(&url).json(&body).send().await.map_err(|source| http_error(&url, source))?;
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return Err(Error::Other(RELOGIN_MESSAGE.to_owned()));
+        return Err(Error::Other(relogin_message().to_owned()));
     }
     if !status.is_success() {
-        return Err(Error::Other(format!("ely.by вернул ошибку {status} при обновлении токена")));
+        return Err(Error::Other(tr_fmt!("ely.by returned error {status} while refreshing the token", "ely.by вернул ошибку {status} при обновлении токена")));
     }
     let refreshed: AuthResponse = response.json().await.map_err(|source| http_error(&url, source))?;
     Ok(Some(ElybySecrets { access_token: refreshed.access_token, ..secrets.clone() }))
@@ -183,7 +187,7 @@ async fn latest_release(http: &reqwest::Client) -> Result<InjectorRelease> {
     let host_ok = reqwest::Url::parse(&release.download_url)
         .is_ok_and(|url| url.scheme() == "https" && url.host_str() == Some(INJECTOR_HOST));
     if !version_ok || !host_ok {
-        return Err(Error::Other("authlib-injector: неожиданный ответ сервера обновлений".to_owned()));
+        return Err(Error::Other("authlib-injector: unexpected response from the update server".to_owned()));
     }
     Ok(release)
 }
@@ -225,13 +229,13 @@ mod tests {
     fn two_factor_is_detected() {
         let body = r#"{"error":"ForbiddenOperationException","errorMessage":"Account protected with two factor auth."}"#;
         assert!(matches!(classify_error(StatusCode::UNAUTHORIZED, body, false), Failure::TwoFactor));
-        assert!(message(classify_error(StatusCode::UNAUTHORIZED, body, true)).contains("код"));
+        assert!(message(classify_error(StatusCode::UNAUTHORIZED, body, true)).contains("code"));
     }
 
     #[test]
     fn credentials_errors_are_explained() {
         let body = r#"{"error":"ForbiddenOperationException","errorMessage":"Invalid credentials. Invalid nickname or password."}"#;
-        assert!(message(classify_error(StatusCode::UNAUTHORIZED, body, false)).contains("Неверный логин"));
+        assert!(message(classify_error(StatusCode::UNAUTHORIZED, body, false)).contains("Wrong ely.by login"));
         assert!(message(classify_error(StatusCode::BAD_GATEWAY, "<html>", false)).contains("502"));
     }
 

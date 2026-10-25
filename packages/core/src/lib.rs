@@ -5,6 +5,7 @@ pub mod component;
 pub mod content;
 pub mod download;
 pub mod error;
+pub mod i18n;
 pub mod install;
 pub mod instance;
 pub mod java;

@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, IoContext, Result};
+use crate::i18n::Language;
 use crate::instance::SharedFolder;
 use crate::paths::Paths;
 
@@ -105,6 +106,8 @@ impl Default for PlaytimeSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UiSettings {
+    /// Language of the UI and of the messages the backend shows.
+    pub language: Language,
     /// A built-in theme id or the id of one of `custom_themes`.
     pub theme: String,
     /// Lightweight mode for low-end PCs.
@@ -155,6 +158,7 @@ impl UiSettings {
 impl Default for UiSettings {
     fn default() -> Self {
         Self {
+            language: Language::default(),
             theme: "k0t1k".to_owned(),
             lite_mode: false,
             custom_themes: Vec::new(),
@@ -403,6 +407,15 @@ mod tests {
         assert!(settings.playtime.record && settings.playtime.show);
         assert_eq!(settings.behavior.on_game_launch, OnGameLaunch::HideToTray);
         assert_eq!(settings.behavior.on_close, OnClose::Tray);
+    }
+
+    #[test]
+    fn language_defaults_to_english_and_old_files_load() {
+        assert_eq!(GlobalSettings::default().ui.language, Language::En);
+        let old: GlobalSettings = serde_json::from_str(r#"{"ui":{"theme":"light"}}"#).unwrap();
+        assert_eq!(old.ui.language, Language::En);
+        let ru: GlobalSettings = serde_json::from_str(r#"{"ui":{"language":"ru"}}"#).unwrap();
+        assert_eq!(ru.ui.language, Language::Ru);
     }
 
     #[test]

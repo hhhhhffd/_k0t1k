@@ -30,7 +30,7 @@ pub struct ElybyLoginResult {
 }
 
 fn client_id() -> CommandResult<&'static str> {
-    MSA_CLIENT_ID.filter(|id| !id.is_empty()).ok_or_else(|| AppError::new(auth::NO_MSA_CLIENT_ID))
+    MSA_CLIENT_ID.filter(|id| !id.is_empty()).ok_or_else(|| AppError::new(auth::no_msa_client_id()))
 }
 
 #[tauri::command]

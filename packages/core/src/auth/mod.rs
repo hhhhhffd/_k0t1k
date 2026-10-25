@@ -14,9 +14,11 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::i18n::tr;
 use crate::launch::Account as GameAccount;
 use crate::paths::Paths;
 use crate::settings::{Account, AccountKind, GlobalSettings, write_json_private};
+use crate::tr_fmt;
 
 pub use elyby::{ElybySecrets, Login as ElybyLogin};
 pub use microsoft::{DeviceCode, MicrosoftSecrets};
@@ -251,9 +253,9 @@ async fn fresh_microsoft_secrets(
     msa_client_id: Option<&str>,
     account_id: &str,
 ) -> Result<MicrosoftSecrets> {
-    let load = || match stored_secrets(paths, account_id, microsoft::RELOGIN_MESSAGE)? {
+    let load = || match stored_secrets(paths, account_id, microsoft::relogin_message())? {
         Secrets::Microsoft(secrets) => Ok(secrets),
-        Secrets::Elyby(_) => Err(Error::Other(microsoft::RELOGIN_MESSAGE.to_owned())),
+        Secrets::Elyby(_) => Err(Error::Other(microsoft::relogin_message().to_owned())),
     };
     let now = chrono::Utc::now().timestamp();
     let current = load()?;
@@ -267,7 +269,7 @@ async fn fresh_microsoft_secrets(
     if !microsoft::needs_refresh(current.expires_at, now) {
         return Ok(current);
     }
-    let client_id = msa_client_id.ok_or_else(|| Error::Other(NO_MSA_CLIENT_ID.to_owned()))?;
+    let client_id = msa_client_id.ok_or_else(|| Error::Other(no_msa_client_id().to_owned()))?;
     let refreshed = async {
         let tokens = microsoft::refresh(http, client_id, &current.refresh_token).await?;
         if let Some(rotated) = &tokens.refresh_token {
@@ -303,8 +305,8 @@ async fn valid_elyby_secrets(paths: &Paths, http: &reqwest::Client, account_id: 
     // Two launches must not refresh the same token: the loser would be told to sign in again. The secrets
     // are read after the lock is taken, so a launch that waited sees the winner's new token.
     let _guard = REFRESH_LOCK.lock().await;
-    let Secrets::Elyby(secrets) = stored_secrets(paths, account_id, elyby::RELOGIN_MESSAGE)? else {
-        return Err(Error::Other(elyby::RELOGIN_MESSAGE.to_owned()));
+    let Secrets::Elyby(secrets) = stored_secrets(paths, account_id, elyby::relogin_message())? else {
+        return Err(Error::Other(elyby::relogin_message().to_owned()));
     };
     match elyby::ensure_valid(http, &secrets).await? {
         Some(refreshed) => {
@@ -315,7 +317,9 @@ async fn valid_elyby_secrets(paths: &Paths, http: &reqwest::Client, account_id: 
     }
 }
 
-pub const NO_MSA_CLIENT_ID: &str = "Microsoft-вход недоступен: сборка без K0T1K_MSA_CLIENT_ID";
+pub fn no_msa_client_id() -> &'static str {
+    tr("Microsoft sign-in is unavailable: built without K0T1K_MSA_CLIENT_ID", "Microsoft-вход недоступен: сборка без K0T1K_MSA_CLIENT_ID")
+}
 
 /// Sends a JSON request and parses the JSON answer; `service` names the server in error messages.
 pub(crate) async fn send_json<T: serde::de::DeserializeOwned>(
@@ -325,7 +329,7 @@ pub(crate) async fn send_json<T: serde::de::DeserializeOwned>(
 ) -> Result<T> {
     let response = request.send().await.map_err(|source| http_error(url, source))?;
     if !response.status().is_success() {
-        return Err(Error::Other(format!("{service} вернул ошибку {}", response.status())));
+        return Err(Error::Other(tr_fmt!("{service} returned error {}", "{service} вернул ошибку {}", response.status())));
     }
     response.json().await.map_err(|source| http_error(url, source))
 }

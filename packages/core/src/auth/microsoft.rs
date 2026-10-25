@@ -7,6 +7,8 @@ use serde_json::json;
 
 use super::{Secrets, http_error, send_json};
 use crate::error::{Error, Result};
+use crate::i18n::tr;
+use crate::tr_fmt;
 
 const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
@@ -22,10 +24,27 @@ const SLOW_DOWN_STEP: Duration = Duration::from_secs(5);
 /// Refresh the Minecraft token when it expires within this many seconds.
 const REFRESH_MARGIN_SECS: i64 = 5 * 60;
 
-pub const RELOGIN_MESSAGE: &str = "Сессия Microsoft истекла: войдите в аккаунт заново";
-const CLIENT_NOT_APPROVED_MESSAGE: &str = "Minecraft отказал во входе (403): идентификатор приложения лаунчера не одобрен для Minecraft API (вероятно, ошибка конфигурации сборки)";
-const NO_PROFILE_MESSAGE: &str = "У аккаунта нет Minecraft или ещё не создан профиль (ник) — зайдите на minecraft.net";
-const EXPIRED_CODE_MESSAGE: &str = "Код входа Microsoft истёк: начните вход заново";
+pub fn relogin_message() -> &'static str {
+    tr("The Microsoft session has expired: sign in again", "Сессия Microsoft истекла: войдите в аккаунт заново")
+}
+
+fn client_not_approved_message() -> &'static str {
+    tr(
+        "Minecraft refused the sign-in (403): the launcher's application id is not approved for the Minecraft API (probably a build configuration error)",
+        "Minecraft отказал во входе (403): идентификатор приложения лаунчера не одобрен для Minecraft API (вероятно, ошибка конфигурации сборки)",
+    )
+}
+
+fn no_profile_message() -> &'static str {
+    tr(
+        "This account has no Minecraft or no profile (nickname) yet: go to minecraft.net",
+        "У аккаунта нет Minecraft или ещё не создан профиль (ник) — зайдите на minecraft.net",
+    )
+}
+
+fn expired_code_message() -> &'static str {
+    tr("The Microsoft sign-in code has expired: start again", "Код входа Microsoft истёк: начните вход заново")
+}
 
 /// The code the user types at `verification_uri`.
 #[derive(Debug, Clone, Deserialize)]
@@ -73,7 +92,7 @@ pub async fn request_device_code(http: &reqwest::Client, client_id: &str) -> Res
     let response = request.send().await.map_err(|source| http_error(DEVICE_CODE_URL, source))?;
     if !response.status().is_success() {
         let body = response.text().await.unwrap_or_default();
-        return Err(Error::Other(format!("Microsoft не выдал код входа: {}", oauth_message(&body))));
+        return Err(Error::Other(tr_fmt!("Microsoft did not issue a sign-in code: {}", "Microsoft не выдал код входа: {}", oauth_message(&body))));
     }
     response.json().await.map_err(|source| http_error(DEVICE_CODE_URL, source))
 }
@@ -85,7 +104,7 @@ pub async fn poll_token(http: &reqwest::Client, client_id: &str, device: &Device
     loop {
         tokio::time::sleep(interval).await;
         if tokio::time::Instant::now() >= deadline {
-            return Err(Error::Other(EXPIRED_CODE_MESSAGE.to_owned()));
+            return Err(Error::Other(expired_code_message().to_owned()));
         }
         let form = [
             ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
@@ -113,7 +132,7 @@ pub async fn refresh(http: &reqwest::Client, client_id: &str, refresh_token: &st
     ];
     match token_request(http, &form).await? {
         Poll::Done(tokens) => Ok(into_tokens(tokens)),
-        Poll::Pending | Poll::SlowDown => Err(Error::Other(RELOGIN_MESSAGE.to_owned())),
+        Poll::Pending | Poll::SlowDown => Err(Error::Other(relogin_message().to_owned())),
     }
 }
 
@@ -133,15 +152,15 @@ async fn token_request(http: &reqwest::Client, form: &[(&str, &str)]) -> Result<
 /// Maps an error body of the token endpoint to "keep waiting" or a message for the user.
 fn classify_token_error(body: &str) -> Result<Poll> {
     let Ok(error) = serde_json::from_str::<OAuthError>(body) else {
-        return Err(Error::Other(format!("Microsoft вернул непонятный ответ: {}", body.chars().take(200).collect::<String>())));
+        return Err(Error::Other(tr_fmt!("Microsoft returned an unexpected response: {}", "Microsoft вернул непонятный ответ: {}", body.chars().take(200).collect::<String>())));
     };
     match error.error.as_str() {
         "authorization_pending" => Ok(Poll::Pending),
         "slow_down" => Ok(Poll::SlowDown),
-        "expired_token" => Err(Error::Other(EXPIRED_CODE_MESSAGE.to_owned())),
-        "authorization_declined" => Err(Error::Other("Вход в Microsoft отклонён".to_owned())),
-        "invalid_grant" => Err(Error::Other(RELOGIN_MESSAGE.to_owned())),
-        _ => Err(Error::Other(format!("Ошибка входа Microsoft: {}", first_line(&error)))),
+        "expired_token" => Err(Error::Other(expired_code_message().to_owned())),
+        "authorization_declined" => Err(Error::Other(tr("The Microsoft sign-in was declined", "Вход в Microsoft отклонён").to_owned())),
+        "invalid_grant" => Err(Error::Other(relogin_message().to_owned())),
+        _ => Err(Error::Other(tr_fmt!("Microsoft sign-in error: {}", "Ошибка входа Microsoft: {}", first_line(&error)))),
     }
 }
 
@@ -202,7 +221,7 @@ pub async fn secrets_from_tokens(
     let refresh_token = tokens
         .refresh_token
         .or_else(|| previous_refresh_token.map(str::to_owned))
-        .ok_or_else(|| Error::Other("Microsoft не вернул токен обновления".to_owned()))?;
+        .ok_or_else(|| Error::Other(tr("Microsoft did not return a refresh token", "Microsoft не вернул токен обновления").to_owned()))?;
 
     let xbl_body = json!({
         "Properties": {
@@ -218,7 +237,7 @@ pub async fn secrets_from_tokens(
         .display_claims
         .xui
         .first()
-        .ok_or_else(|| Error::Other("Xbox Live не вернул данные аккаунта".to_owned()))?
+        .ok_or_else(|| Error::Other(tr("Xbox Live did not return the account data", "Xbox Live не вернул данные аккаунта").to_owned()))?
         .uhs
         .clone();
 
@@ -234,7 +253,7 @@ pub async fn secrets_from_tokens(
         return Err(Error::Other(xsts_error_message(code)));
     }
     if !response.status().is_success() {
-        return Err(Error::Other(format!("Xbox Live (XSTS) вернул ошибку {}", response.status())));
+        return Err(Error::Other(tr_fmt!("Xbox Live (XSTS) returned error {}", "Xbox Live (XSTS) вернул ошибку {}", response.status())));
     }
     let xsts: XboxResponse = response.json().await.map_err(|source| http_error(XSTS_URL, source))?;
 
@@ -246,10 +265,10 @@ pub async fn secrets_from_tokens(
         .await
         .map_err(|source| http_error(MINECRAFT_LOGIN_URL, source))?;
     if response.status() == reqwest::StatusCode::FORBIDDEN {
-        return Err(Error::Other(CLIENT_NOT_APPROVED_MESSAGE.to_owned()));
+        return Err(Error::Other(client_not_approved_message().to_owned()));
     }
     if !response.status().is_success() {
-        return Err(Error::Other(format!("Minecraft вернул ошибку {}", response.status())));
+        return Err(Error::Other(tr_fmt!("Minecraft returned error {}", "Minecraft вернул ошибку {}", response.status())));
     }
     let login: MinecraftLogin = response.json().await.map_err(|source| http_error(MINECRAFT_LOGIN_URL, source))?;
 
@@ -260,10 +279,10 @@ pub async fn secrets_from_tokens(
         .await
         .map_err(|source| http_error(MINECRAFT_PROFILE_URL, source))?;
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err(Error::Other(NO_PROFILE_MESSAGE.to_owned()));
+        return Err(Error::Other(no_profile_message().to_owned()));
     }
     if !response.status().is_success() {
-        return Err(Error::Other(format!("Профиль Minecraft недоступен: ошибка {}", response.status())));
+        return Err(Error::Other(tr_fmt!("The Minecraft profile is unavailable: error {}", "Профиль Minecraft недоступен: ошибка {}", response.status())));
     }
     let profile: MinecraftProfile = response.json().await.map_err(|source| http_error(MINECRAFT_PROFILE_URL, source))?;
 
@@ -279,11 +298,11 @@ pub async fn secrets_from_tokens(
 /// Explains an XSTS `XErr` code.
 fn xsts_error_message(code: u64) -> String {
     match code {
-        2148916233 => "У этого аккаунта Microsoft нет учётной записи Xbox: создайте её на xbox.com".to_owned(),
-        2148916235 => "Xbox Live недоступен в стране этого аккаунта".to_owned(),
-        2148916236 | 2148916237 => "Аккаунту нужна проверка возраста (adult verification) на сайте Xbox".to_owned(),
-        2148916238 => "Это детский аккаунт: взрослый должен добавить его в семейную группу Microsoft".to_owned(),
-        _ => format!("Xbox Live отказал в доступе (XErr {code})"),
+        2148916233 => tr("This Microsoft account has no Xbox account: create one at xbox.com", "У этого аккаунта Microsoft нет учётной записи Xbox: создайте её на xbox.com").to_owned(),
+        2148916235 => tr("Xbox Live is not available in this account's country", "Xbox Live недоступен в стране этого аккаунта").to_owned(),
+        2148916236 | 2148916237 => tr("The account needs age verification (adult verification) on the Xbox site", "Аккаунту нужна проверка возраста (adult verification) на сайте Xbox").to_owned(),
+        2148916238 => tr("This is a child account: an adult must add it to a Microsoft family group", "Это детский аккаунт: взрослый должен добавить его в семейную группу Microsoft").to_owned(),
+        _ => tr_fmt!("Xbox Live denied access (XErr {code})", "Xbox Live отказал в доступе (XErr {code})"),
     }
 }
 
@@ -291,8 +310,8 @@ fn xsts_error_message(code: u64) -> String {
 /// to a transient one after which a still valid Minecraft token can be used.
 pub fn requires_relogin(error: &Error) -> bool {
     let Error::Other(message) = error else { return false };
-    message == RELOGIN_MESSAGE
-        || message.starts_with("Xbox Live отказал в доступе")
+    message == relogin_message()
+        || message.starts_with(tr("Xbox Live denied access", "Xbox Live отказал в доступе"))
         || [2148916233, 2148916235, 2148916236, 2148916237, 2148916238].iter().any(|&code| *message == xsts_error_message(code))
 }
 
@@ -319,18 +338,18 @@ mod tests {
     #[test]
     fn xsts_codes_have_messages() {
         assert!(xsts_error_message(2148916233).contains("Xbox"));
-        assert!(xsts_error_message(2148916235).contains("стран"));
+        assert!(xsts_error_message(2148916235).contains("country"));
         assert_eq!(xsts_error_message(2148916236), xsts_error_message(2148916237));
-        assert!(xsts_error_message(2148916238).contains("семейн"));
+        assert!(xsts_error_message(2148916238).contains("family"));
         assert!(xsts_error_message(1).contains("XErr 1"));
     }
 
     #[test]
     fn only_final_refresh_failures_require_a_new_sign_in() {
-        assert!(requires_relogin(&Error::Other(RELOGIN_MESSAGE.to_owned())));
+        assert!(requires_relogin(&Error::Other(relogin_message().to_owned())));
         assert!(requires_relogin(&Error::Other(xsts_error_message(2148916233))));
         assert!(requires_relogin(&Error::Other(xsts_error_message(1))));
-        assert!(!requires_relogin(&Error::Other("Minecraft вернул ошибку 503".to_owned())));
+        assert!(!requires_relogin(&Error::Other("Minecraft returned error 503".to_owned())));
     }
 
     #[test]
@@ -346,9 +365,9 @@ mod tests {
         assert!(matches!(classify_token_error(pending), Ok(Poll::Pending)));
         assert!(matches!(classify_token_error(r#"{"error":"slow_down"}"#), Ok(Poll::SlowDown)));
         for (body, expected) in [
-            (r#"{"error":"expired_token"}"#, "истёк"),
-            (r#"{"error":"authorization_declined"}"#, "отклонён"),
-            (r#"{"error":"invalid_grant","error_description":"expired"}"#, "заново"),
+            (r#"{"error":"expired_token"}"#, "expired"),
+            (r#"{"error":"authorization_declined"}"#, "declined"),
+            (r#"{"error":"invalid_grant","error_description":"expired"}"#, "sign in again"),
         ] {
             let Err(Error::Other(message)) = classify_token_error(body) else { panic!("{body}") };
             assert!(message.contains(expected), "{message}");
