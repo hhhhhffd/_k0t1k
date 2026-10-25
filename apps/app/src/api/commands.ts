@@ -11,7 +11,7 @@
  *   copy_instance(instanceId, name)                          -> Instance
  *   set_instance_group(instanceId, group: string | null)     -> Instance
  *   update_instance_settings(instanceId, settings: InstanceSettingsUpdate) -> Instance
- *   change_instance_versions(instanceId, minecraftVersion, loader: {id, version} | null) -> Instance (refused while running; downloads the new game files in the background)
+ *   change_instance_versions(instanceId, minecraftVersion, loader: {id, version} | null, client?: ClientId) -> Instance (refused while running; downloads the new game files in the background; a client excludes the loader)
  *   get_instances_dir()                                      -> string  (allows the asset protocol for it; custom icons are files in it)
  *   set_instance_icon(instanceId, path)                      -> Instance  (image file, png/jpeg/gif/webp up to 5 MB; icon becomes `custom:<file>`)
  *   reset_instance_icon(instanceId)                          -> Instance  (back to a built-in icon, removes the file)
@@ -36,6 +36,9 @@
  * Versions
  *   list_minecraft_versions()                                -> MinecraftVersion[]
  *   list_loader_versions(minecraftVersion, loader: LoaderId) -> LoaderVersion[]
+ *   list_client_versions(client: ClientId)                   -> string[]       (Minecraft versions the client supports; errors without network and cache)
+ *   get_client_terms(client: ClientId)                       -> ClientTerms    (fetches the text; `accepted` = already accepted in settings)
+ *   accept_client_terms(client: ClientId)                    -> void           (create_instance / change_instance_versions refuse a client until this was called)
  * Java
  *   detect_java()                                            -> JavaInstall[]  (system installs; rescans)
  *   list_managed_java()                                      -> JavaInstall[]
@@ -148,6 +151,8 @@ import type {
   ExportEntry,
   ExportRequest,
   PackExportReport,
+  ClientId,
+  ClientTerms,
   CreateInstanceRequest,
   FtbPack,
   CatPack,
@@ -260,8 +265,12 @@ export const setInstanceGroup = (instanceId: string, group: string | null) =>
   call<Instance>('set_instance_group', { instanceId, group })
 export const updateInstanceSettings = (instanceId: string, settings: InstanceSettingsUpdate) =>
   call<Instance>('update_instance_settings', { instanceId, settings })
-export const changeInstanceVersions = (instanceId: string, minecraftVersion: string, loader: CreateInstanceRequest['loader'] | null) =>
-  call<Instance>('change_instance_versions', { instanceId, minecraftVersion, loader })
+export const changeInstanceVersions = (
+  instanceId: string,
+  minecraftVersion: string,
+  loader: CreateInstanceRequest['loader'] | null,
+  client?: ClientId,
+) => call<Instance>('change_instance_versions', { instanceId, minecraftVersion, loader, client })
 export const getInstancesDir = () => call<string>('get_instances_dir')
 export const setInstanceIcon = (instanceId: string, path: string) => call<Instance>('set_instance_icon', { instanceId, path })
 export const resetInstanceIcon = (instanceId: string) => call<Instance>('reset_instance_icon', { instanceId })
@@ -283,6 +292,10 @@ export const dismissCrash = (sessionId: SessionId) => call<void>('dismiss_crash'
 export const listMinecraftVersions = () => call<MinecraftVersion[]>('list_minecraft_versions')
 export const listLoaderVersions = (minecraftVersion: string, loader: LoaderId) =>
   call<LoaderVersion[]>('list_loader_versions', { minecraftVersion, loader })
+
+export const listClientVersions = (client: ClientId) => call<string[]>('list_client_versions', { client })
+export const getClientTerms = (client: ClientId) => call<ClientTerms>('get_client_terms', { client })
+export const acceptClientTerms = (client: ClientId) => call<void>('accept_client_terms', { client })
 
 // ---- java ----
 export const detectJava = () => call<JavaInstall[]>('detect_java')

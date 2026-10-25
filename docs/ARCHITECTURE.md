@@ -55,6 +55,41 @@ apps/app/src           Vue 3 UI
   instance is refused while any of its sessions is live. Preparations run concurrently; `install_lock`
   serialises the installs.
 
+## Game clients (`core/src/client`)
+
+A client (LabyMod 4 today; Lunar and Feather are meant to follow) is an alternative to the mod loaders layered on
+vanilla Minecraft. It is an instance component with a launcher-owned uid (`net.labymod.labymod4`, version = release
+channel), not a Prism meta package, and it excludes the loaders and other clients (`client::check_exclusive`, run by
+`resolve_components`, and the picker in the UI).
+
+- **Extension point**: a provider resolves to a `VersionFile` (main class, classpath libraries, JVM and game arguments,
+  required Java) plus `ClientFiles` (files that go into the game dir instead of `libraries/`, and an "installed" mark).
+  A new client adds a `ClientKind` variant, a uid in `CLIENT_UIDS` and a branch in `client::load`; the profile build,
+  install and launch code do not change. `client::apply` strips the launch parts of `net.minecraft` (libraries,
+  main class, arguments, `requires`, Java) so only the client's own apply, while `net.minecraft` still gives the client
+  jar, asset index and traits. `LaunchProfile::client_files` carries the files; `client::install_files` /
+  `check_files` run after `install_game` / `check_installed` (create, version change and every launch).
+- **LabyMod provider** (`client/labymod.rs`): the channel manifest (`latest.json`) names the build (`commitReference`)
+  and the supported Minecraft versions; each version has a Mojang-format JSON. Its main class
+  (`net.minecraft.launchwrapper.Launch`), plain game arguments (ending in `--dummyMinecraftClass`), plain JVM arguments
+  (`-Dnet.labymod.running-version`, ...) and Java are used as they are; the arguments with rules are covered by the
+  launcher (window, quick play, OS flags), and `-cp` / `java.library.path` are built as for any game. LabyMod's library
+  list (everything, as LabyMod's launcher and XMCL do; natives of other systems are filtered by a rule derived from the
+  `natives-<os>` name) and the jar (`net.labymod:LabyMod:<build>-<commit>`, sha1 from the manifest, the manifest size is
+  not exact) are added to the classpath. The commit is part of the jar version because the build number can repeat
+  between commits and a file on disk is trusted by its path. The asset jars go to `<game dir>/labymod-neo/assets/<name>.jar`
+  and are re-downloaded when their sha1 differs. LWJGL libraries LabyMod loads on its own (`isolated_libraries`) are
+  dropped from the version JSON; LabyMod downloads them itself into `labymod-neo/libraries` at start.
+- **Updates**: online resolving re-reads `latest.json` when the cached copy is older than 10 minutes; a new commit
+  fetches its version JSON and library list (cached per commit) and the changed files. When offline (or when the meta
+  resolve falls back to the cache), the commit recorded in `meta/labymod/<channel>/installed-<mc>.txt` is used; that file
+  is written by `install_files` only after every file of the build is on disk.
+- **Terms**: the first use asks the user to accept LabyMod's terms (fetched from `dl.labymod.net`); the acceptance is
+  `acceptedClientTerms` in `settings.json` (kept by `save_settings`), and create / change-versions refuse a client
+  without it. ely.by (authlib-injector) with LabyMod is not verified.
+- **UI**: the loader picker has a "Client" radio next to the loaders (disabled with a tooltip for versions missing from
+  the manifest); the Mods tab of a LabyMod instance explains that LabyMod uses its own mods folder.
+
 ## Accounts (`core/src/auth`)
 
 - `settings.json` holds only the public list `{id, name, kind}` (`offline` | `microsoft` | `elyby`); ids are the offline
@@ -304,4 +339,4 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
 
 ## Later
 
-ely.by skins, custom clients (Lunar, LabyMod).
+ely.by skins, more clients (Lunar, Feather) through the client extension point.

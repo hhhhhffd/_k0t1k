@@ -6,13 +6,13 @@ import ftbLogo from '../assets/brands/ftb.svg'
 import modrinthLogo from '../assets/brands/modrinth.svg'
 import { computed, ref } from 'vue'
 import { fileUrl, isTauri } from '../api/commands'
-import type { Instance, LoaderId } from '../api/types'
+import type { ClientId, Instance, LoaderId } from '../api/types'
 import { t } from '../i18n'
 import { useCustomizationStore } from '../stores/customization'
 import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
 import { useTasksStore } from '../stores/tasks'
-import { LOADER_LABELS } from '../utils/format'
+import { CLIENT_LABELS, LOADER_LABELS } from '../utils/format'
 import InstanceIcon, { INSTANCE_ICONS } from './InstanceIcon.vue'
 import LoaderPicker from './LoaderPicker.vue'
 import McVersionList from './McVersionList.vue'
@@ -46,6 +46,7 @@ const iconsOpen = ref(false)
 const mcVersion = ref('')
 const loader = ref<LoaderId | null>(null)
 const loaderVersion = ref('')
+const client = ref<ClientId | null>(null)
 
 const source = ref('')
 const packChoice = ref<PackChoice | null>(null)
@@ -53,7 +54,9 @@ const packChoice = ref<PackChoice | null>(null)
 // The name field shows what the instance gets called when it is left empty.
 const isUrl = (s: string) => /^(https?|curseforge):\/\//i.test(s.trim())
 const suggestedName = computed(() => {
-  if (page.value === 'custom') return mcVersion.value ? (loader.value ? `${LOADER_LABELS[loader.value]} ${mcVersion.value}` : mcVersion.value) : ''
+  if (page.value === 'custom') if (!mcVersion.value) return ''
+    const kind = client.value ? CLIENT_LABELS[client.value] : loader.value ? LOADER_LABELS[loader.value] : ''
+    return kind ? `${kind} ${mcVersion.value}` : mcVersion.value
   if (page.value === 'import') {
     const last = source.value.trim().split(/[\\/?#]/).filter(Boolean).pop() ?? ''
     return decodeURIComponent(last).replace(/\.(mrpack|zip)$/i, '')
@@ -96,6 +99,7 @@ function create() {
       icon: icon.value,
       minecraftVersion: mcVersion.value,
       loader: loader.value ? { id: loader.value, version: loaderVersion.value } : undefined,
+      client: client.value ?? undefined,
     }
     const picture = libraryIcon.value
     work = tasks.guard(async () => {
@@ -183,7 +187,7 @@ function create() {
         <template v-if="page === 'custom'">
           <div class="flex min-h-[250px] flex-[3] flex-col"><McVersionList v-model="mcVersion" /></div>
           <div class="flex min-h-[240px] flex-[2] flex-col border-t border-line pt-3">
-            <LoaderPicker v-model:loader="loader" v-model:loader-version="loaderVersion" :mc-version="mcVersion" />
+            <LoaderPicker v-model:loader="loader" v-model:loader-version="loaderVersion" v-model:client="client" :mc-version="mcVersion" />
           </div>
         </template>
 

@@ -2,7 +2,7 @@
 import type { Instance } from '../api/types'
 import { t } from '../i18n'
 import { useLayoutStore } from '../stores/layout'
-import { loaderOf, minecraftVersionOf } from '../utils/format'
+import { clientOf, loaderOf, minecraftVersionOf } from '../utils/format'
 import type { MenuItem } from './ContextMenu.vue'
 import GripHandle from './GripHandle.vue'
 import InstanceIcon from './InstanceIcon.vue'
@@ -29,6 +29,7 @@ const layout = useLayoutStore()
         <div class="flex flex-wrap justify-center gap-1">
           <span class="badge">{{ minecraftVersionOf(instance) }}</span>
           <span v-if="loaderOf(instance)" class="badge badge-accent">{{ loaderOf(instance)!.label }}</span>
+          <span v-if="clientOf(instance)" class="badge badge-accent">{{ clientOf(instance)!.label }}</span>
         </div>
       </div>
       <nav class="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 pb-2">

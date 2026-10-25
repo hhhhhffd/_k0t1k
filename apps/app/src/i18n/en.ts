@@ -238,6 +238,19 @@ export const en = {
     uploaded: 'Log uploaded, link copied',
     uploadedLink: 'Log link',
   },
+  client: {
+    label: 'Client',
+    description:
+      'LabyMod 4 is a game client that replaces the mod loader. Its files are downloaded into the instance and updated at launch when a new build is out.',
+    noLoaders: 'It cannot be combined with Fabric, Forge, NeoForge or Quilt.',
+    unavailable: 'The list of supported versions could not be loaded: check the network connection',
+    unsupported: (mc: string) => `LabyMod 4 does not support Minecraft ${mc}`,
+    termsTitle: (name: string) => `${name}: terms of use`,
+    termsIntro: 'To use this client you have to accept its terms of use. They are published by its authors.',
+    accept: 'Accept',
+    decline: 'Decline',
+    modsNote: (name: string) => `${name} loads mods from its own folder, labymod-neo/fabric/<version>/mods in the instance folder, not from mods. Mods listed here are not used.`,
+  },
   version: {
     component: 'Component',
     version: 'Version',
@@ -247,6 +260,7 @@ export const en = {
     replaceLoader: 'Change loader…',
     updateLoader: (v: string) => `Update the loader to ${v}`,
     removeLoader: 'Remove loader',
+    removeClient: 'Remove client',
     removeLoaderTitle: 'Remove the loader?',
     removeLoaderText: (name: string) => `${name} will be removed and the instance will become vanilla. Mods stay in the folder but will not load.`,
     dialogTitle: 'Minecraft version and loader',

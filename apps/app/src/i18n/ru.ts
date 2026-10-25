@@ -239,6 +239,19 @@ export const ru: Dictionary = {
     uploaded: 'Лог загружен, ссылка скопирована',
     uploadedLink: 'Ссылка на лог',
   },
+  client: {
+    label: 'Клиент',
+    description:
+      'LabyMod 4 — игровой клиент, который заменяет загрузчик модов. Его файлы скачиваются в экземпляр и обновляются при запуске, когда выходит новая сборка.',
+    noLoaders: 'Его нельзя сочетать с Fabric, Forge, NeoForge и Quilt.',
+    unavailable: 'Не удалось загрузить список поддерживаемых версий: проверьте подключение к сети',
+    unsupported: (mc: string) => `LabyMod 4 не поддерживает Minecraft ${mc}`,
+    termsTitle: (name: string) => `${name}: условия использования`,
+    termsIntro: 'Чтобы пользоваться этим клиентом, нужно принять его условия использования. Их публикуют авторы клиента.',
+    accept: 'Принять',
+    decline: 'Отклонить',
+    modsNote: (name: string) => `${name} загружает моды из своей папки labymod-neo/fabric/<версия>/mods в папке экземпляра, а не из mods. Моды из этого списка не используются.`,
+  },
   version: {
     component: 'Компонент',
     version: 'Версия',
@@ -248,6 +261,7 @@ export const ru: Dictionary = {
     replaceLoader: 'Сменить загрузчик…',
     updateLoader: (v: string) => `Обновить загрузчик до ${v}`,
     removeLoader: 'Удалить загрузчик',
+    removeClient: 'Удалить клиент',
     removeLoaderTitle: 'Удалить загрузчик?',
     removeLoaderText: (name: string) => `${name} будет удалён, экземпляр станет ванильным. Моды останутся в папке, но не загрузятся.`,
     dialogTitle: 'Версия Minecraft и загрузчик',

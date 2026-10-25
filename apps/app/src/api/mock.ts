@@ -2,6 +2,7 @@
 // It implements the same commands/events as the Rust side so the UI can be developed in a browser.
 import type {
   Account,
+  ClientId,
   AddFilesReport,
   AvailableUpdate,
   BlockedFile,
@@ -57,7 +58,7 @@ import type {
   VersionFilter,
   World,
 } from './types'
-import { COMPONENT_MINECRAFT, LOADER_UIDS } from './types'
+import { CLIENT_UIDS, COMPONENT_MINECRAFT, LOADER_UIDS } from './types'
 import { installTestHook, pluginCommand, type PluginMockContext } from './mockPlugins'
 
 type Args = Record<string, unknown>
@@ -135,6 +136,7 @@ const defaultSettings: GlobalSettings = {
   sharedFoldersDefault: ['resourcepacks', 'shaderpacks'],
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],
   selectedAccountId: 'acc-1',
+  acceptedClientTerms: [],
 }
 function loadSettings(): GlobalSettings {
   try {
@@ -182,11 +184,18 @@ const managedJava: JavaInstall[] = [
 ]
 
 // ---- instances ----
-function components(mc: string, loader?: { id: LoaderId; version: string }): InstanceComponent[] {
+function components(mc: string, loader?: { id: LoaderId; version: string }, client?: ClientId): InstanceComponent[] {
   const list: InstanceComponent[] = [{ uid: COMPONENT_MINECRAFT, version: mc, dependencyOnly: false }]
+  if (loader && client) throw new Error(`the client ${client} cannot be combined with the mod loader ${loader.id}`)
   if (loader) list.push({ uid: LOADER_UIDS[loader.id], version: loader.version, dependencyOnly: false })
+  if (client) {
+    if (!settings.acceptedClientTerms.includes(client)) throw new Error('the terms of the client have not been accepted')
+    list.push({ uid: CLIENT_UIDS[client], version: 'production', dependencyOnly: false })
+  }
   return list
 }
+/** Minecraft versions LabyMod 4 supports (a slice of its real manifest). */
+const clientVersions = ['26.3', '26.2', '26.1.2', '26.1', '1.21.11', '1.21.10', '1.21.8', '1.21.4', '1.20.6', '1.20.4', '1.20.1', '1.19.4', '1.18.2', '1.16.5', '1.12.2', '1.8.9']
 const newInstance = (fields: Pick<Instance, 'id' | 'name' | 'icon' | 'components'> & Partial<Instance>): Instance => ({
   group: null, created: new Date().toISOString(), lastPlayed: null, playtime: { totalSecs: 0, lastSecs: 0 },
   managedPack: null, notes: '', sharedFolders: [...settings.sharedFoldersDefault], settings: {}, ...fields,
@@ -564,7 +573,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     case 'list_instances': return clone({ instances, errors: [] })
     case 'create_instance': {
       const r = a.request as CreateInstanceRequest
-      const inst = newInstance({ id: nextId('inst'), name: r.name, icon: r.icon, group: r.group || null, components: components(r.minecraftVersion, r.loader) })
+      const inst = newInstance({ id: nextId('inst'), name: r.name, icon: r.icon, group: r.group || null, components: components(r.minecraftVersion, r.loader, r.client) })
       await fakeTask(`create-${inst.id}`, `Создание ${inst.name}`, ['Метаданные Minecraft', 'Метаданные загрузчика', 'Подготовка папки'], 300)
       instances.push(inst)
       return clone(inst)
@@ -594,7 +603,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
         throw new Error('the instance is running; stop it before changing its versions')
       }
       await fakeTask(`game:${i.id}`, `Загрузка игры: ${i.name}`, ['Библиотеки', 'Ассеты'], 300)
-      i.components = components(a.minecraftVersion as string, (a.loader as CreateInstanceRequest['loader']) ?? undefined)
+      i.components = components(a.minecraftVersion as string, (a.loader as CreateInstanceRequest['loader']) ?? undefined, (a.client as ClientId | undefined) ?? undefined)
       return clone(i)
     }
     case 'get_instances_dir': return 'C:\\mock\\instances'
@@ -614,6 +623,14 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     case 'get_game_logs': return clone(sessionLogs.get(a.sessionId as SessionId) ?? [])
     case 'list_minecraft_versions': return minecraftVersions
     case 'list_loader_versions': { await sleep(250); return loaderVersions(a.minecraftVersion as string, a.loader as LoaderId) }
+    case 'list_client_versions': await sleep(200); return [...clientVersions]
+    case 'get_client_terms':
+      await sleep(200)
+      return { text: 'LabyMod Terms of Service\n\n1. By using LabyMod you agree to these terms.\n2. (Mock text: the real one is downloaded from dl.labymod.net.)', accepted: settings.acceptedClientTerms.includes(a.client as string) }
+    case 'accept_client_terms':
+      if (!settings.acceptedClientTerms.includes(a.client as string)) settings.acceptedClientTerms.push(a.client as string)
+      persistSettings()
+      return undefined
     case 'detect_java': await sleep(400); return javaInstalls
     case 'list_managed_java': return managedJava
     case 'list_managed_java_usage':

@@ -25,7 +25,7 @@ import { useLayoutStore } from '../stores/layout'
 import { usePacksStore } from '../stores/packs'
 import { useRatscanStore } from '../stores/ratscan'
 import { useTasksStore } from '../stores/tasks'
-import { formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'
+import { clientOf, formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'
 import { baseName, useFileDrop } from '../utils/useFileDrop'
 
 const props = defineProps<{ id: string }>()
@@ -137,6 +137,9 @@ const { dragging } = useFileDrop(async (paths) => {
 
       <section class="min-w-0 flex-1 overflow-y-auto p-4">
         <h2 class="mb-3 text-[15px] font-semibold">{{ t.instance.tabs[tab] }}</h2>
+        <p v-if="tab === 'mods' && instance && clientOf(instance)" class="mb-3 rounded-lg border border-line bg-raised px-3 py-2 text-[12.5px] text-muted">
+          {{ t.client.modsNote(clientOf(instance)!.label) }}
+        </p>
         <ResourceList
           v-if="tab === 'mods' || tab === 'resourcepacks' || tab === 'shaders'"
           :key="`${instance.id}-${tab}-${listKey}`"

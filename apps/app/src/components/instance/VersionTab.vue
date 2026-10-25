@@ -2,11 +2,11 @@
 import { ArrowUpCircle, Box, FolderOpen, Pencil, Puzzle, Trash2, Wrench } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { listLoaderVersions, openInstanceFolder } from '../../api/commands'
-import { COMPONENT_MINECRAFT, LOADER_UIDS, type Instance, type LoaderId, type LoaderVersion } from '../../api/types'
+import { CLIENT_UIDS, COMPONENT_MINECRAFT, LOADER_UIDS, type ClientId, type Instance, type LoaderId, type LoaderVersion } from '../../api/types'
 import { t } from '../../i18n'
 import { useInstancesStore } from '../../stores/instances'
 import { useTasksStore } from '../../stores/tasks'
-import { LOADER_LABELS, loaderOf, minecraftVersionOf } from '../../utils/format'
+import { CLIENT_LABELS, LOADER_LABELS, clientOf, loaderOf, minecraftVersionOf } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import LoaderPicker from '../LoaderPicker.vue'
 import McVersionList from '../McVersionList.vue'
@@ -17,14 +17,17 @@ const store = useInstancesStore()
 const tasks = useTasksStore()
 
 const loader = computed(() => loaderOf(props.instance))
+const client = computed(() => clientOf(props.instance))
 const running = computed(() => store.stateOf(props.instance.id) !== 'stopped')
 const busy = ref(false)
 
 const rows = computed(() =>
   props.instance.components.map((c) => {
     const loaderId = (Object.keys(LOADER_UIDS) as LoaderId[]).find((id) => LOADER_UIDS[id] === c.uid)
-    const name = c.uid === COMPONENT_MINECRAFT ? 'Minecraft' : loaderId ? LOADER_LABELS[loaderId] : c.uid
-    return { ...c, name, kind: c.uid === COMPONENT_MINECRAFT ? 'minecraft' : loaderId ? 'loader' : 'other' }
+    const clientId = (Object.keys(CLIENT_UIDS) as ClientId[]).find((id) => CLIENT_UIDS[id] === c.uid)
+    const name = c.uid === COMPONENT_MINECRAFT ? 'Minecraft' : loaderId ? LOADER_LABELS[loaderId] : clientId ? CLIENT_LABELS[clientId] : c.uid
+    const kind = c.uid === COMPONENT_MINECRAFT ? 'minecraft' : loaderId || clientId ? 'loader' : 'other'
+    return { ...c, name, kind }
   }),
 )
 
@@ -47,13 +50,15 @@ const editing = ref(false)
 const draftMc = ref('')
 const draftLoader = ref<LoaderId | null>(null)
 const draftLoaderVersion = ref('')
+const draftClient = ref<ClientId | null>(null)
 function openEditor() {
   draftMc.value = minecraftVersionOf(props.instance)
   draftLoader.value = loader.value?.id ?? null
   draftLoaderVersion.value = loader.value?.version ?? ''
+  draftClient.value = client.value?.id ?? null
   editing.value = true
 }
-const loaderChanges = computed(() => (loader.value?.id ?? null) !== draftLoader.value)
+const loaderChanges = computed(() => (loader.value?.id ?? null) !== draftLoader.value || (client.value?.id ?? null) !== draftClient.value)
 const canApply = computed(
   () =>
     draftMc.value !== '' &&
@@ -61,16 +66,16 @@ const canApply = computed(
     (draftMc.value !== minecraftVersionOf(props.instance) || loaderChanges.value || draftLoaderVersion.value !== (loader.value?.version ?? '')),
 )
 
-async function apply(mc: string, next: { id: LoaderId; version: string } | null) {
+async function apply(mc: string, next: { id: LoaderId; version: string } | null, nextClient?: ClientId) {
   busy.value = true
-  const saved = await tasks.guard(() => store.changeVersions(props.instance.id, mc, next))
+  const saved = await tasks.guard(() => store.changeVersions(props.instance.id, mc, next, nextClient))
   busy.value = false
   if (saved) tasks.toast(t.version.changed, 'ok')
   return saved
 }
 async function applyEditor() {
   editing.value = false
-  await apply(draftMc.value, draftLoader.value ? { id: draftLoader.value, version: draftLoaderVersion.value } : null)
+  await apply(draftMc.value, draftLoader.value ? { id: draftLoader.value, version: draftLoaderVersion.value } : null, draftClient.value ?? undefined)
 }
 function updateLoader() {
   if (loader.value && newestLoader.value) void apply(minecraftVersionOf(props.instance), { id: loader.value.id, version: newestLoader.value.version })
@@ -116,14 +121,14 @@ function removeLoader() {
       <div class="flex w-56 shrink-0 flex-col gap-1">
         <button class="btn justify-start" :disabled="running || busy" @click="openEditor"><Pencil :size="15" class="text-accent" />{{ t.version.change }}</button>
         <button class="btn justify-start" :disabled="running || busy" @click="openEditor">
-          <Puzzle :size="15" class="text-accent" />{{ loader ? t.version.replaceLoader : t.version.installLoader }}
+          <Puzzle :size="15" class="text-accent" />{{ loader || client ? t.version.replaceLoader : t.version.installLoader }}
         </button>
         <button v-if="loader && newestLoader" class="btn justify-start" :disabled="running || busy" @click="updateLoader">
           <ArrowUpCircle :size="15" class="text-ok" />
           <span class="truncate">{{ t.version.updateLoader(newestLoader.version) }}</span>
         </button>
-        <button v-if="loader" class="btn justify-start" :disabled="running || busy" @click="confirmRemove = true">
-          <Trash2 :size="15" class="text-danger" />{{ t.version.removeLoader }}
+        <button v-if="loader || client" class="btn justify-start" :disabled="running || busy" @click="confirmRemove = true">
+          <Trash2 :size="15" class="text-danger" />{{ client ? t.version.removeClient : t.version.removeLoader }}
         </button>
         <div class="my-1 h-px bg-line" />
         <button class="btn justify-start" @click="tasks.guard(() => openInstanceFolder(instance.id))"><FolderOpen :size="15" class="text-warn" />{{ t.library.openFolder }}</button>
@@ -134,9 +139,9 @@ function removeLoader() {
       <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
         <div class="flex min-h-[250px] flex-[3] flex-col"><McVersionList v-model="draftMc" /></div>
         <div class="flex min-h-[240px] flex-[2] flex-col border-t border-line pt-3">
-          <LoaderPicker v-model:loader="draftLoader" v-model:loader-version="draftLoaderVersion" :mc-version="draftMc" />
+          <LoaderPicker v-model:loader="draftLoader" v-model:loader-version="draftLoaderVersion" v-model:client="draftClient" :mc-version="draftMc" />
         </div>
-        <p v-if="loaderChanges && loader" class="shrink-0 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] text-warn">{{ t.version.loaderWarning }}</p>
+        <p v-if="loaderChanges && (loader || client)" class="shrink-0 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] text-warn">{{ t.version.loaderWarning }}</p>
         <p class="shrink-0 text-[12px] text-faint">{{ t.version.dialogHint }}</p>
       </div>
       <template #footer>
@@ -145,9 +150,9 @@ function removeLoader() {
       </template>
     </ModalDialog>
     <ConfirmDialog
-      v-if="confirmRemove && loader"
+      v-if="confirmRemove && (loader || client)"
       :title="t.version.removeLoaderTitle"
-      :text="t.version.removeLoaderText(loader.label)"
+      :text="t.version.removeLoaderText((loader ?? client)!.label)"
       :confirm-label="t.version.removeLoader"
       @confirm="removeLoader"
       @close="confirmRemove = false"

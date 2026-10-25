@@ -15,6 +15,16 @@ export const LOADER_UIDS = {
 } as const
 export type LoaderId = keyof typeof LOADER_UIDS
 
+/** Game clients (alternatives to the mod loaders, never combined with one); their uids are owned by the launcher. */
+export const CLIENT_UIDS = { labymod4: 'net.labymod.labymod4' } as const
+export type ClientId = keyof typeof CLIENT_UIDS
+
+/** The terms a client asks the user to accept before its first use. */
+export interface ClientTerms {
+  text: string
+  accepted: boolean
+}
+
 export interface InstanceComponent {
   uid: string
   version: string
@@ -116,6 +126,8 @@ export interface CreateInstanceRequest {
   icon: string
   minecraftVersion: string
   loader?: { id: LoaderId; version: string }
+  /** Excludes `loader`. */
+  client?: ClientId
 }
 
 export type ThemeId = 'k0t1k' | 'light' | 'amoled' | 'mint'
@@ -183,6 +195,8 @@ export interface GlobalSettings {
   sharedFoldersDefault: SharedFolder[]
   accounts: Account[]
   selectedAccountId: string | null
+  /** Owned by `accept_client_terms`: `save_settings` never overwrites it. Keys such as `labymod4`. */
+  acceptedClientTerms: string[]
 }
 
 export interface JavaInstall {

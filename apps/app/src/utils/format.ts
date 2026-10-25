@@ -1,6 +1,6 @@
-import { COMPONENT_MINECRAFT, LOADER_UIDS } from '../api/types'
+import { CLIENT_UIDS, COMPONENT_MINECRAFT, LOADER_UIDS } from '../api/types'
 import { language, t } from '../i18n'
-import type { Instance, LoaderId, Platform, PwMod } from '../api/types'
+import type { ClientId, Instance, LoaderId, Platform, PwMod } from '../api/types'
 
 export const LOADER_LABELS: Record<LoaderId, string> = {
   fabric: 'Fabric',
@@ -8,6 +8,8 @@ export const LOADER_LABELS: Record<LoaderId, string> = {
   forge: 'Forge',
   neoForge: 'NeoForge',
 }
+
+export const CLIENT_LABELS: Record<ClientId, string> = { labymod4: 'LabyMod 4' }
 
 export function minecraftVersionOf(inst: Instance): string {
   return inst.components.find((c) => c.uid === COMPONENT_MINECRAFT)?.version ?? '?'
@@ -17,6 +19,14 @@ export function loaderOf(inst: Instance): { id: LoaderId; label: string; version
   for (const id of Object.keys(LOADER_UIDS) as LoaderId[]) {
     const comp = inst.components.find((c) => c.uid === LOADER_UIDS[id])
     if (comp) return { id, label: LOADER_LABELS[id], version: comp.version }
+  }
+  return undefined
+}
+
+export function clientOf(inst: Instance): { id: ClientId; label: string; version: string } | undefined {
+  for (const id of Object.keys(CLIENT_UIDS) as ClientId[]) {
+    const comp = inst.components.find((c) => c.uid === CLIENT_UIDS[id])
+    if (comp) return { id, label: CLIENT_LABELS[id], version: comp.version }
   }
   return undefined
 }
