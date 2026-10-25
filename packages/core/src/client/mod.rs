@@ -19,6 +19,49 @@ use crate::meta::{Loader, MetaClient};
 use crate::profile::{LaunchProfile, ResolvedComponent};
 use crate::progress::ProgressFn;
 
+/// The clients the UI can offer. The serialized name is also the key of the accepted terms in the settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClientKind {
+    Labymod4,
+}
+
+impl ClientKind {
+    pub fn uid(self) -> &'static str {
+        match self {
+            Self::Labymod4 => labymod::UID,
+        }
+    }
+
+    /// Key in `GlobalSettings::accepted_client_terms`.
+    pub fn terms_key(self) -> &'static str {
+        match self {
+            Self::Labymod4 => "labymod4",
+        }
+    }
+
+    /// Component version used when a client is added to an instance (the release channel).
+    pub fn default_version(self) -> &'static str {
+        match self {
+            Self::Labymod4 => labymod::DEFAULT_CHANNEL,
+        }
+    }
+
+    /// Minecraft versions the client currently supports.
+    pub async fn supported_versions(self, meta: &MetaClient) -> Result<Vec<String>> {
+        match self {
+            Self::Labymod4 => labymod::supported_versions(meta, labymod::DEFAULT_CHANNEL).await,
+        }
+    }
+
+    /// The text the user accepts before the client is first used.
+    pub async fn terms(self, http: &reqwest::Client) -> Result<String> {
+        match self {
+            Self::Labymod4 => labymod::terms(http).await,
+        }
+    }
+}
+
 /// Uids of the supported clients.
 pub const CLIENT_UIDS: [&str; 1] = [labymod::UID];
 

@@ -1,3 +1,4 @@
+use k0t1k_core::client::{ClientKind, is_client_uid};
 use k0t1k_core::component::{ComponentSpec, MINECRAFT_UID};
 use k0t1k_core::content::Loader;
 use std::collections::BTreeSet;
@@ -9,7 +10,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{AppError, CommandResult, blocking};
-use crate::game;
+use crate::{clients, game};
 use crate::state::AppState;
 use crate::versions::meta_loader;
 
@@ -41,6 +42,9 @@ pub struct CreateInstanceRequest {
     icon: String,
     minecraft_version: String,
     loader: Option<LoaderChoice>,
+    /// A game client (LabyMod); excludes `loader`.
+    #[serde(default)]
+    client: Option<ClientKind>,
 }
 
 #[derive(Deserialize)]
@@ -80,6 +84,10 @@ pub async fn create_instance(app: AppHandle, state: State<'_, AppState>, request
     let mut specs = vec![spec(MINECRAFT_UID, request.minecraft_version)];
     if let Some(loader) = request.loader {
         specs.push(spec(meta_loader(loader.id).uid(), loader.version));
+    }
+    if let Some(client) = request.client {
+        clients::ensure_terms_accepted(&state, client).await?;
+        specs.push(spec(client.uid(), client.default_version().to_owned()));
     }
     // Resolving also checks that every chosen version exists and fits together.
     let (components, _) = game::resolve(&state.paths, specs.clone()).await?;
@@ -147,7 +155,7 @@ pub async fn update_instance_settings(
     Ok(instance.into())
 }
 
-/// Replaces the instance's Minecraft version and mod loader (or removes the loader) and downloads the new
+/// Replaces the instance's Minecraft version and mod loader or game client (or removes both) and downloads the new
 /// game files in the background. Components that are neither of these stay; dependency-only ones are
 /// dropped because resolving adds them again in the versions the new set needs.
 #[tauri::command]
@@ -157,6 +165,7 @@ pub async fn change_instance_versions(
     instance_id: String,
     minecraft_version: String,
     loader: Option<LoaderChoice>,
+    client: Option<ClientKind>,
 ) -> CommandResult<InstanceView> {
     if state.is_running(&instance_id) {
         return Err(AppError::new("the instance is running; stop it before changing its versions"));
@@ -172,12 +181,13 @@ pub async fn change_instance_versions(
     if let Some(loader) = loader {
         specs.push(spec(meta_loader(loader.id).uid(), loader.version));
     }
-    specs.extend(
-        current
-            .components
-            .into_iter()
-            .filter(|c| !c.dependency_only && c.uid != MINECRAFT_UID && !loader_uids.contains(&c.uid.as_str())),
-    );
+    if let Some(client) = client {
+        clients::ensure_terms_accepted(&state, client).await?;
+        specs.push(spec(client.uid(), client.default_version().to_owned()));
+    }
+    specs.extend(current.components.into_iter().filter(|c| {
+        !c.dependency_only && c.uid != MINECRAFT_UID && !loader_uids.contains(&c.uid.as_str()) && !is_client_uid(&c.uid)
+    }));
     // Resolving also checks that every chosen version exists and fits together.
     let (components, _) = game::resolve(&state.paths, specs.clone()).await?;
 

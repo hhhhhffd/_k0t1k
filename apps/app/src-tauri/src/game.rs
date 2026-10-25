@@ -49,12 +49,14 @@ pub fn spawn_game_install(app: AppHandle, state: AppState, instance: Instance, c
     let handle = tauri::async_runtime::spawn({
         let state = state.clone();
         let (task, title, id) = (task, title.clone(), instance.id.clone());
+        let game_dir = instance.game_dir(&state.paths);
         async move {
             let progress = progress_fn(&app, &task, &title);
             let install = async {
                 let profile = LaunchProfile::build(&components, RuntimeContext::host(host_java_arch()))?;
                 let _installing = state.install_lock.lock().await;
                 install_game(&state.http, &state.paths, &profile, &task, &progress).await?;
+                k0t1k_core::client::install_files(&state.http, &game_dir, &profile, &task, &progress).await?;
                 Ok(())
             };
             // A failure is reported to the UI by `tracked` as an error event; the next launch retries.

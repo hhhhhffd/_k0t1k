@@ -1,4 +1,5 @@
 mod accounts;
+mod clients;
 mod cmdline;
 mod content;
 mod customization;
@@ -108,6 +109,9 @@ pub fn run() {
             launch::open_crash_report,
             launch::upload_game_log,
             versions::list_minecraft_versions,
+            clients::list_client_versions,
+            clients::get_client_terms,
+            clients::accept_client_terms,
             versions::list_loader_versions,
             java::detect_java,
             java::list_managed_java,

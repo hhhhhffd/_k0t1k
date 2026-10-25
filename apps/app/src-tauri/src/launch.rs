@@ -10,6 +10,7 @@ use chrono::Utc;
 use k0t1k_core::i18n::tr;
 use k0t1k_core::tr_fmt;
 use k0t1k_core::auth;
+use k0t1k_core::client;
 use k0t1k_core::install::{check_installed, extract_natives, install_game, reconstruct_assets};
 use k0t1k_core::instance::servers::{pull_shared, push_shared};
 use k0t1k_core::instance::{EffectiveSettings, Instance, SharedFolder};
@@ -441,15 +442,18 @@ async fn prepare(
     }
 
     let profile = LaunchProfile::build(&components, RuntimeContext::host(&java.arch))?;
+    let game_dir = instance.game_dir(paths);
     let assets = if online {
-        install_game(&state.http, paths, &profile, task, progress).await?
+        let assets = install_game(&state.http, paths, &profile, task, progress).await?;
+        client::install_files(&state.http, &game_dir, &profile, task, progress).await?;
+        assets
     } else {
         log.line("launcher", tr("No network: using the game files already downloaded", "Нет сети: используются уже загруженные файлы игры"));
+        client::check_files(&game_dir, &profile).await?;
         check_installed(paths, &profile).await?
     };
     drop(installing);
 
-    let game_dir = instance.game_dir(paths);
     remove_stale_sessions(state, instance, log).await;
     // The argfile is written next to this directory, so it belongs to the session as well.
     let natives_dir = session_dir.join("natives");

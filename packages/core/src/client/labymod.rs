@@ -24,9 +24,7 @@ pub const UID: &str = "net.labymod.labymod4";
 pub const DEFAULT_CHANNEL: &str = "production";
 const CHANNELS: [&str; 2] = ["production", "snapshot"];
 
-/// Terms the user accepts before LabyMod is used; the key is stored in `acceptedClientTerms`.
-pub const TERMS_KEY: &str = "labymod4";
-pub const TERMS_URL: &str = "https://dl.labymod.net/latest/documents/tos.txt";
+const TERMS_URL: &str = "https://dl.labymod.net/latest/documents/tos.txt";
 
 const API_URL: &str = "https://releases.r2.labymod.net/api/v1";
 const JAR_URL: &str = "https://laby-releases.s3.de.io.cloud.ovh.net/api/v1/download/labymod4";
@@ -115,6 +113,13 @@ fn plain(arguments: Vec<Argument>) -> impl Iterator<Item = String> {
         Argument::Plain(value) => Some(value),
         Argument::Ruled(_) => None,
     })
+}
+
+/// LabyMod's terms of service, shown before its first use.
+pub async fn terms(http: &reqwest::Client) -> Result<String> {
+    let error = |source| Error::Http { url: TERMS_URL.to_owned(), source };
+    let response = http.get(TERMS_URL).timeout(Duration::from_secs(15)).send().await.map_err(error)?;
+    response.error_for_status().map_err(error)?.text().await.map_err(error)
 }
 
 fn check_name(what: &str, value: &str) -> Result<()> {

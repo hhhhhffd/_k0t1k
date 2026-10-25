@@ -38,7 +38,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> CommandResult<GlobalSet
     blocking(move || GlobalSettings::load(&paths)).await
 }
 
-/// Accounts, the global playtime and the onboarding record are owned by their own commands and the
+/// Accounts, the global playtime, the accepted client terms and the onboarding record are owned by their own commands and the
 /// launch sequence, so a settings form holding an older copy cannot overwrite them.
 #[tauri::command]
 pub async fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: GlobalSettings) -> CommandResult<()> {
@@ -51,7 +51,9 @@ pub async fn save_settings(app: AppHandle, state: State<'_, AppState>, settings:
             let selected_account_id = current.selected_account_id.take();
             let total_secs = current.playtime.total_secs;
             let onboarding = std::mem::take(&mut current.onboarding);
+            let accepted_client_terms = std::mem::take(&mut current.accepted_client_terms);
             *current = settings;
+            current.accepted_client_terms = accepted_client_terms;
             current.onboarding = onboarding;
             current.accounts = accounts;
             current.selected_account_id = selected_account_id;
