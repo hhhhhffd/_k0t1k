@@ -44,7 +44,8 @@ pub use install::{
     install_version,
 };
 pub use local::{
-    LocalResource, ResourceMetadata, delete_resource, parse_mod_jar, scan_resources, set_enabled,
+    LocalResource, ResourceMetadata, delete_resource, parse_mod_jar, read_resource, scan_resources, set_enabled,
+    write_resource_new,
 };
 pub(crate) use modpack::safe_join;
 pub use modpack::{

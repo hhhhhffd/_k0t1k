@@ -13,9 +13,12 @@ pub mod launch;
 pub mod mclogs;
 pub mod meta;
 pub mod paths;
+pub mod packformat;
 pub mod placement;
+pub mod plugins;
 pub mod profile;
 pub mod progress;
+pub mod scancache;
 pub mod settings;
 pub mod update;
 

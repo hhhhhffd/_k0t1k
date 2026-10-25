@@ -129,6 +129,45 @@ fn read_metadata(
     }
 }
 
+/// Reads a whole file of an instance's resource folder, failing when it is larger than `max_bytes`
+/// or is a folder.
+pub fn read_resource(game_dir: &Path, kind: ResourceKind, file_name: &str, max_bytes: u64) -> Result<Vec<u8>> {
+    let path = resource_path(game_dir, kind, file_name)?;
+    let size = std::fs::metadata(&path).at(&path)?.len();
+    if !path.is_file() || size > max_bytes {
+        return Err(Error::Other(format!("{file_name} is not a file or is larger than {max_bytes} bytes")));
+    }
+    std::fs::read(&path).at(&path)
+}
+
+/// Saves `bytes` as `file_name` in the resource folder without replacing anything: when the name is
+/// taken, ` (2)`, ` (3)`... is inserted before the extension. Returns the name used.
+pub fn write_resource_new(game_dir: &Path, kind: ResourceKind, file_name: &str, bytes: &[u8]) -> Result<String> {
+    use std::io::Write;
+    let (stem, extension) = file_name.rsplit_once('.').map_or((file_name, ""), |(stem, extension)| (stem, extension));
+    for attempt in 1..100 {
+        let candidate = match (attempt, extension) {
+            (1, _) => file_name.to_owned(),
+            (_, "") => format!("{stem} ({attempt})"),
+            _ => format!("{stem} ({attempt}).{extension}"),
+        };
+        let path = resource_path(game_dir, kind, &candidate)?;
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+                    // Do not leave a truncated file that would look like a pack.
+                    let _ = std::fs::remove_file(&path);
+                    return Err(error).at(&path);
+                }
+                return Ok(candidate);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error).at(&path),
+        }
+    }
+    Err(Error::Other(format!("too many files named like {file_name}")))
+}
+
 /// Renames to or from the `.disabled` suffix and returns the new file name.
 /// Directories cannot be toggled; an existing target is an error rather than being overwritten.
 pub fn set_enabled(
@@ -607,5 +646,18 @@ authors = "mezz, others"
         assert!(!mods.join("a.jar").exists());
         assert!(packwiz::list(&mods.join(".index")).unwrap().is_empty());
         std::fs::remove_dir_all(&game_dir).unwrap();
+    }
+
+    #[test]
+    fn new_files_never_replace_existing_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("resourcepacks")).unwrap();
+        let kind = ResourceKind::ResourcePack;
+        assert_eq!(write_resource_new(dir.path(), kind, "a (1.21).zip", b"1").unwrap(), "a (1.21).zip");
+        assert_eq!(write_resource_new(dir.path(), kind, "a (1.21).zip", b"2").unwrap(), "a (1.21) (2).zip");
+        assert_eq!(std::fs::read(dir.path().join("resourcepacks/a (1.21).zip")).unwrap(), b"1");
+        assert_eq!(read_resource(dir.path(), kind, "a (1.21) (2).zip", 10).unwrap(), b"2");
+        assert!(read_resource(dir.path(), kind, "a (1.21) (2).zip", 0).is_err());
+        assert!(write_resource_new(dir.path(), kind, "../x.zip", b"3").is_err());
     }
 }

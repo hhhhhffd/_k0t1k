@@ -38,7 +38,7 @@ const ASSET_URL_PREFIX: &str = concat!("https://github.com/", "hhhhhffd/_k0t1k",
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Longest silence while reading a response; a stalled download fails instead of hanging.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
-const API_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const API_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// HTTP client for update requests, with timeouts. The shared client has none.
 pub fn http_client() -> reqwest::Client {
@@ -77,27 +77,27 @@ pub enum UpdateCheck {
 }
 
 #[derive(Deserialize)]
-struct GithubRelease {
-    tag_name: String,
+pub(crate) struct GithubRelease {
+    pub(crate) tag_name: String,
     #[serde(default)]
     body: Option<String>,
     #[serde(default)]
-    draft: bool,
+    pub(crate) draft: bool,
     #[serde(default)]
-    prerelease: bool,
+    pub(crate) prerelease: bool,
     #[serde(default)]
-    assets: Vec<GithubAsset>,
+    pub(crate) assets: Vec<GithubAsset>,
 }
 
 #[derive(Deserialize)]
-struct GithubAsset {
-    name: String,
-    browser_download_url: String,
-    size: u64,
+pub(crate) struct GithubAsset {
+    pub(crate) name: String,
+    pub(crate) browser_download_url: String,
+    pub(crate) size: u64,
 }
 
 /// `X.Y.Z` with an optional leading `v`; pre-release and build suffixes are not supported.
-fn parse_version(text: &str) -> Option<(u64, u64, u64)> {
+pub(crate) fn parse_version(text: &str) -> Option<(u64, u64, u64)> {
     let mut parts = text.strip_prefix('v').unwrap_or(text).split('.');
     let mut next = || {
         let part = parts.next()?;
@@ -107,7 +107,7 @@ fn parse_version(text: &str) -> Option<(u64, u64, u64)> {
     parts.next().is_none().then_some(version)
 }
 
-fn normalized(version: (u64, u64, u64)) -> String {
+pub(crate) fn normalized(version: (u64, u64, u64)) -> String {
     format!("{}.{}.{}", version.0, version.1, version.2)
 }
 
@@ -171,7 +171,7 @@ pub fn signed_message(version: &str, sha256: &[u8]) -> Vec<u8> {
 }
 
 /// Checks `signature_b64` (base64 of 64 raw bytes) over `message` against a base64 raw public key.
-fn verify_with(public_key_b64: &str, message: &[u8], signature_b64: &str) -> Result<()> {
+pub(crate) fn verify_with(public_key_b64: &str, message: &[u8], signature_b64: &str) -> Result<()> {
     let bad = |what: &str| Error::Other(format!("update signature check failed: {what}"));
     let key: [u8; 32] = STANDARD.decode(public_key_b64).ok().and_then(|bytes| bytes.try_into().ok()).ok_or_else(|| bad("bad public key"))?;
     let key = VerifyingKey::from_bytes(&key).map_err(|_| bad("bad public key"))?;
@@ -180,21 +180,27 @@ fn verify_with(public_key_b64: &str, message: &[u8], signature_b64: &str) -> Res
     key.verify_strict(message, &Signature::from_bytes(&signature)).map_err(|_| bad("the signature does not match"))
 }
 
-async fn fetch_signature(client: &reqwest::Client, url: &str) -> Result<String> {
+/// GETs `url` into memory, failing as soon as the body exceeds `max` bytes.
+pub(crate) async fn fetch_capped(client: &reqwest::Client, url: &str, max: usize, what: &str) -> Result<Vec<u8>> {
     let http = |source| Error::Http { url: url.to_owned(), source };
     let response = client.get(url).timeout(API_TIMEOUT).send().await.map_err(http)?.error_for_status().map_err(http)?;
-    let too_large = || Error::Other("the signature file is too large".to_owned());
-    if response.content_length().is_some_and(|length| length > MAX_SIGNATURE_BYTES as u64) {
+    let too_large = || Error::Other(format!("the {what} is too large"));
+    if response.content_length().is_some_and(|length| length > max as u64) {
         return Err(too_large());
     }
     let mut body = Vec::new();
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
         body.extend_from_slice(&chunk.map_err(http)?);
-        if body.len() > MAX_SIGNATURE_BYTES {
+        if body.len() > max {
             return Err(too_large());
         }
     }
+    Ok(body)
+}
+
+async fn fetch_signature(client: &reqwest::Client, url: &str) -> Result<String> {
+    let body = fetch_capped(client, url, MAX_SIGNATURE_BYTES, "signature file").await?;
     String::from_utf8(body).map_err(|_| Error::Other("the signature file is not text".to_owned()))
 }
 

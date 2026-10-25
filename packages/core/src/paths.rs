@@ -80,6 +80,11 @@ impl Paths {
         self.root.join("iconsets")
     }
 
+    /// Installed wasm plugins: `<id>/<version>/` folders and an `active` pointer per plugin.
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.root.join("plugins")
+    }
+
     pub fn logs_dir(&self) -> PathBuf {
         self.root.join("logs")
     }
