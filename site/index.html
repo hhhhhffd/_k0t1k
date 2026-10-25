@@ -137,6 +137,7 @@ dialog#lb img { width: 100%; max-height: calc(96vh - 90px); object-fit: contain;
 
 footer { border-top: 2px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
 footer p { margin: 0 0 6px; }
+footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -319,7 +320,7 @@ footer p { margin: 0 0 6px; }
 
 <footer>
   <div class="wrap">
-    <p><span class="en">Not affiliated with Mojang or Microsoft.</span><span class="ru">Не связан с Mojang или Microsoft.</span> &copy; 2026 hhhhhffd. <span class="en">All rights reserved.</span><span class="ru">Все права защищены.</span></p>
+    <p class="foot-row"><span><span class="en">Not affiliated with Mojang or Microsoft.</span><span class="ru">Не связан с Mojang или Microsoft.</span></span><span>&copy; 2026 hhhhhffd. <span class="en">All rights reserved.</span><span class="ru">Все права защищены.</span></span></p>
   </div>
 </footer>
 
