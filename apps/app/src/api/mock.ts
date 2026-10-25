@@ -37,6 +37,7 @@ import type {
   ModpackImport,
   OnboardingInfo,
   Platform,
+  LoginStage,
   ProgressEvent,
   ProjectVersion,
   CrashInfo,
@@ -667,8 +668,18 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       mockLoginCancelled = false
       return { userCode: 'MOCK1234', verificationUri: 'https://www.microsoft.com/link', expiresIn: 900 } satisfies DeviceCodeInfo
     case 'finish_microsoft_login': {
-      for (let i = 0; i < 30 && !mockLoginCancelled; i++) await sleep(100)
+      emit('microsoft-login-stage', 'waiting' satisfies LoginStage)
+      for (let i = 0; i < 40 && !mockLoginCancelled; i++) await sleep(100)
+      // Stage delays are long enough to look at; `?mockLoginFail=<stage>` makes that step fail.
+      const failAt = new URLSearchParams(location.search).get('mockLoginFail')
+      for (const stage of ['microsoft', 'xbox', 'minecraft', 'profile'] as const) {
+        if (mockLoginCancelled) break
+        emit('microsoft-login-stage', stage)
+        await sleep(1200)
+        if (failAt === stage) throw 'Xbox Live (XSTS) вернул ошибку 503'
+      }
       if (mockLoginCancelled) throw 'вход через Microsoft отменён'
+      emit('microsoft-login-stage', 'done' satisfies LoginStage)
       return mockPremiumAccount('microsoft', 'MockSteve')
     }
     case 'cancel_microsoft_login': mockLoginCancelled = true; return undefined

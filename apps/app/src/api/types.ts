@@ -140,6 +140,9 @@ export interface Account {
   kind: AccountKind
 }
 
+/** Step of the Microsoft sign-in; the event marks its start. */
+export type LoginStage = 'waiting' | 'microsoft' | 'xbox' | 'minecraft' | 'profile' | 'done'
+
 /** Microsoft device code the user enters at `verificationUri`. */
 export interface DeviceCodeInfo {
   userCode: string

@@ -118,6 +118,7 @@
  *   install_update(version)                                  -> void           (installs exactly that release (refused when the latest differs): downloads, verifies, replaces the exe and restarts;
  *                                                                              emits `progress` as task `update`; refused while a game runs or anything is downloading)
  * Events (backend -> frontend, via emit)
+ *   microsoft-login-stage  LoginStage  (a step of finish_microsoft_login has started)
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
  *   game-log        GameLogBatch     (lines of one session, batched)
  *   instance-state  InstanceRunState (one session; `stopped` is the last event of a session)
@@ -163,6 +164,7 @@ import type {
   ModpackImport,
   OnboardingInfo,
   Platform,
+  LoginStage,
   ProgressEvent,
   ProjectVersion,
   RelocationReport,
@@ -415,6 +417,7 @@ export const setUpdateLock = (instanceId: string, kind: LocalResourceKind, fileN
   call<void>('set_update_lock', { instanceId, kind, fileName, locked })
 
 // ---- events ----
+export const onMicrosoftLoginStage = (cb: (stage: LoginStage) => void) => subscribe('microsoft-login-stage', cb)
 export const onProgress = (cb: (e: ProgressEvent) => void) => subscribe('progress', cb)
 export const onGameLog = (cb: (e: GameLogBatch) => void) => subscribe('game-log', cb)
 export const onInstanceState = (cb: (e: InstanceRunState) => void) =>

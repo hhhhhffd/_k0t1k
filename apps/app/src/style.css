@@ -355,6 +355,14 @@ input[type='range'] {
 .anim-slide { animation: slide-in 0.2s ease-out; }
 .anim-bob { animation: bob 2.4s ease-in-out infinite; }
 
+/* Microsoft sign-in dialog: step list and the code block that folds away once the code is confirmed */
+.fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.28s ease, opacity 0.2s ease; }
+.fold[data-folded='true'] { grid-template-rows: 0fr; opacity: 0; }
+.fold > div { overflow: hidden; min-height: 0; }
+.step-ring { border: 2px solid color-mix(in srgb, var(--color-accent) 25%, transparent); border-top-color: var(--color-accent); border-radius: 9999px; animation: step-spin 0.8s linear infinite; }
+.step-check { animation: pop-in 0.2s ease-out; }
+@keyframes step-spin { to { transform: rotate(360deg); } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
