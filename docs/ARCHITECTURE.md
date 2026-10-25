@@ -220,6 +220,25 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
   `tr(en, ru)` and `tr_fmt!(en, ru, args)`. Used for everything the user sees (errors, task titles, launch log lines,
   tray menu, dialogs); the tray is rebuilt on a change. Tracing and internal errors stay English.
 
+## Updates (`core::update`, `src-tauri/src/update.rs`)
+
+- Self-update from GitHub Releases, not `tauri-plugin-updater` (it expects an installer; the launcher is a portable exe).
+  `GET /repos/hhhhhffd/_k0t1k/releases/latest` without any token; the tag `vX.Y.Z` is compared with the app version as
+  plain numbers (no pre-release tags). A 404 (private repository, no release) or a release without both assets is
+  `unavailable`, not an error. The result of a check is kept for the run, so a recreated window shows the notice
+  without asking again; a failed check is logged by the backend and shown only for the "Check now" button.
+- Assets: `_k0t1k.exe` and `_k0t1k.exe.sig` (base64 of a raw Ed25519 signature over the exe). The public key is embedded;
+  `ed25519-dalek` `verify_strict` runs on the downloaded file and a file that fails is deleted, never installed.
+  `scripts/release.sh <exe> [notes]` signs with `K0T1K_UPDATE_KEY` (default `~/.config/k0t1k/update-signing-key.pem`, never in
+  the repo), refuses when the tag exists or the signature does not verify against the embedded key, and runs `gh release create`.
+- Install (`install_update`): refused while any session is live (re-checked after the download) and in debug builds or off
+  Windows (`installBlocked` carries the reason). The download goes to `<exe>.new`, then the running exe is renamed to
+  `<exe>.old`, `.new` takes its place (any failure renames `.old` back) and the new exe is started with `--wait-for <pid>`,
+  the same mechanism as onboarding, so it waits for this process to exit before the single-instance mutex is created.
+  The next start deletes `.old` and `.new`, logging failures. Progress is the `update` task of the `progress` event.
+- Setting `updates.checkOnStartup` (default true) only controls the silent startup check, which shows a notice in the
+  status bar; Settings, About has the Updates block (release notes are rendered as plain text).
+
 ## Later
 
 ely.by skins, custom clients (Lunar, LabyMod).
