@@ -1,0 +1,10 @@
+{
+  "id": "packconv",
+  "version": "0.1.0",
+  "api": 1,
+  "minLauncher": "0.1.0",
+  "files": {
+    "packconv_wasm.js": "c2fdf069f42a898ffeb03bbbafab62c3e1999ac62dbe92a1d5a65ffb7ad1889c",
+    "packconv_wasm_bg.wasm": "66674490d4272fc9b84306710c4a3069645a3a9d932ad5c2121b90fe685a1e25"
+  }
+}

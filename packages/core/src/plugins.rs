@@ -146,7 +146,8 @@ fn asset_urls(assets: &[GithubAsset], manifest: &Manifest, plugin: &KnownPlugin)
         .collect()
 }
 
-fn verify_file(manifest: &Manifest, name: &str, bytes: &[u8]) -> Result<()> {
+/// Checks `bytes` against the hash the manifest lists for `name`.
+pub fn verify_file(manifest: &Manifest, name: &str, bytes: &[u8]) -> Result<()> {
     let expected = manifest.files.get(name).ok_or_else(|| reject(format!("{name} is not in plugin.json")))?;
     let actual = hex::encode(Sha256::digest(bytes));
     if &actual != expected {

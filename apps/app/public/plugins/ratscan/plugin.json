@@ -1,0 +1,10 @@
+{
+  "id": "ratscan",
+  "version": "0.1.0",
+  "api": 1,
+  "minLauncher": "0.1.0",
+  "files": {
+    "ratscan_wasm.js": "5e3d211f503cd6cd7def94c2e6e962a1f8da0ab3bfb8493e328dd1d40cfd659b",
+    "ratscan_wasm_bg.wasm": "ceaa5f8ca9648b3c0aaddd73d7653eb05af17fcf656ceee6bdc0c5de4b72a6eb"
+  }
+}
