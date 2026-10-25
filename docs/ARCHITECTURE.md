@@ -209,6 +209,17 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
 - Built-in instance icons are SVGs in the repo-root `icons/instances/`; `index.json` there gives their keys (Prism's
   icon keys, so imported Prism instances keep their icon) and the picker order. Unknown keys show `grass`.
 
+## Language
+
+- English (default) and Russian, chosen in Settings and stored as `ui.language` (`en` | `ru`; missing means `en`).
+  No i18n library. UI: `i18n/en.ts` is the source dictionary, `ru.ts` is typed against it (a missing key is a type
+  error), and `i18n/index.ts` exports `t`, a reactive object whose sections are replaced on a switch. `App.vue`
+  remounts its tree on a change, so values computed once in `setup` follow too. The choice is also cached in
+  localStorage for the first paint.
+- Backend: `k0t1k_core::i18n` holds the language in an atomic (set at startup and in `save_settings`) with
+  `tr(en, ru)` and `tr_fmt!(en, ru, args)`. Used for everything the user sees (errors, task titles, launch log lines,
+  tray menu, dialogs); the tray is rebuilt on a change. Tracing and internal errors stay English.
+
 ## Later
 
 ely.by skins, custom clients (Lunar, LabyMod).
