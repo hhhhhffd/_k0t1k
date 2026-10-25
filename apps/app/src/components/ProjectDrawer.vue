@@ -3,7 +3,7 @@ import { ArrowUpRight, Download, ExternalLink, ShieldAlert, TriangleAlert, X } f
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getProjectVersions, installDatapack, installVersion, listWorlds } from '../api/commands'
 import type { LocalResourceKind, ProjectVersion, SearchHit, VersionFilter } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
 import { openExternal } from '../utils/external'

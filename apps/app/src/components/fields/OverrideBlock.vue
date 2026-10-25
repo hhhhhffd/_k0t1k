@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '../../i18n/ru'
+import { t } from '../../i18n'
 defineProps<{ title: string }>()
 /** true = this instance overrides the global value. */
 const overridden = defineModel<boolean>({ required: true })

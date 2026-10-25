@@ -4,7 +4,7 @@ import { Check, ExternalLink, FolderSearch, Loader, ShieldAlert } from '@lucide/
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getDownloadsDir, isTauri, scanBlockedFiles } from '../api/commands'
 import type { BlockedFile } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 import { openExternal } from '../utils/external'
 import ModalDialog from './ModalDialog.vue'

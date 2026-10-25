@@ -2,7 +2,7 @@
 import { Copy, Trash2, Upload } from '@lucide/vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { GameLogLine, SessionId } from '../../api/types'
-import { t } from '../../i18n/ru'
+import { t } from '../../i18n'
 import { MAX_LOG_LINES, useInstancesStore } from '../../stores/instances'
 import { useTasksStore } from '../../stores/tasks'
 import { openExternal } from '../../utils/external'

@@ -3,7 +3,7 @@ import { ArrowUpCircle, ArrowUpFromLine, Lock, LockOpen, Plus, RefreshCw, Search
 import { computed, onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
 import type { AvailableUpdate, BlockedFile, LocalResource, LocalResourceKind } from '../../api/types'
-import { t } from '../../i18n/ru'
+import { t } from '../../i18n'
 import { useTasksStore } from '../../stores/tasks'
 import { errorMessage, formatBytes, originPlatform } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'

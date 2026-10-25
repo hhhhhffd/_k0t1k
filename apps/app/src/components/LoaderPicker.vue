@@ -3,7 +3,7 @@ import { RefreshCw, Star } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { listLoaderVersions } from '../api/commands'
 import type { LoaderId, LoaderVersion } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 import { LOADER_LABELS } from '../utils/format'
 

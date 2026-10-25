@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronDown, Loader, Play, Plus, Square } from '@lucide/vue'
 import { computed, ref } from 'vue'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'

@@ -1,5 +1,7 @@
-// Single Russian dictionary; no i18n library on purpose.
-export const t = {
+import type { Dictionary } from './en'
+
+// Typed against the English dictionary: a missing or extra key is a type error.
+export const ru: Dictionary = {
   common: {
     cancel: 'Отмена',
     create: 'Создать',
@@ -18,6 +20,8 @@ export const t = {
     confirm: 'Подтвердить',
     nothingFound: 'Ничего не найдено',
     mb: 'МБ',
+    ms: 'мс',
+    closeLabel: 'Закрыть',
   },
   nav: { library: 'Библиотека', settings: 'Настройки' },
   account: {
@@ -99,6 +103,7 @@ export const t = {
     copyName: 'Имя копии',
     deleteTitle: 'Удалить экземпляр?',
     deleteText: (name: string) => `«${name}» будет удалён вместе с мирами, модами и настройками. Это нельзя отменить.`,
+    copySuffix: 'копия',
     managedPack: 'Модпак',
     creating: 'Создаётся…',
     downloading: 'Скачиваются файлы игры',
@@ -390,6 +395,8 @@ export const t = {
     postExit: 'После выхода',
     wrapper: 'Команда-обёртка',
     theme: 'Тема',
+    language: 'Язык',
+    languageHint: 'Язык лаунчера.',
     lite: 'Лёгкий режим',
     liteHint: 'Отключает размытие, тени и анимации — для слабых ПК.',
     onGameLaunch: 'Когда запускается игра',
@@ -531,5 +538,35 @@ export const t = {
     allFound: 'Все файлы на месте',
     placed: 'На месте',
   },
+  format: {
+    lessThanMinute: '<1 мин',
+    min: 'мин',
+    hour: 'ч',
+    day: 'дн',
+    never: 'никогда',
+    justNow: 'только что',
+    ago: (amount: string) => `${amount} назад`,
+    byte: 'Б',
+    kilobyte: 'КБ',
+    megabyte: 'МБ',
+    gigabyte: 'ГБ',
+  },
+  themeNames: { k0t1k: '_k0t1k', light: 'Светлая', amoled: 'AMOLED', mint: 'Мята' },
+  themeColors: {
+    'c-base': 'Фон',
+    'c-surface': 'Поверхности',
+    'c-fg': 'Текст',
+    'c-muted': 'Второстепенный текст',
+    'c-accent': 'Акцент',
+    'c-line': 'Границы',
+    'c-danger': 'Ошибка',
+    'c-ok': 'Успех',
+  },
+  themeErrors: {
+    notJson: 'Это не JSON',
+    noName: 'В теме нет имени',
+    noColors: 'В теме нет цветов',
+    badColor: (key: string) => `Недопустимый цвет: ${key}`,
+  },
   runState: { stopped: 'Остановлен', preparing: 'Подготовка', running: 'Запущен', stopping: 'Остановка' },
-} as const
+}

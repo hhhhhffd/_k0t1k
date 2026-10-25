@@ -1,4 +1,5 @@
 import { COMPONENT_MINECRAFT, LOADER_UIDS } from '../api/types'
+import { language, t } from '../i18n'
 import type { Instance, LoaderId, Platform, PwMod } from '../api/types'
 
 export const LOADER_LABELS: Record<LoaderId, string> = {
@@ -27,35 +28,40 @@ export function originPlatform(origin: PwMod): Platform | undefined {
   return undefined
 }
 
+const dateLocale = () => (language.value === 'ru' ? 'ru-RU' : 'en-US')
+
 export function formatPlaytime(secs: number): string {
-  if (secs < 60) return secs > 0 ? '<1 мин' : '—'
+  const { min, hour, lessThanMinute } = t.format
+  if (secs < 60) return secs > 0 ? lessThanMinute : '—'
   const h = Math.floor(secs / 3600)
   const m = Math.floor((secs % 3600) / 60)
-  return h > 0 ? `${h} ч ${m} мин` : `${m} мин`
+  return h > 0 ? `${h} ${hour} ${m} ${min}` : `${m} ${min}`
 }
 
 export function formatRelative(iso?: string | null): string {
-  if (!iso) return 'никогда'
+  if (!iso) return t.format.never
+  const { min: minLabel, hour, day, justNow, ago } = t.format
   const diff = Date.now() - new Date(iso).getTime()
   const min = Math.floor(diff / 60_000)
-  if (min < 1) return 'только что'
-  if (min < 60) return `${min} мин назад`
+  if (min < 1) return justNow
+  if (min < 60) return ago(`${min} ${minLabel}`)
   const h = Math.floor(min / 60)
-  if (h < 24) return `${h} ч назад`
+  if (h < 24) return ago(`${h} ${hour}`)
   const d = Math.floor(h / 24)
-  if (d < 30) return `${d} дн назад`
-  return new Date(iso).toLocaleDateString('ru-RU')
+  if (d < 30) return ago(`${d} ${day}`)
+  return new Date(iso).toLocaleDateString(dateLocale())
 }
 
 export function formatDate(iso?: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString('ru-RU') : '—'
+  return iso ? new Date(iso).toLocaleDateString(dateLocale()) : '—'
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} Б`
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} КБ`
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} МБ`
-  return `${(bytes / 1024 ** 3).toFixed(2)} ГБ`
+  const { byte, kilobyte, megabyte, gigabyte } = t.format
+  if (bytes < 1024) return `${bytes} ${byte}`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} ${kilobyte}`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} ${megabyte}`
+  return `${(bytes / 1024 ** 3).toFixed(2)} ${gigabyte}`
 }
 
 export function formatCount(n: number): string {

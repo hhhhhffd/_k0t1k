@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RelocationReport } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import ModalDialog from './ModalDialog.vue'
 
 defineProps<{ report: RelocationReport }>()

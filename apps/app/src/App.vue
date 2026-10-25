@@ -11,7 +11,7 @@ import StatusBar from './components/StatusBar.vue'
 import TitleBar from './components/TitleBar.vue'
 import TaskBar from './components/TaskBar.vue'
 import ToastHost from './components/ToastHost.vue'
-import { t } from './i18n/ru'
+import { language, t } from './i18n'
 import { useCustomizationStore } from './stores/customization'
 import { useInstancesStore } from './stores/instances'
 import { useLayoutStore } from './stores/layout'
@@ -45,7 +45,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <!-- remounted on a language change, so values computed once in setup pick up the new dictionary -->
+  <div :key="language" class="flex h-full flex-col">
     <TitleBar />
     <OnboardingView v-if="onboarding" :info="onboarding" />
     <template v-else-if="onboarding === null">

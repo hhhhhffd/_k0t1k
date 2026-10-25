@@ -3,6 +3,8 @@
 // thin Rust view types: `Instance` (+ `id`), `JavaInstall` (+ `source`), local resource icons and `World`.
 // Timestamps are ISO-8601 strings (UTC), durations are seconds, sizes are bytes, memory is MiB.
 
+import type { Language } from '../i18n'
+
 /** Component uids follow Prism meta. */
 export const COMPONENT_MINECRAFT = 'net.minecraft'
 export const LOADER_UIDS = {
@@ -168,7 +170,7 @@ export interface GlobalSettings {
    * `theme` is a built-in `ThemeId`, the id of one of `customThemes` or a theme file (`file:<name>`).
    * `catPack`: null = no cat, `mascot` = the built-in one, else a `CatPack.id`. `iconSet`: null = built-in icons, else an `IconSet.id`.
    */
-  ui: { theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null }
+  ui: { language: Language; theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
   discord: { enabled: boolean }
   /** Owned by the onboarding commands: `save_settings` never overwrites it. */

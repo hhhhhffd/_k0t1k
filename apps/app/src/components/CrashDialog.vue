@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as api from '../api/commands'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
 import { openExternal } from '../utils/external'

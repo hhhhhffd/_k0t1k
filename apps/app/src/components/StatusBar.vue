@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
 import { formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'

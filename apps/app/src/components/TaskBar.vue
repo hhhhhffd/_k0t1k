@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AlertTriangle, Check, Loader } from '@lucide/vue'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 
 const tasks = useTasksStore()

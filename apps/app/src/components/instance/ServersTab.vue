@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Pencil, Play, Plus, RefreshCw, Server as ServerIcon
 import { onMounted, reactive, ref, watch } from 'vue'
 import * as api from '../../api/commands'
 import type { ResourcePackPolicy, Server, ServerStatus } from '../../api/types'
-import { t } from '../../i18n/ru'
+import { t } from '../../i18n'
 import { useInstancesStore } from '../../stores/instances'
 import { useSettingsStore } from '../../stores/settings'
 import { useTasksStore } from '../../stores/tasks'
@@ -118,7 +118,7 @@ async function confirmDelete() {
         <template v-if="pings[i]?.state === 'ok'">
           <span class="badge">{{ pings[i].status.online }}/{{ pings[i].status.max }} {{ t.servers.online }}</span>
           <span class="badge max-w-40 truncate" :title="pings[i].status.version">{{ pings[i].status.version }}</span>
-          <span class="badge badge-accent">{{ pings[i].status.latencyMs }} мс</span>
+          <span class="badge badge-accent">{{ pings[i].status.latencyMs }} {{ t.common.ms }}</span>
         </template>
         <button class="btn" :title="t.servers.playOn" @click="play(s.address)"><Play :size="13" fill="currentColor" />{{ t.servers.play }}</button>
         <button class="btn btn-ghost btn-icon text-muted" :title="t.servers.edit" :aria-label="t.servers.edit" @click="startEdit(i)"><Pencil :size="15" /></button>

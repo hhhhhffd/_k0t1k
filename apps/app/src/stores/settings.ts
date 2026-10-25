@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as api from '../api/commands'
 import type { CustomTheme, GlobalSettings, ThemeId } from '../api/types'
+import { setLanguage } from '../i18n'
 import { isBuiltinTheme, themeVars } from '../utils/theme'
 
 const THEME_CACHE = 'k0t1k.ui'
@@ -62,6 +63,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function load() {
     const loaded = await api.getSettings()
     settings.value = loaded
+    setLanguage(loaded.ui.language)
     applyUi(loaded.ui.theme, loaded.ui.liteMode, allThemes())
   }
 
@@ -73,6 +75,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function setUi(patch: Partial<GlobalSettings['ui']>) {
     if (!settings.value) return
     settings.value.ui = { ...settings.value.ui, ...patch }
+    if (patch.language) setLanguage(patch.language)
     reapply()
     await save()
   }

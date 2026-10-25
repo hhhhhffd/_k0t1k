@@ -6,7 +6,7 @@ import { isTauri, keepPortableHere, relocate } from '../api/commands'
 import type { OnboardingInfo } from '../api/types'
 import mascot from '../assets/mascot.png'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 
 const props = defineProps<{ info: OnboardingInfo }>()

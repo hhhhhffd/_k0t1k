@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import ModalDialog from './ModalDialog.vue'
 
 const props = defineProps<{ title: string; label: string; initial?: string; allowEmpty?: boolean; suggestions?: string[] }>()

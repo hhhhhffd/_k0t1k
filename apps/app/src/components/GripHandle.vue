@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 
 /**
  * Dotted handle that moves a bar to the other edge of the window: `y` docks it to the top or bottom,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CommandSettings } from '../../api/types'
-import { t } from '../../i18n/ru'
+import { t } from '../../i18n'
 
 defineProps<{ disabled?: boolean }>()
 const model = defineModel<CommandSettings>({ required: true })

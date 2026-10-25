@@ -124,7 +124,7 @@ const defaultSettings: GlobalSettings = {
   commands: { preLaunch: '', postExit: '', wrapper: '' },
   env: {},
   playtime: { record: true, show: true, totalSecs: 0 },
-  ui: { theme: 'k0t1k', liteMode: false, customThemes: [] },
+  ui: { language: 'en', theme: 'k0t1k', liteMode: false, customThemes: [] },
   behavior: { onGameLaunch: 'hide_to_tray', onClose: 'tray' },
   discord: { enabled: true },
   onboarding: { keepPortableAt: null, createdShortcuts: [] },

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { WindowSettings } from '../../api/types'
-import { t } from '../../i18n/ru'
+import { t } from '../../i18n'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
 defineProps<{ disabled?: boolean }>()

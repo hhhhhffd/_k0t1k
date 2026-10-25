@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, File, Folder } from '@lucide/vue'
 import { reactive, ref } from 'vue'
 import { listExportEntries } from '../api/commands'
 import type { ExportEntry } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 import { formatBytes } from '../utils/format'
 

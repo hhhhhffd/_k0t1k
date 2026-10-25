@@ -3,7 +3,7 @@ import { RefreshCw } from '@lucide/vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { listMinecraftVersions } from '../api/commands'
 import type { MinecraftVersion } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 import CheckBox from './CheckBox.vue'
 

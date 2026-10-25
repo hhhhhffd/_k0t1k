@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import ModalDialog from './ModalDialog.vue'
 
 defineProps<{ title: string; text: string; confirmLabel?: string }>()

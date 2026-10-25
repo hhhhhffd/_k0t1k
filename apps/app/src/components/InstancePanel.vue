@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Instance } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useLayoutStore } from '../stores/layout'
 import { loaderOf, minecraftVersionOf } from '../utils/format'
 import type { MenuItem } from './ContextMenu.vue'

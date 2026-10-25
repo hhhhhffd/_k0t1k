@@ -3,7 +3,7 @@ import type { Window } from '@tauri-apps/api/window'
 import { Minus, Plus, Shrink, X } from '@lucide/vue'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { isTauri } from '../api/commands'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 
 const tasks = useTasksStore()

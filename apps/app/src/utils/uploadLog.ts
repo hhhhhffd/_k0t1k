@@ -1,6 +1,6 @@
 import * as api from '../api/commands'
 import type { SessionId } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 
 /** Uploads the log of a session to mclo.gs, copies the link to the clipboard and reports it. Returns the link, or `undefined` on failure. */

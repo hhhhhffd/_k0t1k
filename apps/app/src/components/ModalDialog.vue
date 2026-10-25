@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { X } from '@lucide/vue'
 import { onBeforeUnmount, onMounted } from 'vue'
+import { t } from '../i18n'
 
 /** `large` makes the dialog follow the window size instead of a fixed width. */
 const props = withDefaults(defineProps<{ title: string; width?: number; large?: boolean }>(), { width: 560 })
@@ -25,7 +26,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       >
         <header class="flex items-center justify-between border-b border-line px-4 py-3">
           <h2 class="text-[15px] font-semibold">{{ title }}</h2>
-          <button class="btn btn-ghost btn-icon" :aria-label="'Закрыть'" @click="emit('close')"><X :size="16" /></button>
+          <button class="btn btn-ghost btn-icon" :aria-label="t.common.closeLabel" @click="emit('close')"><X :size="16" /></button>
         </header>
         <div class="min-h-0 flex-1" :class="large ? 'flex flex-col' : 'overflow-y-auto p-4'"><slot /></div>
         <footer v-if="$slots.footer" class="flex justify-end gap-2 border-t border-line px-4 py-3"><slot name="footer" /></footer>

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, reactive, ref, shallowReactive } from 'vue'
 import * as api from '../api/commands'
 import type { GameCrashed, GameLogBatch, GameLogLine, Instance, InstanceRunState, ModpackImport, ProjectVersion, RunSession, RunState, SessionId } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useTasksStore } from './tasks'
 import { baseName } from '../utils/useFileDrop'
 

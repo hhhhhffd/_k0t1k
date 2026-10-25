@@ -15,7 +15,7 @@ import InstanceIcon from '../components/InstanceIcon.vue'
 import InstancePanel from '../components/InstancePanel.vue'
 import PackUpdateDialog from '../components/PackUpdateDialog.vue'
 import PromptDialog from '../components/PromptDialog.vue'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
 import { useSettingsStore } from '../stores/settings'
@@ -261,7 +261,7 @@ const { dragging } = useFileDrop(async (paths) => {
       v-if="dialog && dialog.kind !== 'delete'"
       :title="dialog.kind === 'rename' ? t.library.rename : dialog.kind === 'copy' ? t.library.copy : t.library.changeGroup"
       :label="dialog.kind === 'rename' ? t.library.newName : dialog.kind === 'copy' ? t.library.copyName : t.library.groupName"
-      :initial="dialog.kind === 'rename' ? dialog.instance.name : dialog.kind === 'copy' ? `${dialog.instance.name} (копия)` : (dialog.instance.group ?? '')"
+      :initial="dialog.kind === 'rename' ? dialog.instance.name : dialog.kind === 'copy' ? `${dialog.instance.name} (${t.library.copySuffix})` : (dialog.instance.group ?? '')"
       :allow-empty="dialog.kind === 'group'"
       :suggestions="dialog.kind === 'group' ? store.groups : []"
       @submit="submitPrompt"

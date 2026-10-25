@@ -15,7 +15,7 @@ import SelectMenu from '../components/SelectMenu.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import ThemeEditor from '../components/ThemeEditor.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
-import { t } from '../i18n/ru'
+import { LANGUAGES, t } from '../i18n'
 import { useCustomizationStore } from '../stores/customization'
 import { useInstancesStore } from '../stores/instances'
 import { useSettingsStore } from '../stores/settings'
@@ -252,6 +252,20 @@ async function addAccount() {
       <section v-else-if="section === 'commands'" class="card p-4"><CommandFields v-model="s.commands" /></section>
 
       <template v-else-if="section === 'appearance'">
+        <section class="card flex flex-col gap-2 p-4">
+          <span><span class="block font-medium">{{ t.settings.language }}</span><span class="text-[12px] text-faint">{{ t.settings.languageHint }}</span></span>
+          <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.language">
+            <button
+              v-for="l in LANGUAGES"
+              :key="l.id"
+              role="radio"
+              :aria-checked="s.ui.language === l.id"
+              class="h-8 flex-1 rounded-md px-2 font-medium transition-colors"
+              :class="s.ui.language === l.id ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
+              @click="store.setUi({ language: l.id })"
+            >{{ l.label }}</button>
+          </div>
+        </section>
         <section class="card p-4">
           <h3 class="section-title mb-3">{{ t.settings.theme }}</h3>
           <div class="grid grid-cols-2 gap-3">

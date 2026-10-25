@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MemorySettings } from '../../api/types'
-import { t } from '../../i18n/ru'
+import { t } from '../../i18n'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
 const props = defineProps<{ disabled?: boolean; totalRamMib?: number | null }>()

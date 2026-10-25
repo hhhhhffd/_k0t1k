@@ -1,23 +1,21 @@
+import { t } from '../i18n'
 import type { CustomTheme, ThemeId } from '../api/types'
 
-export const THEMES: { id: ThemeId; label: string }[] = [
-  { id: 'k0t1k', label: '_k0t1k' },
-  { id: 'light', label: 'Светлая' },
-  { id: 'amoled', label: 'AMOLED' },
-  { id: 'mint', label: 'Мята' },
-]
+/** Labels are getters so they follow the language when read while rendering. */
+export const THEMES: { id: ThemeId; label: string }[] = (['k0t1k', 'light', 'amoled', 'mint'] as const).map((id) => ({
+  id,
+  get label() {
+    return t.themeNames[id]
+  },
+}))
 
 /** The colors a custom theme edits: CSS variable name (without `--`) and its label. */
-export const THEME_COLORS = [
-  { key: 'c-base', label: 'Фон' },
-  { key: 'c-surface', label: 'Поверхности' },
-  { key: 'c-fg', label: 'Текст' },
-  { key: 'c-muted', label: 'Второстепенный текст' },
-  { key: 'c-accent', label: 'Акцент' },
-  { key: 'c-line', label: 'Границы' },
-  { key: 'c-danger', label: 'Ошибка' },
-  { key: 'c-ok', label: 'Успех' },
-] as const
+export const THEME_COLORS = (['c-base', 'c-surface', 'c-fg', 'c-muted', 'c-accent', 'c-line', 'c-danger', 'c-ok'] as const).map((key) => ({
+  key,
+  get label() {
+    return t.themeColors[key]
+  },
+}))
 
 /** Same rule as the backend applies to every stored value. */
 const COLOR_VALUE = /^[#a-zA-Z0-9(),.%\s-]{1,64}$/
@@ -75,18 +73,18 @@ export function parseThemeJson(text: string): Omit<CustomTheme, 'id'> {
   try {
     data = JSON.parse(text)
   } catch {
-    throw new Error('Это не JSON')
+    throw new Error(t.themeErrors.notJson)
   }
   const obj = data as { name?: unknown; base?: unknown; colors?: unknown } | null
-  if (!obj || typeof obj !== 'object' || typeof obj.name !== 'string' || !obj.name.trim()) throw new Error('В теме нет имени')
-  if (!obj.colors || typeof obj.colors !== 'object') throw new Error('В теме нет цветов')
+  if (!obj || typeof obj !== 'object' || typeof obj.name !== 'string' || !obj.name.trim()) throw new Error(t.themeErrors.noName)
+  if (!obj.colors || typeof obj.colors !== 'object') throw new Error(t.themeErrors.noColors)
   const colors: Record<string, string> = {}
   for (const [key, value] of Object.entries(obj.colors)) {
     if (!KEYS.has(key)) continue
-    if (typeof value !== 'string' || !COLOR_VALUE.test(value)) throw new Error(`Недопустимый цвет: ${key}`)
+    if (typeof value !== 'string' || !COLOR_VALUE.test(value)) throw new Error(t.themeErrors.badColor(key))
     colors[key] = value
   }
-  if (!Object.keys(colors).length) throw new Error('В теме нет цветов')
+  if (!Object.keys(colors).length) throw new Error(t.themeErrors.noColors)
   const base = typeof obj.base === 'string' && isBuiltinTheme(obj.base) ? obj.base : 'k0t1k'
   return { name: obj.name.trim().slice(0, 32), base, colors }
 }

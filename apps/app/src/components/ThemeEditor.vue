@@ -2,7 +2,7 @@
 import { Copy, Download, Plus, Trash2, Upload } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import type { CustomTheme, ThemeId } from '../api/types'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
 import { errorMessage } from '../utils/format'

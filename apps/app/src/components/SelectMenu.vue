@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Check, ChevronDown, Search } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
-import { t } from '../i18n/ru'
+import { t } from '../i18n'
 
 export interface SelectOption {
   value: string
