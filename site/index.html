@@ -76,8 +76,6 @@ nav.links a:hover { color: var(--fg); }
   background: var(--accent); color: var(--accent-fg); border: 0; box-shadow: 0 var(--px) 0 rgb(0 0 0 / .35), var(--glow); transition: transform .1s; }
 .btn:hover { transform: translateY(-2px); }
 .btn:active { transform: translateY(2px); }
-.btn[aria-disabled="true"] { background: var(--raised); color: var(--muted); border: 2px dashed var(--faint); box-shadow: none; cursor: not-allowed; }
-.btn[aria-disabled="true"]:hover { transform: none; }
 .soon { font: 12px/1 "Press Start 2P", monospace; padding: 6px 8px; background: var(--accent); color: var(--accent-fg); }
 .beta-tag { margin: 0 0 16px; }
 .report { margin-top: 18px; font-size: 14px; }
@@ -312,13 +310,10 @@ footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-betwee
   <div class="wrap">
     <img class="cat-sm" src="assets/mascot.png" width="96" height="96" alt="">
     <h2 class="px" style="margin-bottom:12px"><span class="en">Download</span><span class="ru">Скачать</span></h2>
-    <p class="sub en dl-pending">The open beta build is coming soon.</p>
-    <p class="sub ru dl-pending">Сборка открытой беты скоро.</p>
-    <p class="sub en dl-ready" hidden>Open beta <span class="dl-ver"></span> · <span class="dl-size"></span> MB</p>
-    <p class="sub ru dl-ready" hidden>Открытая бета <span class="dl-ver"></span> · <span class="dl-size"></span> МБ</p>
-    <a class="btn" href="https://github.com/hhhhhffd/_k0t1k/releases/latest" aria-disabled="true" id="dl-btn">
-      <span class="en">Download for Windows</span><span class="ru">Скачать для Windows</span>
-      <span class="soon en dl-pending">SOON</span><span class="soon ru dl-pending">СКОРО</span></a>
+    <p class="sub en">Open beta<span class="dl-meta" hidden> <span class="dl-ver"></span> · <span class="dl-size"></span> MB</span></p>
+    <p class="sub ru">Открытая бета<span class="dl-meta" hidden> <span class="dl-ver"></span> · <span class="dl-size"></span> МБ</span></p>
+    <a class="btn" href="https://github.com/hhhhhffd/_k0t1k/releases/latest/download/_k0t1k.exe" id="dl-btn">
+      <span class="en">Download for Windows</span><span class="ru">Скачать для Windows</span></a>
     <p class="sub en" style="margin-top:14px;font-size:14px">Windows 10 or newer with WebView2.</p>
     <p class="sub ru" style="margin-top:14px;font-size:14px">Windows 10 или новее с WebView2.</p>
     <p class="report en">This is an open beta, so things may break. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Report a problem on Discord</a>.</p>
@@ -383,22 +378,18 @@ footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-betwee
   dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
   dlg.addEventListener('close', function () { if (current) current.focus(); });
 
-  var dl = document.getElementById('dl-btn');
-  dl.addEventListener('click', function (e) { if (dl.getAttribute('aria-disabled') === 'true') e.preventDefault(); });
-  // The button turns on by itself once a public release with the exe exists; until then it stays "soon".
+  // The button is a plain link to the latest exe. The version and size are best effort: the API is limited
+  // to 60 requests an hour per IP, so on any failure the line simply stays without them.
   fetch('https://api.github.com/repos/hhhhhffd/_k0t1k/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (rel) {
       var exe = (rel.assets || []).filter(function (a) { return a.name === '_k0t1k.exe'; })[0];
       if (!exe) throw new Error('release ' + rel.tag_name + ' has no _k0t1k.exe');
-      dl.href = exe.browser_download_url;
-      dl.removeAttribute('aria-disabled');
       document.querySelectorAll('.dl-ver').forEach(function (el) { el.textContent = rel.tag_name; });
       document.querySelectorAll('.dl-size').forEach(function (el) { el.textContent = (exe.size / 1048576).toFixed(1); });
-      document.querySelectorAll('.dl-pending').forEach(function (el) { el.hidden = true; });
-      document.querySelectorAll('.dl-ready').forEach(function (el) { el.hidden = false; });
+      document.querySelectorAll('.dl-meta').forEach(function (el) { el.hidden = false; });
     })
-    .catch(function (err) { console.info('No public release yet:', err.message); });
+    .catch(function () { /* the plain link above keeps working */ });
 })();
 </script>
 </body>
