@@ -41,6 +41,7 @@ a { color: var(--accent-text); }
 .wrap { width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 16px; }
 .px { font-family: "Press Start 2P", ui-monospace, "Cascadia Mono", Consolas, monospace; line-height: 1.5; letter-spacing: 0; }
 html:not([lang="ru"]) .ru, html[lang="ru"] .en { display: none !important; }
+[hidden] { display: none !important; }
 
 /* header */
 header.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--base) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 2px solid var(--line); }
@@ -307,11 +308,13 @@ footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-betwee
   <div class="wrap">
     <img class="cat-sm" src="assets/mascot.png" width="96" height="96" alt="">
     <h2 class="px" style="margin-bottom:12px"><span class="en">Download</span><span class="ru">Скачать</span></h2>
-    <p class="sub en">The repository is private during development, so releases are not public yet.</p>
-    <p class="sub ru">Пока идёт разработка, репозиторий закрыт, поэтому релизы ещё не опубликованы.</p>
+    <p class="sub en dl-pending">The first public release is coming soon.</p>
+    <p class="sub ru dl-pending">Первый публичный релиз скоро.</p>
+    <p class="sub en dl-ready" hidden>Version <span class="dl-ver"></span> · <span class="dl-size"></span> MB</p>
+    <p class="sub ru dl-ready" hidden>Версия <span class="dl-ver"></span> · <span class="dl-size"></span> МБ</p>
     <a class="btn" href="https://github.com/hhhhhffd/_k0t1k/releases/latest" aria-disabled="true" id="dl-btn">
       <span class="en">Download for Windows</span><span class="ru">Скачать для Windows</span>
-      <span class="soon en">SOON</span><span class="soon ru">СКОРО</span></a>
+      <span class="soon en dl-pending">SOON</span><span class="soon ru dl-pending">СКОРО</span></a>
     <p class="sub en" style="margin-top:14px;font-size:14px">Windows 10 or newer with WebView2.</p>
     <p class="sub ru" style="margin-top:14px;font-size:14px">Windows 10 или новее с WebView2.</p>
   </div>
@@ -374,7 +377,22 @@ footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-betwee
   dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
   dlg.addEventListener('close', function () { if (current) current.focus(); });
 
-  document.getElementById('dl-btn').addEventListener('click', function (e) { e.preventDefault(); });
+  var dl = document.getElementById('dl-btn');
+  dl.addEventListener('click', function (e) { if (dl.getAttribute('aria-disabled') === 'true') e.preventDefault(); });
+  // The button turns on by itself once a public release with the exe exists; until then it stays "soon".
+  fetch('https://api.github.com/repos/hhhhhffd/_k0t1k/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (rel) {
+      var exe = (rel.assets || []).filter(function (a) { return a.name === '_k0t1k.exe'; })[0];
+      if (!exe) throw new Error('release ' + rel.tag_name + ' has no _k0t1k.exe');
+      dl.href = exe.browser_download_url;
+      dl.removeAttribute('aria-disabled');
+      document.querySelectorAll('.dl-ver').forEach(function (el) { el.textContent = rel.tag_name; });
+      document.querySelectorAll('.dl-size').forEach(function (el) { el.textContent = (exe.size / 1048576).toFixed(1); });
+      document.querySelectorAll('.dl-pending').forEach(function (el) { el.hidden = true; });
+      document.querySelectorAll('.dl-ready').forEach(function (el) { el.hidden = false; });
+    })
+    .catch(function (err) { console.info('No public release yet:', err.message); });
 })();
 </script>
 </body>
