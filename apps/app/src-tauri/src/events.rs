@@ -1,10 +1,11 @@
-//! Events sent to the UI: `progress`, `game-log` (batched), `instance-state` and `game-crashed`.
+//! Events sent to the UI: `progress`, `microsoft-login-stage`, `game-log` (batched), `instance-state` and `game-crashed`.
 
 use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use k0t1k_core::auth::LoginStage;
 use k0t1k_core::i18n::tr;
 use k0t1k_core::progress::{ProgressEvent, ProgressFn};
 use serde::Serialize;
@@ -131,6 +132,11 @@ pub fn progress_fn(app: &AppHandle, task: &str, title: &str) -> ProgressFn {
 
 pub fn progress_step(app: &AppHandle, task: &str, title: &str, stage: &str, done: u64, total: u64) {
     emit(app, "progress", payload(task, title, stage, done, total));
+}
+
+/// A step of the Microsoft sign-in has started (the dialog shows the steps).
+pub fn microsoft_login_stage(app: &AppHandle, stage: LoginStage) {
+    emit(app, "microsoft-login-stage", stage);
 }
 
 /// Ends the task row of an operation that was stopped on purpose.

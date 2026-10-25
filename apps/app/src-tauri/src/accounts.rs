@@ -8,10 +8,11 @@ use k0t1k_core::i18n::tr;
 use k0t1k_core::auth::{self, ElybyOutcome, microsoft};
 use k0t1k_core::settings::Account;
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 use tokio::sync::watch;
 
 use crate::error::{AppError, CommandResult};
+use crate::events;
 use crate::state::{AppState, MSA_CLIENT_ID, MicrosoftLogin};
 
 #[derive(Serialize)]
@@ -58,15 +59,16 @@ pub async fn start_microsoft_login(state: State<'_, AppState>) -> CommandResult<
 /// Waits for the user to enter the code, then stores the account. Fails when the sign-in is cancelled,
 /// declined or expired.
 #[tauri::command]
-pub async fn finish_microsoft_login(state: State<'_, AppState>) -> CommandResult<Account> {
+pub async fn finish_microsoft_login(app: AppHandle, state: State<'_, AppState>) -> CommandResult<Account> {
     let client_id = client_id()?;
     let (device, mut cancelled) = {
         let pending = state.microsoft_login.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let pending = pending.as_ref().ok_or_else(|| AppError::new(tr("Microsoft sign-in has not been started", "вход через Microsoft не начат")))?;
         (pending.device.clone(), pending.cancel.subscribe())
     };
+    let on_stage = |stage| events::microsoft_login_stage(&app, stage);
     let outcome = tokio::select! {
-        account = auth::complete_microsoft_login(&state.paths, &state.http, client_id, &device) => account.map_err(AppError::from),
+        account = auth::complete_microsoft_login(&state.paths, &state.http, client_id, &device, &on_stage) => account.map_err(AppError::from),
         _ = cancelled.wait_for(|cancelled| *cancelled) => Err(AppError::new(tr("Microsoft sign-in was cancelled", "вход через Microsoft отменён"))),
     };
     // A newer sign-in may have replaced this one; only clear our own.

@@ -192,7 +192,7 @@ pub async fn complete_microsoft_login(
     http: &reqwest::Client,
     client_id: &str,
     device: &DeviceCode,
-    on_stage: &dyn Fn(LoginStage),
+    on_stage: &(dyn Fn(LoginStage) + Sync),
 ) -> Result<Account> {
     let result = async {
         on_stage(LoginStage::Waiting);

@@ -240,7 +240,7 @@ pub async fn secrets_from_tokens(
     http: &reqwest::Client,
     tokens: MicrosoftTokens,
     previous_refresh_token: Option<&str>,
-    on_stage: &dyn Fn(LoginStage),
+    on_stage: &(dyn Fn(LoginStage) + Sync),
 ) -> Result<Secrets> {
     let refresh_token = tokens
         .refresh_token
