@@ -68,7 +68,7 @@ async function pickJava() {
 
 const isCustomIcon = computed(() => draft.icon.startsWith('custom:'))
 
-/** The picture is stored at once (like the file itself); the built-in choices below only change the draft until saved. */
+/** The picture is stored at once (like the file itself). */
 async function pickIcon() {
   const picked = isTauri
     ? await open({ multiple: false, directory: false, title: t.iset.pickIconTitle, filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }] })
@@ -81,6 +81,13 @@ async function pickIcon() {
 /** Icons from the launcher's icons folder are copied into the instance at once, like a picked file. */
 async function useLibraryIcon(path: string) {
   const saved = await tasks.guard(() => store.setIcon(props.instance.id, path))
+  if (saved) draft.icon = saved.icon
+}
+
+/** A built-in icon is applied at once too, without saving the other unsaved fields of the form. */
+async function chooseIcon(key: string) {
+  const { notes, joinServer, sharedFolders, settings } = props.instance
+  const saved = await tasks.guard(() => store.updateSettings(props.instance.id, { icon: key, notes, joinServer, sharedFolders, settings }))
   if (saved) draft.icon = saved.icon
 }
 
@@ -144,7 +151,7 @@ async function save() {
           class="rounded-md p-0.5"
           :class="draft.icon === key ? 'bg-accent/30 ring-2 ring-accent' : 'hover:bg-hover'"
           :aria-label="key"
-          @click="((draft.icon = key), markDirty())"
+          @click="chooseIcon(key)"
         >
           <InstanceIcon :icon="key" :size="32" />
         </button>
