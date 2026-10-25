@@ -79,6 +79,9 @@ nav.links a:hover { color: var(--fg); }
 .btn[aria-disabled="true"] { background: var(--raised); color: var(--muted); border: 2px dashed var(--faint); box-shadow: none; cursor: not-allowed; }
 .btn[aria-disabled="true"]:hover { transform: none; }
 .soon { font: 12px/1 "Press Start 2P", monospace; padding: 6px 8px; background: var(--accent); color: var(--accent-fg); }
+.beta-tag { margin: 0 0 16px; }
+.report { margin-top: 18px; font-size: 14px; }
+.report a { color: var(--accent); }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
 
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 36px; max-width: 520px; }
@@ -167,6 +170,7 @@ footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-betwee
 <div class="hero">
   <div class="wrap">
     <div>
+      <p class="beta-tag"><span class="soon">OPEN BETA</span></p>
       <h1 class="px"><span>_k0t1k</span><br>
         <span class="en" style="color:var(--fg)">Minecraft launcher</span><span class="ru" style="color:var(--fg)">лаунчер Minecraft</span></h1>
       <p class="lead en">A fast, portable Minecraft launcher for Windows with Prism Launcher-level features in a modern UI.</p>
@@ -308,15 +312,17 @@ footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-betwee
   <div class="wrap">
     <img class="cat-sm" src="assets/mascot.png" width="96" height="96" alt="">
     <h2 class="px" style="margin-bottom:12px"><span class="en">Download</span><span class="ru">Скачать</span></h2>
-    <p class="sub en dl-pending">The first public release is coming soon.</p>
-    <p class="sub ru dl-pending">Первый публичный релиз скоро.</p>
-    <p class="sub en dl-ready" hidden>Version <span class="dl-ver"></span> · <span class="dl-size"></span> MB</p>
-    <p class="sub ru dl-ready" hidden>Версия <span class="dl-ver"></span> · <span class="dl-size"></span> МБ</p>
+    <p class="sub en dl-pending">The open beta build is coming soon.</p>
+    <p class="sub ru dl-pending">Сборка открытой беты скоро.</p>
+    <p class="sub en dl-ready" hidden>Open beta <span class="dl-ver"></span> · <span class="dl-size"></span> MB</p>
+    <p class="sub ru dl-ready" hidden>Открытая бета <span class="dl-ver"></span> · <span class="dl-size"></span> МБ</p>
     <a class="btn" href="https://github.com/hhhhhffd/_k0t1k/releases/latest" aria-disabled="true" id="dl-btn">
       <span class="en">Download for Windows</span><span class="ru">Скачать для Windows</span>
       <span class="soon en dl-pending">SOON</span><span class="soon ru dl-pending">СКОРО</span></a>
     <p class="sub en" style="margin-top:14px;font-size:14px">Windows 10 or newer with WebView2.</p>
     <p class="sub ru" style="margin-top:14px;font-size:14px">Windows 10 или новее с WebView2.</p>
+    <p class="report en">This is an open beta, so things may break. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Report a problem on Discord</a>.</p>
+    <p class="report ru">Это открытая бета, что-то может сломаться. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Сообщить о проблеме в Discord</a>.</p>
   </div>
 </section>
 </main>
