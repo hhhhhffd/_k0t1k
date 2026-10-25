@@ -17,5 +17,6 @@ pub mod placement;
 pub mod profile;
 pub mod progress;
 pub mod settings;
+pub mod update;
 
 pub use error::{Error, Result};

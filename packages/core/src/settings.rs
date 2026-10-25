@@ -210,6 +210,20 @@ impl Default for DiscordSettings {
     }
 }
 
+/// Launcher self-update (see `update`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UpdateSettings {
+    /// Look for a newer launcher release at startup (silently).
+    pub check_on_startup: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self { check_on_startup: true }
+    }
+}
+
 /// Decisions made when the launcher was first started (see `placement`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -234,6 +248,7 @@ pub struct GlobalSettings {
     pub ui: UiSettings,
     pub behavior: BehaviorSettings,
     pub discord: DiscordSettings,
+    pub updates: UpdateSettings,
     pub onboarding: OnboardingSettings,
     /// Folders that new instances (including imported modpacks) share with other instances.
     pub shared_folders_default: BTreeSet<SharedFolder>,
@@ -254,6 +269,7 @@ impl Default for GlobalSettings {
             ui: UiSettings::default(),
             behavior: BehaviorSettings::default(),
             discord: DiscordSettings::default(),
+            updates: UpdateSettings::default(),
             onboarding: OnboardingSettings::default(),
             shared_folders_default: BTreeSet::from([SharedFolder::Resourcepacks, SharedFolder::Shaderpacks]),
             accounts: Vec::new(),
