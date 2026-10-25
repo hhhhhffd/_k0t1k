@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { AppWindow, Check, Download, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
+import { AppWindow, Bug, Check, Download, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openLauncherFolder, openSharedFolder, setDataDir, uninstall } from '../api/commands'
@@ -22,8 +22,11 @@ import { usePluginsStore } from '../stores/plugins'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
 import { useUpdateStore } from '../stores/update'
+import { openExternal } from '../utils/external'
 import { formatRelative } from '../utils/format'
 import { THEMES, themeVars } from '../utils/theme'
+
+const REPORT_URL = 'https://discord.gg/zxnMAfUvJ'
 
 const store = useSettingsStore()
 const tasks = useTasksStore()
@@ -452,13 +455,20 @@ async function addAccount() {
       <section class="card flex items-start gap-4 p-4">
         <img :src="mascot" alt="" class="pixelated size-20" />
         <div class="flex flex-col gap-1">
-          <div class="font-mono text-xl font-bold">_k0t1k</div>
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-xl font-bold">_k0t1k</span>
+            <span class="badge badge-accent">{{ t.settings.openBeta }}</span>
+          </div>
           <p class="text-muted">{{ t.settings.aboutText }}</p>
+          <p class="text-[12px] text-faint">{{ t.settings.openBetaHint }}</p>
           <dl v-if="system" class="mt-2 grid grid-cols-[110px_1fr] gap-y-1 text-muted">
             <dt class="text-faint">{{ t.settings.version }}</dt><dd>{{ system.appVersion }}</dd>
             <dt class="text-faint">{{ t.settings.system }}</dt><dd>{{ system.os }}</dd>
             <dt class="text-faint">{{ t.settings.dataDir }}</dt><dd class="selectable font-mono text-[12px]">{{ system.dataDir }}</dd>
           </dl>
+          <div class="mt-2">
+            <button class="btn" @click="openExternal(REPORT_URL)"><Bug :size="15" />{{ t.settings.reportProblem }}</button>
+          </div>
         </div>
       </section>
       <section class="card flex flex-col gap-3 p-4">
