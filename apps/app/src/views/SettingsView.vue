@@ -128,7 +128,7 @@ async function deleteJava(usage: ManagedJavaUsage) {
 }
 
 const downloadPercent = computed(() => {
-  const task = tasks.tasks.find((x) => x.task === 'update')
+  const task = tasks.tasks.find((x) => x.task === 'update' && !x.finished && !x.error)
   return task?.total ? Math.min(100, Math.round((task.done / task.total) * 100)) : null
 })
 const updateSummary = computed(() => {
@@ -143,7 +143,8 @@ const updateBlockedReason = computed(() => {
 })
 
 onMounted(async () => {
-  if (!update.status) void update.check(false, true)
+  // manual "Check now" only when the startup check is off
+  if (!update.status && s.value?.updates.checkOnStartup) void update.check(false, true)
   system.value = (await tasks.guard(getSystemInfo)) ?? null
   await loadManagedJava()
 })

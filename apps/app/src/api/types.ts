@@ -210,7 +210,7 @@ export interface SystemInfo {
 export interface ReleaseInfo {
   version: string
   notes: string
-  size: number | null
+  size: number
 }
 
 /**

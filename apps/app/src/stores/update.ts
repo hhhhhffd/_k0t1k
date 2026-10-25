@@ -21,7 +21,7 @@ export const useUpdateStore = defineStore('update', () => {
   async function check(force: boolean, silent = false) {
     if (checking.value) return
     checking.value = true
-    error.value = ''
+    if (!silent) error.value = ''
     try {
       status.value = await checkForUpdate(force)
     } catch (e) {
@@ -33,10 +33,11 @@ export const useUpdateStore = defineStore('update', () => {
   }
 
   async function install() {
+    if (!release.value) return
     installing.value = true
     error.value = ''
     try {
-      await installUpdate()
+      await installUpdate(release.value.version)
     } catch (e) {
       error.value = errorMessage(e)
     } finally {

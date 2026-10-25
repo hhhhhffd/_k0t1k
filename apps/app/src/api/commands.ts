@@ -115,7 +115,8 @@
  *   set_update_lock(instanceId, kind, fileName, locked)      -> void
  * Launcher update (GitHub Releases, Ed25519-signed exe)
  *   check_for_update(force)                                  -> UpdateStatus   (without force, the result of the earlier check of this run; failures are logged by the backend)
- *   install_update()                                         -> void           (downloads, verifies, replaces the exe and restarts; emits `progress` as task `update`; refused while a game runs)
+ *   install_update(version)                                  -> void           (installs exactly that release (refused when the latest differs): downloads, verifies, replaces the exe and restarts;
+ *                                                                              emits `progress` as task `update`; refused while a game runs or anything is downloading)
  * Events (backend -> frontend, via emit)
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
  *   game-log        GameLogBatch     (lines of one session, batched)
@@ -271,7 +272,7 @@ export const getSettings = () => call<GlobalSettings>('get_settings')
 export const saveSettings = (settings: GlobalSettings) => call<void>('save_settings', { settings })
 export const getSystemInfo = () => call<SystemInfo>('get_system_info')
 export const checkForUpdate = (force: boolean) => call<UpdateStatus>('check_for_update', { force })
-export const installUpdate = () => call<void>('install_update')
+export const installUpdate = (version: string) => call<void>('install_update', { version })
 export const openDataDir = () => call<void>('open_data_dir')
 export const openLauncherFolder = (folder: LauncherFolder) => call<void>('open_launcher_folder', { folder })
 export const listIconLibrary = () => call<string[]>('list_icon_library')
