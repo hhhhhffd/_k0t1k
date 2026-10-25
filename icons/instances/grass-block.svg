@@ -1,4 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-<g fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polygon stroke="#ff9d3c" points="10,21 32,33 32,57 10,45"/><polygon stroke="#ff9d3c" points="32,33 54,21 54,45 32,57"/><polygon stroke="#5dff6a" points="10,21 32,9 54,21 32,33"/><polyline stroke="#5dff6a" points="10,28.2 13.67,26.36 17.33,32.2 21,30.36 24.67,36.2 28.33,34.36 32,40.2"/><polyline stroke="#5dff6a" points="32,40.2 35.67,34.36 39.33,36.2 43,30.36 46.67,32.2 50.33,26.36 54,28.2"/></g>
-<g fill="none" stroke="#fff" stroke-opacity=".7" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"><polygon points="10,21 32,33 32,57 10,45"/><polygon points="32,33 54,21 54,45 32,57"/><polygon points="10,21 32,9 54,21 32,33"/><polyline points="10,28.2 13.67,26.36 17.33,32.2 21,30.36 24.67,36.2 28.33,34.36 32,40.2"/><polyline points="32,40.2 35.67,34.36 39.33,36.2 43,30.36 46.67,32.2 50.33,26.36 54,28.2"/></g>
-</svg>

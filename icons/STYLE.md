@@ -1,40 +1,40 @@
 # Instance icon style
 
 Used by the launcher's instance icon pickers (`apps/app/src/components/InstanceIcon.vue`).
+The icon keys and subjects follow Prism Launcher's instance icons, so imported Prism instances keep theirs.
+Every icon is drawn from scratch as SVG.
 
-- **Look:** flat line art in bright colors, no fills, no gradients, no glow or other filters, no raster. Not pixel art.
-- **Grid:** `viewBox="0 0 64 64"`, artwork within roughly 8–56, centered.
-- **Stroke:** two passes of the same geometry:
-  1. colored stroke `2.6`, round caps and joins (no glow);
-  2. white highlight on top: `stroke="#fff" stroke-opacity=".7" stroke-width=".9"`.
-- **Corners:** frames use `rx` 3–6; everything else gets its rounding from round joins.
-- **Blocks:** isometric cube. Top `32,9 54,21 32,33 10,21`, left face `10,21 32,33 32,57 10,45`,
-  right face `32,33 54,21 54,45 32,57`. Texture is drawn with lines on the faces in face coordinates.
-- **Mobs:** front-facing head in a rounded square (about 40×40), eyes and mouth from simple rects and lines.
-- **Items / meta:** a single silhouette, plus at most one or two small accent details (sparkles, bubbles).
-- **Colors:** each icon uses 1–3 colors from the palette below, never anything else.
+- **Look:** flat neon. No glow or other filters, no gradients, no white highlight, no raster.
+- **Grid:** `viewBox="0 0 64 64"`, round caps and joins on the root `<svg>`.
+- **Tile:** blocks and mobs are a front-facing tile, `rect x=8 y=8 w=48 h=48 rx=9`.
+  The tile is filled with its color at `fill-opacity=".18"` and stroked with the same color, `stroke-width=3`.
+- **Details:** faces, bands and caps (eyes, mouths, the grass top, the TNT band) are **solid fills** in bright
+  colors. Texture lines (planks, bricks, iron bands, stone cracks) are strokes `3` in the tile color.
+- **Non-tile subjects** (meat, ender pearl, nether star, flame, gear, magitech, FTB): a single silhouette
+  with the same tinted fill and stroke, plus a solid detail.
+- **Colors:** only the palette below; 1–3 colors per icon.
 
 | Token | Hex | Used for |
 |---|---|---|
-| green | `#5dff6a` | grass, creeper, plants |
-| soil | `#ff9d3c` | dirt, bee stripes |
-| yellow | `#ffd23c` | gold, sparks, star, accents |
-| red | `#ff3d5a` | TNT, heart, wattle |
+| green | `#5dff6a` | grass, creeper |
+| soil | `#ff9d3c` | dirt, hair |
+| yellow | `#ffd23c` | gold, bee, beak, FTB |
+| red | `#ff3d5a` | TNT, wattle, red eyes, FTB |
 | brick | `#ff5a3c` | bricks |
-| wood | `#ffb04a` | planks, handles, chest |
+| wood | `#ffb04a` | planks |
 | stone | `#aebfdc` | stone |
-| iron | `#dfe8ff` | iron, tool heads |
-| cyan | `#3cf0ff` | diamond, sword |
-| purple | `#c26bff` | obsidian, ender, book, default |
-| magenta | `#ff4dff` | ender eyes, potion, magic |
+| iron | `#dfe8ff` | iron, gear |
+| cyan | `#3cf0ff` | diamond, bee and skeleton eyes |
+| purple | `#c26bff` | enderman, magitech, FTB tile |
+| magenta | `#ff4dff` | ender eyes |
 | teal | `#2dffc4` | ender pearl |
-| blue | `#3c8cff` | server |
-| white | `#ffffff` | eyes, TNT band |
-| paper | `#f4f4ff` | glass, pages, white fur |
+| blue | `#3c8cff` | FTB |
+| sky | `#3cc8ff` | gear ring |
+| periwinkle | `#6a8cff` | Steve's eyes |
+| paper | `#f4f4ff` | chicken, fox white, eye whites, TNT band |
 | bone | `#e8f0ff` | skeleton |
-| fire | `#ff7a2d` | flame, fox |
-| amber | `#ffb03c` | beak |
-| starlight | `#fff4b0` | star sparkles, shine |
+| fire | `#ff7a2d` | fox, flame |
+| meat | `#ff7a5a` | meat |
+| skin | `#fff4b0` | Steve, Herobrine, nether star |
 
-Known limitation: the style is made for dark backgrounds. Icons drawn mostly in
-`iron`, `bone`, `paper` or `white` lose contrast on light backgrounds.
+Known limitation: made for dark backgrounds. Icons in `iron`, `bone`, `paper` or `skin` lose contrast on light ones.

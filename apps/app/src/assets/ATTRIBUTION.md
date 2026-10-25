@@ -1,6 +1,7 @@
 # Asset attribution
 
-The instance icons in `icons/instances/` (repository root) are the launcher's own artwork.
+The instance icons in `icons/instances/` (repository root) are the launcher's own artwork, drawn from scratch;
+only their keys and subjects follow Prism Launcher's instance icons.
 
 ## brands/
 

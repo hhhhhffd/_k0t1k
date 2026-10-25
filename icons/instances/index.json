@@ -1,151 +1,156 @@
 [
   {
-    "id": "grass-block",
-    "name": "Grass Block",
-    "file": "grass-block.svg",
-    "tags": [
-      "block",
-      "nature",
-      "survival"
-    ]
-  },
-  {
-    "id": "dirt-block",
-    "name": "Dirt Block",
-    "file": "dirt-block.svg",
+    "id": "grass",
+    "name": "Grass",
+    "file": "grass.svg",
     "tags": [
       "block",
       "nature"
     ]
   },
   {
-    "id": "stone-block",
-    "name": "Stone Block",
-    "file": "stone-block.svg",
+    "id": "dirt",
+    "name": "Dirt",
+    "file": "dirt.svg",
+    "tags": [
+      "block",
+      "nature"
+    ]
+  },
+  {
+    "id": "stone",
+    "name": "Stone",
+    "file": "stone.svg",
     "tags": [
       "block",
       "cave"
     ]
   },
   {
-    "id": "planks-block",
-    "name": "Oak Planks",
-    "file": "planks-block.svg",
+    "id": "planks",
+    "name": "Planks",
+    "file": "planks.svg",
     "tags": [
       "block",
-      "wood",
-      "build"
+      "wood"
     ]
   },
   {
-    "id": "brick-block",
+    "id": "brick",
     "name": "Bricks",
-    "file": "brick-block.svg",
+    "file": "brick.svg",
     "tags": [
       "block",
       "build"
     ]
   },
   {
-    "id": "tnt-block",
+    "id": "tnt",
     "name": "TNT",
-    "file": "tnt-block.svg",
+    "file": "tnt.svg",
     "tags": [
       "block",
-      "explosive",
-      "chaos"
-    ]
-  },
-  {
-    "id": "iron-block",
-    "name": "Iron Block",
-    "file": "iron-block.svg",
-    "tags": [
-      "block",
-      "metal",
-      "ore"
-    ]
-  },
-  {
-    "id": "gold-block",
-    "name": "Gold Block",
-    "file": "gold-block.svg",
-    "tags": [
-      "block",
-      "metal",
-      "ore",
-      "rich"
-    ]
-  },
-  {
-    "id": "diamond-block",
-    "name": "Diamond Block",
-    "file": "diamond-block.svg",
-    "tags": [
-      "block",
-      "gem",
-      "ore",
-      "rich"
-    ]
-  },
-  {
-    "id": "obsidian-block",
-    "name": "Obsidian",
-    "file": "obsidian-block.svg",
-    "tags": [
-      "block",
-      "nether",
-      "portal"
-    ]
-  },
-  {
-    "id": "creeper-head",
-    "name": "Creeper Head",
-    "file": "creeper-head.svg",
-    "tags": [
-      "mob",
-      "hostile",
       "explosive"
     ]
   },
   {
-    "id": "enderman-head",
-    "name": "Enderman Head",
-    "file": "enderman-head.svg",
+    "id": "iron",
+    "name": "Iron",
+    "file": "iron.svg",
+    "tags": [
+      "block",
+      "metal"
+    ]
+  },
+  {
+    "id": "gold",
+    "name": "Gold",
+    "file": "gold.svg",
+    "tags": [
+      "block",
+      "metal"
+    ]
+  },
+  {
+    "id": "diamond",
+    "name": "Diamond",
+    "file": "diamond.svg",
+    "tags": [
+      "block",
+      "gem"
+    ]
+  },
+  {
+    "id": "creeper",
+    "name": "Creeper",
+    "file": "creeper.svg",
     "tags": [
       "mob",
-      "end",
       "hostile"
     ]
   },
   {
-    "id": "skeleton-head",
-    "name": "Skeleton Head",
-    "file": "skeleton-head.svg",
+    "id": "squarecreeper",
+    "name": "Creeper (red eyes)",
+    "file": "squarecreeper.svg",
     "tags": [
       "mob",
-      "undead",
       "hostile"
     ]
   },
   {
-    "id": "chicken-head",
-    "name": "Chicken Head",
-    "file": "chicken-head.svg",
+    "id": "skeleton",
+    "name": "Skeleton",
+    "file": "skeleton.svg",
     "tags": [
       "mob",
-      "passive",
-      "farm"
+      "undead"
     ]
   },
   {
-    "id": "fox-head",
-    "name": "Fox Head",
-    "file": "fox-head.svg",
+    "id": "enderman",
+    "name": "Enderman",
+    "file": "enderman.svg",
     "tags": [
       "mob",
-      "passive",
-      "forest"
+      "end"
+    ]
+  },
+  {
+    "id": "steve",
+    "name": "Steve",
+    "file": "steve.svg",
+    "tags": [
+      "mob",
+      "player"
+    ]
+  },
+  {
+    "id": "herobrine",
+    "name": "Herobrine",
+    "file": "herobrine.svg",
+    "tags": [
+      "mob",
+      "player",
+      "creepy"
+    ]
+  },
+  {
+    "id": "chicken",
+    "name": "Chicken",
+    "file": "chicken.svg",
+    "tags": [
+      "mob",
+      "passive"
+    ]
+  },
+  {
+    "id": "fox",
+    "name": "Fox",
+    "file": "fox.svg",
+    "tags": [
+      "mob",
+      "passive"
     ]
   },
   {
@@ -154,118 +159,82 @@
     "file": "bee.svg",
     "tags": [
       "mob",
-      "neutral",
-      "nature"
+      "neutral"
     ]
   },
   {
-    "id": "pickaxe",
-    "name": "Pickaxe",
-    "file": "pickaxe.svg",
+    "id": "meat",
+    "name": "Meat",
+    "file": "meat.svg",
     "tags": [
       "item",
-      "tool",
-      "mining"
+      "food"
     ]
   },
   {
-    "id": "sword",
-    "name": "Sword",
-    "file": "sword.svg",
+    "id": "enderpearl",
+    "name": "Ender Pearl",
+    "file": "enderpearl.svg",
     "tags": [
       "item",
-      "weapon",
-      "pvp"
+      "end"
     ]
   },
   {
-    "id": "potion",
-    "name": "Potion",
-    "file": "potion.svg",
+    "id": "netherstar",
+    "name": "Nether Star",
+    "file": "netherstar.svg",
     "tags": [
       "item",
-      "brewing",
-      "magic"
+      "boss"
     ]
   },
   {
-    "id": "star",
-    "name": "Star",
-    "file": "star.svg",
+    "id": "flame",
+    "name": "Flame",
+    "file": "flame.svg",
     "tags": [
-      "item",
-      "favorite",
-      "achievement"
+      "meta",
+      "modded"
     ]
   },
   {
-    "id": "book",
-    "name": "Enchanted Book",
-    "file": "book.svg",
+    "id": "gear",
+    "name": "Gear",
+    "file": "gear.svg",
     "tags": [
-      "item",
+      "meta",
+      "tech"
+    ]
+  },
+  {
+    "id": "magitech",
+    "name": "Magitech",
+    "file": "magitech.svg",
+    "tags": [
+      "meta",
       "magic",
-      "knowledge"
+      "tech"
     ]
   },
   {
-    "id": "chest",
-    "name": "Chest",
-    "file": "chest.svg",
-    "tags": [
-      "block",
-      "storage",
-      "loot"
-    ]
-  },
-  {
-    "id": "vanilla",
-    "name": "Vanilla",
-    "file": "vanilla.svg",
+    "id": "ftb_logo",
+    "name": "FTB",
+    "file": "ftb-logo.svg",
     "tags": [
       "meta",
-      "vanilla",
-      "clean"
+      "modpack",
+      "ftb"
     ]
   },
   {
-    "id": "modpack",
-    "name": "Modpack",
-    "file": "modpack.svg",
+    "id": "ftb_glow",
+    "name": "FTB (tile)",
+    "file": "ftb-glow.svg",
     "tags": [
       "meta",
-      "modded",
-      "pack"
-    ]
-  },
-  {
-    "id": "server",
-    "name": "Server",
-    "file": "server.svg",
-    "tags": [
-      "meta",
-      "multiplayer",
-      "online"
-    ]
-  },
-  {
-    "id": "hardcore-heart",
-    "name": "Hardcore",
-    "file": "hardcore-heart.svg",
-    "tags": [
-      "meta",
-      "hardcore",
-      "survival"
-    ]
-  },
-  {
-    "id": "default",
-    "name": "Default",
-    "file": "default.svg",
-    "tags": [
-      "meta",
-      "default",
-      "cat"
+      "modpack",
+      "ftb"
     ]
   }
 ]

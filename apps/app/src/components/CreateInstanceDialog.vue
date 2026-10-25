@@ -28,7 +28,7 @@ const customization = useCustomizationStore()
 type Page = 'custom' | 'import' | 'modrinth' | 'curseForge' | 'ftb'
 /** Each page shows its platform's own logo; the import page a folder like Prism's. */
 const pages: { id: Page; logo?: string }[] = [
-  { id: 'custom', logo: INSTANCE_ICONS['grass-block'] },
+  { id: 'custom', logo: INSTANCE_ICONS.grass },
   { id: 'import' },
   { id: 'modrinth', logo: modrinthLogo },
   { id: 'curseForge', logo: curseforgeLogo },
@@ -38,7 +38,7 @@ const page = ref<Page>('custom')
 
 const name = ref('')
 const group = ref('')
-const icon = ref('grass-block')
+const icon = ref('grass')
 /** A picture from the launcher's icons folder; it is copied into the instance once it exists. */
 const libraryIcon = ref<string | null>(null)
 const iconsOpen = ref(false)
