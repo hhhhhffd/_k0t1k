@@ -96,7 +96,7 @@ async function sha1Hex(bytes: Uint8Array) {
 
 async function bundledInfo(id: PluginId): Promise<PluginInfo> {
   const manifest = (await (await fetch(`${import.meta.env.BASE_URL}plugins/${id}/plugin.json`)).json()) as { version: string; files: Record<string, string> }
-  return { id, version: manifest.version, source: 'bundled', files: Object.keys(manifest.files), lastCheck: lastChecks.get(id) ?? null, error: null }
+  return { id, version: manifest.version, source: 'bundled', files: Object.keys(manifest.files), lastCheck: lastChecks.get(id) ?? null, error: null, delayed: false }
 }
 
 const copyOf = (bytes: Uint8Array) => bytes.slice().buffer

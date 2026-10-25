@@ -10,6 +10,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
 use k0t1k_core::component::MINECRAFT_UID;
+use k0t1k_core::i18n::tr;
 use k0t1k_core::error::IoContext;
 use k0t1k_core::content::{self as core_content, ResourceKind};
 use k0t1k_core::packformat;
@@ -70,6 +71,8 @@ pub struct PluginInfo {
     files: Vec<String>,
     last_check: Option<DateTime<Utc>>,
     error: Option<String>,
+    /// The last check hit a rate limit or a network problem; the UI shows a calm notice, not an error.
+    delayed: bool,
 }
 
 fn resolve(state: &AppState, entry: &Entry) -> (Resolved, Manifest) {
@@ -95,7 +98,17 @@ fn describe(state: &AppState) -> Vec<PluginInfo> {
                 source: resolved.source,
                 files: manifest.files.into_keys().collect(),
                 last_check: record.last_check,
-                error: resolved.problem.or(record.error),
+                error: resolved
+                    .problem
+                    .map(|_| {
+                        tr(
+                            "The downloaded plugin is damaged, the bundled copy is used. Details are in launcher.log.",
+                            "Скачанный плагин повреждён, используется встроенный. Подробности в launcher.log.",
+                        )
+                        .to_owned()
+                    })
+                    .or(record.error),
+                delayed: record.delayed,
             }
         })
         .collect()
@@ -108,8 +121,10 @@ pub async fn list_plugins(state: State<'_, AppState>) -> CommandResult<Vec<Plugi
 }
 
 /// Checks the plugins for newer signed releases. Without `force` this is the startup check: it needs
-/// the setting on and skips a plugin checked within the last 24 hours. Failures are logged and kept
-/// per plugin for Settings; the active version never changes on a failure.
+/// the setting on and skips a plugin checked within the last 24 hours (an hour after a rate limit or
+/// a network problem). Failures are logged and kept per plugin for Settings, a short localized text for
+/// a rejected release and a `delayed` flag for a transient problem; the active version never changes
+/// on a failure.
 pub async fn check_all(state: &AppState, force: bool) -> Vec<PluginInfo> {
     let _guard = CHECK_LOCK.lock().await;
     let auto = GlobalSettings::load(&state.paths).map(|settings| settings.updates.auto_update_plugins).unwrap_or_else(|error| {
@@ -132,12 +147,19 @@ pub async fn check_all(state: &AppState, force: bool) -> Vec<PluginInfo> {
         match result {
             Ok(Some(version)) => {
                 tracing::info!("plugin {} updated to {version}", entry.plugin.id);
-                record.error = None;
+                (record.error, record.delayed) = (None, false);
             }
-            Ok(None) => record.error = None,
+            Ok(None) => (record.error, record.delayed) = (None, false),
             Err(error) => {
                 tracing::warn!("plugin {} update failed: {error}", entry.plugin.id);
-                record.error = Some(AppError::from(error).to_string());
+                record.delayed = update::is_transient(&error);
+                record.error = (!record.delayed).then(|| {
+                    tr(
+                        "The plugin update could not be verified or installed. Details are in launcher.log.",
+                        "Не удалось проверить или установить обновление плагина. Подробности в launcher.log.",
+                    )
+                    .to_owned()
+                });
             }
         }
     }
