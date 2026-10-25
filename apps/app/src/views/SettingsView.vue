@@ -177,8 +177,8 @@ async function addAccount() {
 </script>
 
 <template>
-  <div v-if="s" class="mx-auto flex max-w-5xl gap-6 p-6">
-    <nav class="sticky top-6 flex h-fit w-44 shrink-0 flex-col gap-1" :aria-label="t.settings.title">
+  <div v-if="s" class="flex gap-8 p-6">
+    <nav class="sticky top-6 flex h-fit w-52 shrink-0 flex-col gap-1" :aria-label="t.settings.title">
       <h1 class="mb-2 px-3 text-xl font-bold">{{ t.settings.title }}</h1>
       <button
         v-for="id in sectionIds"
@@ -192,7 +192,7 @@ async function addAccount() {
       </button>
     </nav>
 
-    <div class="flex min-w-0 max-w-2xl flex-1 flex-col gap-4">
+    <div class="flex min-w-0 max-w-5xl flex-1 flex-col gap-4">
       <h2 class="text-[17px] font-bold">{{ t.settings.sections[section] }}</h2>
 
       <template v-if="section === 'java'">
