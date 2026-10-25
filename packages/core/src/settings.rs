@@ -117,6 +117,18 @@ pub struct UiSettings {
     pub cat_pack: Option<String>,
     /// Folder name of the icon set under `iconsets/`; `None` for the built-in icons.
     pub icon_set: Option<String>,
+    /// Side of the title bar that holds the close/minimize/maximize buttons.
+    pub window_controls: WindowControlsSide,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowControlsSide {
+    /// macOS order: close, minimize, maximize.
+    #[default]
+    Left,
+    /// Windows order: minimize, maximize, close.
+    Right,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -164,6 +176,7 @@ impl Default for UiSettings {
             custom_themes: Vec::new(),
             cat_pack: None,
             icon_set: None,
+            window_controls: WindowControlsSide::Left,
         }
     }
 }

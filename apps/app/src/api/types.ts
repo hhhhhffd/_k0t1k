@@ -185,7 +185,7 @@ export interface GlobalSettings {
    * `theme` is a built-in `ThemeId`, the id of one of `customThemes` or a theme file (`file:<name>`).
    * `catPack`: null = no cat, `mascot` = the built-in one, else a `CatPack.id`. `iconSet`: null = built-in icons, else an `IconSet.id`.
    */
-  ui: { language: Language; theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null }
+  ui: { language: Language; theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null; windowControls: WindowControlsSide }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
   discord: { enabled: boolean }
   updates: { checkOnStartup: boolean; autoUpdatePlugins: boolean }
@@ -722,3 +722,5 @@ export interface RepairReport {
   warnings: string[]
   files: number
 }
+
+export type WindowControlsSide = 'left' | 'right'

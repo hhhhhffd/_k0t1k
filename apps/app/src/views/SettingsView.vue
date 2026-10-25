@@ -294,6 +294,20 @@ async function addAccount() {
             >{{ l.label }}</button>
           </div>
         </section>
+        <section class="card flex flex-col gap-2 p-4">
+          <span><span class="block font-medium">{{ t.settings.windowControls }}</span><span class="text-[12px] text-faint">{{ t.settings.windowControlsHint }}</span></span>
+          <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.windowControls">
+            <button
+              v-for="side in (['left', 'right'] as const)"
+              :key="side"
+              role="radio"
+              :aria-checked="s.ui.windowControls === side"
+              class="h-8 flex-1 rounded-md px-2 font-medium transition-colors"
+              :class="s.ui.windowControls === side ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
+              @click="store.setUi({ windowControls: side })"
+            >{{ side === 'left' ? t.settings.windowControlsLeft : t.settings.windowControlsRight }}</button>
+          </div>
+        </section>
         <section class="card p-4">
           <h3 class="section-title mb-3">{{ t.settings.theme }}</h3>
           <div class="grid grid-cols-2 gap-3">

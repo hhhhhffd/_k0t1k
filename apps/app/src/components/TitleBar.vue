@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import type { Window } from '@tauri-apps/api/window'
 import { Minus, Plus, Shrink, X } from '@lucide/vue'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { isTauri } from '../api/commands'
 import { t } from '../i18n'
+import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
 
 const tasks = useTasksStore()
+const settings = useSettingsStore()
+// Left: macOS order (close, minimize, maximize). Right: Windows order, close outermost.
+const onRight = computed(() => settings.settings?.ui.windowControls === 'right')
 const maximized = ref(false)
 // null outside Tauri (browser mock): the buttons are then inert instead of throwing
 let win: Window | null = null
@@ -33,10 +37,10 @@ const toggleMaximize = () => run((w) => w.toggleMaximize())
 <template>
   <!-- data-tauri-drag-region also makes a double click toggle maximize -->
   <header data-tauri-drag-region class="relative flex h-10 shrink-0 items-center border-b border-line bg-surface px-1.5 select-none">
-    <div class="lights flex items-center" role="group" :aria-label="t.titlebar.window">
-      <button class="light" style="--light: #ff5f57" :aria-label="t.common.close" @click="close"><X :size="10" :stroke-width="3.5" /></button>
-      <button class="light" style="--light: #febc2e" :aria-label="t.titlebar.minimize" @click="minimize"><Minus :size="10" :stroke-width="3.5" /></button>
-      <button class="light" style="--light: #28c840" :aria-label="maximized ? t.titlebar.restore : t.titlebar.maximize" @click="toggleMaximize">
+    <div class="lights flex items-center" :class="{ 'ml-auto': onRight }" role="group" :aria-label="t.titlebar.window">
+      <button class="light" :class="{ 'order-3': onRight }" style="--light: #ff5f57" :aria-label="t.common.close" @click="close"><X :size="10" :stroke-width="3.5" /></button>
+      <button class="light" :class="{ 'order-1': onRight }" style="--light: #febc2e" :aria-label="t.titlebar.minimize" @click="minimize"><Minus :size="10" :stroke-width="3.5" /></button>
+      <button class="light" :class="{ 'order-2': onRight }" style="--light: #28c840" :aria-label="maximized ? t.titlebar.restore : t.titlebar.maximize" @click="toggleMaximize">
         <Shrink v-if="maximized" :size="10" :stroke-width="3" />
         <Plus v-else :size="10" :stroke-width="3.5" />
       </button>
