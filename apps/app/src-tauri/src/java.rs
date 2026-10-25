@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use k0t1k_core::i18n::tr;
 use k0t1k_core::java::{JavaInstall, detect_java as detect_installed, required_component};
 use k0t1k_core::meta::MetaClient;
 use k0t1k_core::profile::library::RuntimeContext;
@@ -142,7 +143,7 @@ pub async fn delete_managed_java(state: State<'_, AppState>, dir: String) -> Com
     let dir = PathBuf::from(dir);
     let _installing = state.install_lock.lock().await;
     if !state.running().is_empty() {
-        return Err(AppError::new("Нельзя удалить Java, пока запущена игра"));
+        return Err(AppError::new(tr("Java cannot be removed while a game is running", "Нельзя удалить Java, пока запущена игра")));
     }
     blocking(move || {
         let canonical_java_dir = java_dir.canonicalize().map_err(|source| k0t1k_core::Error::Io { path: java_dir.clone(), source })?;

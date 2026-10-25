@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 
+use k0t1k_core::tr_fmt;
 use k0t1k_core::content::{
     BlockedFile, BlockedScan, HashCache, PackExportReport, PackExportRequest, ResourceKind, add_local_files, collect_blocked,
     export_curseforge, export_mrpack, packwiz,
@@ -74,7 +75,7 @@ pub async fn export_instance(
     }
 
     let task = format!("export:{instance_id}");
-    let title = format!("Экспорт: {}", instance.name);
+    let title = tr_fmt!("Export: {}", "Экспорт: {}", instance.name);
     let progress = progress_fn(&app, &task, &title);
     let destination = PathBuf::from(destination);
     let filter = ExportFilter::new(excluded);

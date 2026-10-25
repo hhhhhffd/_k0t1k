@@ -7,6 +7,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use chrono::Utc;
+use k0t1k_core::i18n::tr;
+use k0t1k_core::tr_fmt;
 use k0t1k_core::auth;
 use k0t1k_core::install::{check_installed, extract_natives, install_game, reconstruct_assets};
 use k0t1k_core::instance::servers::{pull_shared, push_shared};
@@ -196,13 +198,13 @@ async fn remove_stale_sessions(state: &AppState, instance: &Instance, log: &Game
     let mut entries = match tokio::fs::read_dir(&sessions_dir).await {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
-        Err(error) => return log.line("launcher", &format!("Не удалось просмотреть {}: {error}", sessions_dir.display())),
+        Err(error) => return log.line("launcher", &tr_fmt!("Cannot read {}: {error}", "Не удалось просмотреть {}: {error}", sessions_dir.display())),
     };
     loop {
         let entry = match entries.next_entry().await {
             Ok(Some(entry)) => entry,
             Ok(None) => return,
-            Err(error) => return log.line("launcher", &format!("Не удалось просмотреть {}: {error}", sessions_dir.display())),
+            Err(error) => return log.line("launcher", &tr_fmt!("Cannot read {}: {error}", "Не удалось просмотреть {}: {error}", sessions_dir.display())),
         };
         let live = entry
             .file_name()
@@ -226,7 +228,7 @@ async fn remove_stale_sessions(state: &AppState, instance: &Instance, log: &Game
 impl Drop for SessionGuard {
     fn drop(&mut self) {
         if !self.ended {
-            self.end("Сессия запуска завершилась аварийно", None);
+            self.end(tr("The launch session ended abnormally", "Сессия запуска завершилась аварийно"), None);
         }
     }
 }
@@ -251,7 +253,7 @@ async fn run_session(
 ) {
     let id = instance.id.clone();
     let task = format!("launch:{session_id}");
-    let title = format!("Запуск: {}", instance.name);
+    let title = tr_fmt!("Launching: {}", "Запуск: {}", instance.name);
     let post_exit = settings.commands.post_exit.clone();
     let progress = progress_fn(&app, &task, &title);
     let log = GameLog::new(&app, &state, session_id);
@@ -271,16 +273,16 @@ async fn run_session(
     let preparation = async {
         tokio::select! {
             prepared = prepare(&state, &log, &instance, &settings, account, join_server, &dir, &task, &progress) => prepared,
-            () = wait_killed(&mut kill_requests) => Err(AppError::new("запуск отменён")),
+            () = wait_killed(&mut kill_requests) => Err(AppError::new(tr("launch cancelled", "запуск отменён"))),
         }
     };
     let command = match tracked(&app, &task, &title, preparation).await {
         Ok(command) => command,
-        Err(_) if state.kill_requested(session_id) => return session.end("Запуск отменён", None),
-        Err(error) => return session.end(&format!("Запуск не удался: {error}"), None),
+        Err(_) if state.kill_requested(session_id) => return session.end(tr("Launch cancelled", "Запуск отменён"), None),
+        Err(error) => return session.end(&tr_fmt!("Launch failed: {error}", "Запуск не удался: {error}"), None),
     };
     if state.kill_requested(session_id) {
-        return session.end("Запуск отменён", None);
+        return session.end(tr("Launch cancelled", "Запуск отменён"), None);
     }
 
     // A shared server list is copied into the game dir for this run and merged back after it.
@@ -289,7 +291,7 @@ async fn run_session(
         match blocking(move || pull_shared(&paths, &game_dir)).await {
             Ok(snapshot) => Some(snapshot),
             Err(error) => {
-                log.line("launcher", &format!("Не удалось подготовить общий список серверов: {error}"));
+                log.line("launcher", &tr_fmt!("Cannot prepare the shared server list: {error}", "Не удалось подготовить общий список серверов: {error}"));
                 None
             }
         }
@@ -309,7 +311,7 @@ async fn run_session(
     };
     let handle = match spawn_game(&command, on_log) {
         Ok(handle) => handle,
-        Err(error) => return session.end(&format!("Не удалось запустить игру: {}", AppError::from(error)), None),
+        Err(error) => return session.end(&tr_fmt!("Cannot start the game: {}", "Не удалось запустить игру: {}", AppError::from(error)), None),
     };
     let started_at = Utc::now();
     let spawned_at = SystemTime::now();
@@ -341,7 +343,7 @@ async fn run_session(
     let exit_code = match handle.wait().await {
         Ok(code) => code,
         Err(error) => {
-            log.line("launcher", &format!("Не удалось дождаться завершения игры: {error}"));
+            log.line("launcher", &tr_fmt!("Cannot wait for the game to end: {error}", "Не удалось дождаться завершения игры: {error}"));
             None
         }
     };
@@ -350,7 +352,7 @@ async fn run_session(
     if let Some(snapshot) = shared_servers {
         let (paths, game_dir) = (state.paths.clone(), instance.game_dir(&state.paths));
         if let Err(error) = blocking(move || push_shared(&paths, &game_dir, snapshot.as_deref())).await {
-            log.line("launcher", &format!("Не удалось сохранить общий список серверов: {error}"));
+            log.line("launcher", &tr_fmt!("Cannot save the shared server list: {error}", "Не удалось сохранить общий список серверов: {error}"));
         }
     }
 
@@ -362,7 +364,7 @@ async fn run_session(
             blocking(move || manager.record_session(&id, started_at, ended_at).map(|_| ())).await
         };
         if let Err(error) = recorded {
-            log.line("launcher", &format!("Не удалось сохранить время игры: {error}"));
+            log.line("launcher", &tr_fmt!("Cannot save the playtime: {error}", "Не удалось сохранить время игры: {error}"));
         }
     }
     // Windows reports a killed process as exit code 1, so the code alone cannot tell a kill apart.
@@ -373,16 +375,16 @@ async fn run_session(
         let game_dir = instance.game_dir(&state.paths);
         let report = blocking(move || Ok(find_crash_report(&game_dir, spawned_at))).await.ok().flatten();
         if let Some(report) = &report {
-            log.line("launcher", &format!("Найден отчёт о сбое: {}", report.display()));
+            log.line("launcher", &tr_fmt!("Crash report found: {}", "Найден отчёт о сбое: {}", report.display()));
         }
         Some(CrashInfo { exit_code, crash_report: report.map(|path| path.display().to_string()) })
     };
     let message = if killed {
-        "Игра была завершена принудительно".to_owned()
+        tr("The game was stopped by force", "Игра была завершена принудительно").to_owned()
     } else {
         match exit_code {
-            Some(code) => format!("Игра завершилась с кодом {code}"),
-            None => "Игра была завершена сигналом".to_owned(),
+            Some(code) => tr_fmt!("The game exited with code {code}", "Игра завершилась с кодом {code}"),
+            None => tr("The game was ended by a signal", "Игра была завершена сигналом").to_owned(),
         }
     };
     if let Some(crash) = &crash {
@@ -429,9 +431,11 @@ async fn prepare(
     )
     .await?;
     if !preliminary.is_java_compatible(java.major) {
-        let warning = format!(
+        let warning = tr_fmt!(
+            "Warning: Java {} may not suit this game version (one of {:?} is needed)",
             "Предупреждение: Java {} может не подходить этой версии игры (нужна одна из {:?})",
-            java.major, preliminary.compatible_java_majors
+            java.major,
+            preliminary.compatible_java_majors
         );
         log.line("launcher", &warning);
     }
@@ -440,7 +444,7 @@ async fn prepare(
     let assets = if online {
         install_game(&state.http, paths, &profile, task, progress).await?
     } else {
-        log.line("launcher", "Нет сети: используются уже загруженные файлы игры");
+        log.line("launcher", tr("No network: using the game files already downloaded", "Нет сети: используются уже загруженные файлы игры"));
         check_installed(paths, &profile).await?
     };
     drop(installing);
@@ -459,7 +463,7 @@ async fn prepare(
     let extra_jvm_args = cmdline::split(&settings.jvm_args)?;
     let (min_memory_mb, max_memory_mb) = if settings.memory.auto {
         let tuning = tune(total_memory_mib());
-        log.line("launcher", &format!("Автоподбор памяти: {}-{} МиБ", tuning.min_mib, tuning.max_mib));
+        log.line("launcher", &tr_fmt!("Memory picked automatically: {}-{} MiB", "Автоподбор памяти: {}-{} МиБ", tuning.min_mib, tuning.max_mib));
         (tuning.min_mib, tuning.max_mib)
     } else {
         (settings.memory.min_mib, settings.memory.max_mib)
@@ -470,7 +474,7 @@ async fn prepare(
     // Masked in every log line from now on (before the command line is logged and the game starts) and in
     // an uploaded log; masking ignores tokens too short to be real (offline placeholders).
     log.add_secret(&identity.account.access_token);
-    log.line("launcher", &format!("Аккаунт: {} ({})", account.name, identity.account.user_type));
+    log.line("launcher", &tr_fmt!("Account: {} ({})", "Аккаунт: {} ({})", account.name, identity.account.user_type));
 
     let window = (!settings.window.maximized).then_some(WindowSize { width: settings.window.width, height: settings.window.height });
     let options = LaunchOptions {
@@ -490,7 +494,7 @@ async fn prepare(
         join_server,
     };
     let command = build_command(paths, &profile, &assets, &options).await?;
-    log.line("launcher", &format!("Команда запуска: {}", command.display_redacted()));
+    log.line("launcher", &tr_fmt!("Launch command: {}", "Команда запуска: {}", command.display_redacted()));
     Ok(command)
 }
 

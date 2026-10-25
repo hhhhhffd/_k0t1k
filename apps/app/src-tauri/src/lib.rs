@@ -66,6 +66,10 @@ pub fn run() {
             std::fs::create_dir_all(&webview_dir)?;
             onboarding::sweep_stale_roots(state.paths.root());
             record_created_shortcuts(app.handle(), &state);
+            match k0t1k_core::settings::GlobalSettings::load(&state.paths) {
+                Ok(settings) => k0t1k_core::i18n::set_language(settings.ui.language),
+                Err(error) => tracing::warn!("cannot read the language from the settings: {error}"),
+            }
             app.manage(state);
             window::create(app.handle())?;
             if !onboarding {

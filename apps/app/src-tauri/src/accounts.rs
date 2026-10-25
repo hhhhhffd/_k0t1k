@@ -4,6 +4,7 @@
 //! returns it, `finish_microsoft_login` waits until the user has entered it. `cancel_microsoft_login`
 //! stops the wait (closing the dialog).
 
+use k0t1k_core::i18n::tr;
 use k0t1k_core::auth::{self, ElybyOutcome, microsoft};
 use k0t1k_core::settings::Account;
 use serde::Serialize;
@@ -61,12 +62,12 @@ pub async fn finish_microsoft_login(state: State<'_, AppState>) -> CommandResult
     let client_id = client_id()?;
     let (device, mut cancelled) = {
         let pending = state.microsoft_login.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let pending = pending.as_ref().ok_or_else(|| AppError::new("вход через Microsoft не начат"))?;
+        let pending = pending.as_ref().ok_or_else(|| AppError::new(tr("Microsoft sign-in has not been started", "вход через Microsoft не начат")))?;
         (pending.device.clone(), pending.cancel.subscribe())
     };
     let outcome = tokio::select! {
         account = auth::complete_microsoft_login(&state.paths, &state.http, client_id, &device) => account.map_err(AppError::from),
-        _ = cancelled.wait_for(|cancelled| *cancelled) => Err(AppError::new("вход через Microsoft отменён")),
+        _ = cancelled.wait_for(|cancelled| *cancelled) => Err(AppError::new(tr("Microsoft sign-in was cancelled", "вход через Microsoft отменён"))),
     };
     // A newer sign-in may have replaced this one; only clear our own.
     let mut pending = state.microsoft_login.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -95,7 +96,7 @@ pub async fn elyby_login(
     let username = username.trim();
     let totp = totp.as_deref().map(str::trim).filter(|code| !code.is_empty());
     if username.is_empty() || password.is_empty() {
-        return Err(AppError::new("введите логин и пароль ely.by"));
+        return Err(AppError::new(tr("Enter the ely.by login and password", "введите логин и пароль ely.by")));
     }
     Ok(match auth::elyby_login(&state.paths, &state.http, username, &password, totp).await? {
         ElybyOutcome::Done(account) => ElybyLoginResult { account: Some(account), two_factor_required: false },

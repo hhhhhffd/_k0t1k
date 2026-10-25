@@ -14,7 +14,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use k0t1k_core::i18n::tr;
 use k0t1k_core::settings::{GlobalSettings, OnClose, OnGameLaunch};
+use k0t1k_core::tr_fmt;
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
 
@@ -23,10 +25,6 @@ use crate::state::{AppState, SessionId};
 use crate::{launch, tray};
 
 pub const MAIN: &str = "main";
-
-const YES: &str = "Да";
-const NO: &str = "Нет";
-const CANCEL: &str = "Отмена";
 
 /// How long exiting waits for killed games to end and their playtime to be saved.
 const KILL_WAIT: Duration = Duration::from_secs(5);
@@ -210,19 +208,20 @@ fn ask_and_exit(app: &AppHandle) {
         exit(app);
         return;
     }
+    let (yes, no, cancel) = (tr("Yes", "Да"), tr("No", "Нет"), tr("Cancel", "Отмена"));
     let answer = app
         .dialog()
-        .message(format!("Запущено: {}.\nЗакрыть игру тоже?", names.join(", ")))
+        .message(tr_fmt!("Running: {}.\nClose the game too?", "Запущено: {}.\nЗакрыть игру тоже?", names.join(", ")))
         .title("_k0t1k")
         .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::YesNoCancelCustom(YES.to_owned(), NO.to_owned(), CANCEL.to_owned()))
+        .buttons(MessageDialogButtons::YesNoCancelCustom(yes.to_owned(), no.to_owned(), cancel.to_owned()))
         .blocking_show_with_result();
     match answer {
-        MessageDialogResult::Custom(label) if label == YES => {
+        MessageDialogResult::Custom(label) if label == yes => {
             kill_games(app);
             exit(app);
         }
-        MessageDialogResult::Custom(label) if label == NO => exit(app),
+        MessageDialogResult::Custom(label) if label == no => exit(app),
         _ => {}
     }
 }

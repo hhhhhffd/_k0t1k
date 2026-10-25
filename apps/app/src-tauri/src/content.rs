@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use k0t1k_core::i18n::tr;
+use k0t1k_core::tr_fmt;
 use k0t1k_core::component::MINECRAFT_UID;
 use k0t1k_core::content::pack_url::{PackUrl, parse_pack_url};
 use k0t1k_core::content::packwiz::PwMod;
@@ -187,7 +189,7 @@ pub async fn install_version(
     let version = fetch_version(&state, platform, &project_id, &version_id).await?;
 
     let task = format!("install:{instance_id}:{}", version.id);
-    let title = format!("Установка: {}", version.name);
+    let title = tr_fmt!("Installing: {}", "Установка: {}", version.name);
     let progress = progress_fn(&app, &task, &title);
     tracked(&app, &task, &title, async {
         Ok(core_content::install_version(&state.clients, &ctx, kind, &version, &progress).await?)
@@ -235,7 +237,7 @@ pub async fn import_modpack_file(app: AppHandle, state: State<'_, AppState>, pat
     let zip_path = PathBuf::from(&path);
     let label = name.clone().unwrap_or_else(|| zip_path.file_stem().map_or_else(|| path.clone(), |stem| stem.to_string_lossy().into_owned()));
     let task = format!("modpack:{path}");
-    let title = format!("Импорт модпака: {label}");
+    let title = tr_fmt!("Importing modpack: {label}", "Импорт модпака: {label}");
     tracked(&app, &task, &title, create_from_pack(&app, &state, zip_path, name, None, &task, &title)).await
 }
 
@@ -263,12 +265,12 @@ async fn install_managed_pack(
     let version = fetch_version(state, platform, &project_id, &version_id).await?;
     let project = state.clients.project(platform, &project_id).await?;
     let task = format!("modpack:{platform:?}:{version_id}");
-    let title = format!("Установка модпака: {}", name.as_deref().unwrap_or(&project.title));
+    let title = tr_fmt!("Installing modpack: {}", "Установка модпака: {}", name.as_deref().unwrap_or(&project.title));
 
     let work = async {
-        progress_step(app, &task, &title, "Скачивание пакета", 0, 1);
+        progress_step(app, &task, &title, tr("Downloading the pack", "Скачивание пакета"), 0, 1);
         let zip_path = download_pack(state, &version).await?;
-        progress_step(app, &task, &title, "Скачивание пакета", 1, 1);
+        progress_step(app, &task, &title, tr("Downloading the pack", "Скачивание пакета"), 1, 1);
         let managed_pack = ManagedPack {
             platform: match platform {
                 Platform::Modrinth => ManagedPlatform::Modrinth,
@@ -358,15 +360,15 @@ async fn import_pack_from_link(app: &AppHandle, state: &AppState, url: &str, nam
         .unwrap_or_else(|| "modpack.zip".to_owned());
     let label = name.clone().unwrap_or_else(|| Path::new(&file_name).file_stem().map_or_else(|| file_name.clone(), |stem| stem.to_string_lossy().into_owned()));
     let task = format!("modpack:{url}");
-    let title = format!("Импорт модпака: {label}");
+    let title = tr_fmt!("Importing modpack: {label}", "Импорт модпака: {label}");
 
     let work = async {
         let dir = state.paths.cache_dir().join("modpack-links").join(chrono::Utc::now().timestamp_millis().to_string());
         let zip_path = dir.join(&file_name);
-        progress_step(app, &task, &title, "Скачивание пакета", 0, 1);
+        progress_step(app, &task, &title, tr("Downloading the pack", "Скачивание пакета"), 0, 1);
         let imported = match download_checked(&state.http, url, &zip_path, None).await {
             Ok(()) => {
-                progress_step(app, &task, &title, "Скачивание пакета", 1, 1);
+                progress_step(app, &task, &title, tr("Downloading the pack", "Скачивание пакета"), 1, 1);
                 create_from_pack(app, state, zip_path, name, None, &task, &title).await
             }
             Err(error) => Err(error.into()),
@@ -396,12 +398,12 @@ pub async fn update_modpack(app: AppHandle, state: State<'_, AppState>, instance
     };
     let version = fetch_version(&state, platform, &managed.project_id, &version_id).await?;
     let task = format!("modpack-update:{instance_id}");
-    let title = format!("Обновление модпака: {}", instance.name);
+    let title = tr_fmt!("Updating modpack: {}", "Обновление модпака: {}", instance.name);
 
     let work = async {
-        progress_step(&app, &task, &title, "Скачивание пакета", 0, 1);
+        progress_step(&app, &task, &title, tr("Downloading the pack", "Скачивание пакета"), 0, 1);
         let zip_path = download_pack(&state, &version).await?;
-        progress_step(&app, &task, &title, "Скачивание пакета", 1, 1);
+        progress_step(&app, &task, &title, tr("Downloading the pack", "Скачивание пакета"), 1, 1);
         let inspected = zip_path.clone();
         let manifest = blocking(move || inspect_modpack(&inspected)).await?;
         // Resolving also checks that the new version's Minecraft and loader exist, before any file changes.

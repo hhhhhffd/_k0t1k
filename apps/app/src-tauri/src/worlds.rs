@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Local, Utc};
+use k0t1k_core::tr_fmt;
 use k0t1k_core::content::{self as core_content, InstallContext, InstallReport, Platform, ResourceKind};
 use k0t1k_core::instance::worlds::{self, GameMode, World};
 use serde::Serialize;
@@ -195,7 +196,7 @@ pub async fn install_datapack(
     let version = fetch_version(&state, platform, &project_id, &version_id).await?;
 
     let task = format!("datapack:{instance_id}:{world}:{}", version.id);
-    let title = format!("Установка: {}", version.name);
+    let title = tr_fmt!("Installing: {}", "Установка: {}", version.name);
     let progress = progress_fn(&app, &task, &title);
     tracked(&app, &task, &title, async {
         Ok(core_content::install_version(&state.clients, &ctx, ResourceKind::DataPack, &version, &progress).await?)

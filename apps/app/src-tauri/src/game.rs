@@ -1,5 +1,6 @@
 //! Steps shared by creating, importing and launching instances.
 
+use k0t1k_core::tr_fmt;
 use k0t1k_core::component::ComponentSpec;
 use k0t1k_core::install::install_game;
 use k0t1k_core::instance::Instance;
@@ -37,7 +38,7 @@ pub async fn resolve(paths: &Paths, specs: Vec<ComponentSpec>) -> CommandResult<
 /// Downloads libraries and assets of a new instance in the background, so its first launch is fast.
 pub fn spawn_game_install(app: AppHandle, state: AppState, instance: Instance, components: Vec<ResolvedComponent>) {
     let task = format!("game:{}", instance.id);
-    let title = format!("Загрузка игры: {}", instance.name);
+    let title = tr_fmt!("Downloading the game: {}", "Загрузка игры: {}", instance.name);
     // Held until the handle is registered: the task removes itself from the map when it ends.
     let mut installs = state.game_installs();
     let handle = tauri::async_runtime::spawn({

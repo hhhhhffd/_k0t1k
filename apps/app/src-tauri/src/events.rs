@@ -4,6 +4,7 @@ use std::future::Future;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use k0t1k_core::i18n::tr;
 use k0t1k_core::progress::{ProgressEvent, ProgressFn};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -111,7 +112,7 @@ pub fn progress_step(app: &AppHandle, task: &str, title: &str, stage: &str, done
 
 /// Ends the task row of an operation that was stopped on purpose.
 pub fn cancelled(app: &AppHandle, task: &str, title: &str) {
-    let mut end = payload(task, title, "Отменено", 1, 1);
+    let mut end = payload(task, title, tr("Cancelled", "Отменено"), 1, 1);
     end.finished = true;
     emit(app, "progress", end);
 }
@@ -119,11 +120,11 @@ pub fn cancelled(app: &AppHandle, task: &str, title: &str) {
 /// Runs `work` and ends the task row with `finished`, or with `error` when it fails.
 pub async fn tracked<T>(app: &AppHandle, task: &str, title: &str, work: impl Future<Output = CommandResult<T>>) -> CommandResult<T> {
     let result = work.await;
-    let mut end = payload(task, title, "Готово", 1, 1);
+    let mut end = payload(task, title, tr("Done", "Готово"), 1, 1);
     match &result {
         Ok(_) => end.finished = true,
         Err(error) => {
-            end.event.stage = "Ошибка".to_owned();
+            end.event.stage = tr("Error", "Ошибка").to_owned();
             end.error = Some(error.to_string());
         }
     }

@@ -1,5 +1,7 @@
 //! Feed The Beast modpacks: browse the public FTB catalogue and install a pack version as an instance.
 
+use k0t1k_core::i18n::tr;
+use k0t1k_core::tr_fmt;
 use k0t1k_core::component::{ComponentSpec, MINECRAFT_UID};
 use k0t1k_core::content::ftb::{FtbPack, FtbVersion, install_files};
 use k0t1k_core::instance::NewInstance;
@@ -36,10 +38,10 @@ pub async fn install_ftb_pack(
     let state = state.inner().clone();
     let pack = state.clients.ftb.pack(pack_id).await?;
     let task = format!("ftb:{pack_id}:{version_id}");
-    let title = format!("Установка модпака: {}", name.as_deref().unwrap_or(&pack.name));
+    let title = tr_fmt!("Installing modpack: {}", "Установка модпака: {}", name.as_deref().unwrap_or(&pack.name));
 
     let work = async {
-        progress_step(&app, &task, &title, "Загрузка описания пакета", 0, 1);
+        progress_step(&app, &task, &title, tr("Loading the pack description", "Загрузка описания пакета"), 0, 1);
         let manifest = state.clients.ftb.manifest(pack_id, version_id).await?;
         let mut specs = vec![ComponentSpec { uid: MINECRAFT_UID.to_owned(), version: manifest.minecraft_version.clone(), dependency_only: false }];
         if let Some(loader) = &manifest.loader {

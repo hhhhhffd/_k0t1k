@@ -1,5 +1,6 @@
 //! Global settings, offline accounts and system information (premium accounts: `accounts`).
 
+use k0t1k_core::i18n::set_language;
 use k0t1k_core::instance::SharedFolder;
 use k0t1k_core::launch::offline_uuid;
 use k0t1k_core::settings::{Account, AccountKind, GlobalSettings, total_memory_mib};
@@ -12,6 +13,7 @@ use tauri_plugin_opener::OpenerExt;
 use crate::datadir::{self, DataDirSource};
 use crate::error::{AppError, CommandResult, blocking};
 use crate::state::AppState;
+use crate::tray;
 
 const NAME_LENGTH: std::ops::RangeInclusive<usize> = 3..=16;
 
@@ -39,8 +41,9 @@ pub async fn get_settings(state: State<'_, AppState>) -> CommandResult<GlobalSet
 /// Accounts, the global playtime and the onboarding record are owned by their own commands and the
 /// launch sequence, so a settings form holding an older copy cannot overwrite them.
 #[tauri::command]
-pub async fn save_settings(state: State<'_, AppState>, settings: GlobalSettings) -> CommandResult<()> {
+pub async fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: GlobalSettings) -> CommandResult<()> {
     let paths = state.paths.clone();
+    let language = settings.ui.language;
     blocking(move || {
         settings.ui.validate()?;
         GlobalSettings::update(&paths, |current| {
@@ -56,7 +59,11 @@ pub async fn save_settings(state: State<'_, AppState>, settings: GlobalSettings)
         })
         .map(|_| ())
     })
-    .await
+    .await?;
+    // The tray menu is built from translated labels, so it follows the language change.
+    set_language(language);
+    tray::refresh(&app);
+    Ok(())
 }
 
 #[tauri::command]

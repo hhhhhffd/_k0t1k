@@ -3,6 +3,8 @@
 
 use std::sync::Mutex;
 
+use k0t1k_core::i18n::tr;
+use k0t1k_core::tr_fmt;
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
@@ -20,15 +22,15 @@ static REFRESH: Mutex<()> = Mutex::new(());
 
 /// `(session id, menu label)` of every live session.
 fn build_menu(app: &AppHandle, running: &[(SessionId, String)]) -> tauri::Result<Menu<tauri::Wry>> {
-    let open = MenuItem::with_id(app, OPEN, "Открыть _k0t1k", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, OPEN, tr("Open _k0t1k", "Открыть _k0t1k"), true, None::<&str>)?;
     let stops = running
         .iter()
-        .map(|(id, label)| MenuItem::with_id(app, format!("{STOP_PREFIX}{id}"), format!("Остановить: {label}"), true, None::<&str>))
+        .map(|(id, label)| MenuItem::with_id(app, format!("{STOP_PREFIX}{id}"), tr_fmt!("Stop: {label}", "Остановить: {label}"), true, None::<&str>))
         .collect::<tauri::Result<Vec<_>>>()?;
     let stop_items: Vec<&dyn IsMenuItem<tauri::Wry>> = stops.iter().map(|item| item as _).collect();
-    let games = Submenu::with_items(app, "Запущенные игры", !stops.is_empty(), &stop_items)?;
+    let games = Submenu::with_items(app, tr("Running games", "Запущенные игры"), !stops.is_empty(), &stop_items)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let exit = MenuItem::with_id(app, EXIT, "Выход", true, None::<&str>)?;
+    let exit = MenuItem::with_id(app, EXIT, tr("Exit", "Выход"), true, None::<&str>)?;
     Menu::with_items(app, &[&open, &games, &separator, &exit])
 }
 
