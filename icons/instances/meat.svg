@@ -1,3 +1,3 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" stroke-linecap="round" stroke-linejoin="round">
-<path fill="#ff7a5a" fill-opacity=".18" stroke="#ff7a5a" stroke-width="3" d="M41 37 C33 47 15 45 11 33 C7 21 17 9 29 11 C41 13 49 27 41 37 Z"/><rect fill="#f4f4ff" x="19" y="18" width="8" height="5" rx="2.5"/><path fill="none" stroke="#f4f4ff" stroke-width="5" d="M41 37 L48 44"/><circle fill="#f4f4ff" cx="52" cy="45" r="4"/><circle fill="#f4f4ff" cx="46" cy="51" r="4"/>
+<path fill="#f4f4ff" d="M38 36 L47 45 L44 48 L35 39 Z"/><circle fill="#f4f4ff" cx="51" cy="45" r="5"/><circle fill="#f4f4ff" cx="45" cy="51" r="5"/><path fill="#d9574a" d="M42 36 C34 48 14 46 10 33 C6 20 17 8 29 10 C42 12 50 26 42 36 Z"/><path fill="#a93c35" d="M42 36 C34 48 14 46 10 33 C18 40 34 40 42 36 Z"/><rect fill="#ff9a85" x="17" y="17" width="9" height="6" rx="3"/>
 </svg>

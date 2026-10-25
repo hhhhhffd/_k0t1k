@@ -1,7 +1,9 @@
 # Asset attribution
 
-The instance icons in `icons/instances/` (repository root) are the launcher's own artwork, drawn from scratch;
-only their keys and subjects follow Prism Launcher's instance icons.
+The instance icons in `icons/instances/` (repository root) are drawn from scratch as SVG, after the
+instance icons of Prism Launcher (keys, subjects and layout). Prism's icons are CC BY-SA 4.0, so these
+icons are released under CC BY-SA 4.0 too: https://creativecommons.org/licenses/by-sa/4.0/ .
+Original icons: (c) Prism Launcher contributors, https://github.com/PrismLauncher/PrismLauncher .
 
 ## brands/
 
