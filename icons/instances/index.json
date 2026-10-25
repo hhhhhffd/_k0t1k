@@ -219,22 +219,20 @@
   },
   {
     "id": "ftb_logo",
-    "name": "FTB",
-    "file": "ftb-logo.svg",
+    "name": "Modpack",
+    "file": "modpack.svg",
     "tags": [
       "meta",
-      "modpack",
-      "ftb"
+      "modpack"
     ]
   },
   {
     "id": "ftb_glow",
-    "name": "FTB (tile)",
-    "file": "ftb-glow.svg",
+    "name": "Puzzle",
+    "file": "puzzle.svg",
     "tags": [
       "meta",
-      "modpack",
-      "ftb"
+      "modpack"
     ]
   }
 ]

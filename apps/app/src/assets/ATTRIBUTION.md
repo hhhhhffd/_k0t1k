@@ -1,24 +1,17 @@
 # Asset attribution
 
-The instance icons in `icons/instances/` (repository root) are drawn from scratch as SVG, after the
-instance icons of Prism Launcher (keys, subjects and layout). Prism's icons are CC BY-SA 4.0, so these
-icons are released under CC BY-SA 4.0 too: https://creativecommons.org/licenses/by-sa/4.0/ .
-Original icons: (c) Prism Launcher contributors, https://github.com/PrismLauncher/PrismLauncher .
+## Instance icons
+
+The instance icons in `icons/instances/` (repository root) are original work of this project, drawn as pixel
+art (see `icons/STYLE.md`). The icon keys in `icons/instances/index.json`
+are only identifiers for interoperability with imported instances; no artwork is taken from other projects.
 
 ## brands/
 
-Logos are trademarks of their respective owners and are used only to identify the
-corresponding service. `launcher/resources/...` paths are in
-https://github.com/PrismLauncher/PrismLauncher (branch `develop`).
+Logos are trademarks of their respective owners and are used only to identify the corresponding service.
 
 | File | Source | License / status |
 |------|--------|------------------|
-| `modrinth.svg` | `launcher/resources/multimc/scalable/instances/modrinth.svg` | Modrinth trademark; Prism's copy is tagged CC BY-SA 4.0 |
-| `ftb.svg` | `launcher/resources/multimc/scalable/instances/ftb_logo.svg` | Feed The Beast trademark; Prism's copy is tagged CC BY-SA 4.0 |
-| `prism.svg` | `launcher/resources/multimc/scalable/instances/prismlauncher.svg` | Prism Launcher logo; CC BY-SA 4.0 (`program_info/LICENSE`: applies to logos and branding) |
-| `curseforge.svg` | simple-icons v13.0.0 `icons/curseforge.svg` (https://github.com/simple-icons/simple-icons), recolored to CurseForge orange `#F16436` | Icon set is CC0-1.0; the CurseForge mark is a trademark of Overwolf |
-
-Prism Launcher logo: (c) Prism Launcher contributors (AutiOne, Boba, ely, Fulmine,
-gon sawa, Pankakes, tobimori, Zeke), CC BY-SA 4.0,
-https://creativecommons.org/licenses/by-sa/4.0/ . The recolored/redistributed
-SVGs here are unmodified except for the CurseForge fill color.
+| `modrinth.svg` | simple-icons v13.0.0 `icons/modrinth.svg` (https://github.com/simple-icons/simple-icons), filled with Modrinth green `#1BD96A` | Icon set is CC0-1.0; the Modrinth mark is a trademark of Modrinth |
+| `curseforge.svg` | simple-icons v13.0.0 `icons/curseforge.svg`, recolored to CurseForge orange `#F16436` | Icon set is CC0-1.0; the CurseForge mark is a trademark of Overwolf |
+| `ftb.svg` | Original plain "FTB" text badge | Original work; "FTB" and "Feed The Beast" are trademarks of their owners, used only to name the service |
