@@ -3,10 +3,8 @@
 Goal: a Minecraft launcher that matches Prism Launcher's functionality, built on the Modrinth App stack
 (Tauri 2 + Rust core + Vue 3/TypeScript/Tailwind). Windows first. Accounts: offline, Microsoft and ely.by.
 
-Reference guides distilled from Prism's source live in `docs/prism/`:
-- `launch-pipeline.md`: meta, components, libraries, assets, the launch command line, Forge/NeoForge via ForgeWrapper.
-- `java-instances.md`: Java detection/download, JVM settings, instances, playtime, links, launch extras.
-- `mod-platforms.md`: Modrinth/CurseForge APIs, murmur2, packwiz metadata, jar parsing, modpack import/export.
+Working notes distilled from Prism's source (meta and launch pipeline, Java and instances, Modrinth/CurseForge)
+are kept locally in `docs/prism/`, which is git-ignored.
 
 ## Layout
 
@@ -38,7 +36,7 @@ apps/app/src           Vue 3 UI
   with `shareResourcepacks` are converted on read (true = only resourcepacks). Named pools (different shared
   sets for groups of instances) would go in as a pool id in the shared path (`shared/<pool>/<folder>`), with
   the current list being the implicit default pool, so no migration would be needed.
-- **Shared server list**: `servers` is a fifth `SharedFolder` value, but `servers.dat` is a file the game replaces on
+- **Shared server list**: `servers` is the fourth `SharedFolder` value, but `servers.dat` is a file the game replaces on
   save (temp file + rename), which breaks hardlinks and replaces file symlinks, so it is synchronised, not linked.
   `shared/servers.dat` is the master. Enabling merges the instance's entries into it (entries whose address, case-
   insensitive, is missing are appended in order; unknown NBT tags survive), then copies it into the game dir;
@@ -118,14 +116,24 @@ present, otherwise the executable's own folder (Prism-portable style) when it is
 
 ```
 settings.json            global settings
+accounts.json            account tokens (DPAPI-encrypted on Windows)
 meta/                    cached Prism meta JSON (meta/<uid>/index.json, meta/<uid>/<version>.json)
 libraries/               Maven layout; must be named "libraries" (ForgeWrapper walks up to find it)
 assets/                  indexes/, objects/, virtual/
 java/<component>/        managed Java runtimes
 shared/<folder>/         resourcepacks, shaderpacks, screenshots shared between instances
-instances/<id>/          instance.json + minecraft/ (game dir) + sessions/<session>/ (natives of a live launch)
+shared/servers.dat       master copy of the shared server list
+instances/<id>/          instance.json + minecraft/ (game dir) + sessions/<session>/ (natives and launch-args.txt
+                         of a live launch)
 cache/                   downloads cache
+webview/                 WebView2 profile
+logs/                    launcher.log for this run, launcher.1.log ... launcher.5.log for earlier runs
+icons/                   user pictures offered as instance icons
+catpacks/, iconsets/,    user cat pictures, toolbar icon sets and theme .json files (created on demand)
+themes/
 ```
+
+`data-dir.txt` lives next to the exe, not in the data folder.
 
 ### First run, install and uninstall (`onboarding.rs`, `core::placement`)
 
@@ -153,11 +161,12 @@ swept at the next start.
 Goal: while a game runs the launcher costs ~15-30 MB and no CPU. WebView2's processes are the heavy part, so
 the main window is destroyed (not hidden) and the Rust process alone keeps running behind a tray icon.
 
-- The tray icon exists for the whole run. Left click opens the window (recreating it); the menu has "Открыть",
-  a submenu of running sessions ("<name>", or "<name> #<n>" for later launches and for instances with several
-  sessions) with a stop item each (rebuilt on every `instance-state`, no timers) and "Выход".
-- `behavior.onGameLaunch`: `free_memory` (default) destroys the window when a session reaches `running`,
-  `hide_to_tray` hides it, `keep_open` does nothing. When the last session of all instances ends, a window released this way is
+- The tray icon exists for the whole run. Left click opens the window (recreating it); the menu has "Открыть _k0t1k",
+  a "Запущенные игры" submenu with an "Остановить: <label>" item per running session (label "<name>", or
+  "<name> #<n>" for later launches and for instances with several sessions; rebuilt on every `instance-state`,
+  no timers) and "Выход".
+- `behavior.onGameLaunch`: `hide_to_tray` (default) destroys the window when a session reaches `running`, leaving
+  only the tray icon; `keep_open` does nothing. `free_memory` in older settings files is read as `hide_to_tray`. When the last session of all instances ends, a window released this way is
   recreated/shown. Opening the window yourself clears the mark, so a window you closed afterwards stays closed.
 - `behavior.onClose`: `tray` (default) destroys the window on close, `exit` quits. With games running, exit
   (and the tray's "Выход") asks in a native dialog: Да = kill all sessions (waits until playtime is saved), Нет = leave
@@ -192,7 +201,14 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
   uses G1 by default). The choice is written to the session log. A CurseForge pack's `recommendedRam` is applied at
   import as an instance memory override, capped at 90% of the RAM (`cap_recommended_ram`, as in Prism).
 
-## Later (ideas already accounted for)
+## Appearance
 
-Themes and a lightweight mode for low-end PCs, ely.by skins,
-Windows 10 1607 support (WebView2 bootstrapper is embedded), custom clients (Lunar, LabyMod).
+- Themes: built-in ones plus custom themes (`ui.customThemes`, edited in Settings, or `themes/*.json`); lite mode
+  (`ui.liteMode`) turns off blur, shadows and animations. Cat pictures (`ui.catPack`) and toolbar icon sets
+  (`ui.iconSet`) come from `catpacks/` and `iconsets/`.
+- Built-in instance icons are SVGs in the repo-root `icons/instances/`; `index.json` there gives their keys (Prism's
+  icon keys, so imported Prism instances keep their icon) and the picker order. Unknown keys show `grass`.
+
+## Later
+
+ely.by skins, custom clients (Lunar, LabyMod).
