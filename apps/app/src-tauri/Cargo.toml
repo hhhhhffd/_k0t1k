@@ -2,7 +2,7 @@
 name = "k0t1k-app"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
 
 [lib]
 name = "k0t1k_app_lib"
