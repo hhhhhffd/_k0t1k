@@ -1,11 +1,11 @@
 //! Microsoft sign-in: OAuth device code flow, then Xbox Live, XSTS and Minecraft services.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{Secrets, http_error, send_json};
+use super::{AUTH_TIMEOUT, Secrets, http_error, send_json};
 use crate::error::{Error, Result};
 use crate::i18n::tr;
 use crate::tr_fmt;
@@ -46,6 +46,22 @@ fn expired_code_message() -> &'static str {
     tr("The Microsoft sign-in code has expired: start again", "Код входа Microsoft истёк: начните вход заново")
 }
 
+/// Steps of a sign-in the UI shows; each event marks the start of the step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LoginStage {
+    /// Waiting for the user to enter the code in the browser.
+    Waiting,
+    /// The code is confirmed: the Microsoft token is in hand.
+    Microsoft,
+    /// Xbox Live and XSTS.
+    Xbox,
+    /// `login_with_xbox`.
+    Minecraft,
+    Profile,
+    Done,
+}
+
 /// The code the user types at `verification_uri`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceCode {
@@ -79,6 +95,8 @@ enum Poll {
     Done(TokenResponse),
     Pending,
     SlowDown,
+    /// A 5xx answer: the service is having a moment, not the sign-in failing.
+    Unavailable(reqwest::StatusCode),
 }
 
 /// Microsoft tokens; `refresh_token` is `None` when Microsoft did not rotate it.
@@ -88,7 +106,7 @@ pub struct MicrosoftTokens {
 }
 
 pub async fn request_device_code(http: &reqwest::Client, client_id: &str) -> Result<DeviceCode> {
-    let request = http.post(DEVICE_CODE_URL).form(&[("client_id", client_id), ("scope", SCOPE)]);
+    let request = http.post(DEVICE_CODE_URL).timeout(AUTH_TIMEOUT).form(&[("client_id", client_id), ("scope", SCOPE)]);
     let response = request.send().await.map_err(|source| http_error(DEVICE_CODE_URL, source))?;
     if !response.status().is_success() {
         let body = response.text().await.unwrap_or_default();
@@ -115,8 +133,9 @@ pub async fn poll_token(http: &reqwest::Client, client_id: &str, device: &Device
             Ok(Poll::Done(tokens)) => return Ok(into_tokens(tokens)),
             Ok(Poll::Pending) => {}
             Ok(Poll::SlowDown) => interval += SLOW_DOWN_STEP,
+            Ok(Poll::Unavailable(status)) => tracing::warn!("device code poll got HTTP {status}, retrying"),
             // A network hiccup must not end a sign-in the user is still completing; the deadline does.
-            Err(Error::Http { url, source }) => tracing::warn!("device code poll failed for {url}, retrying: {source}"),
+            Err(Error::Http { url, source }) => tracing::warn!("device code poll failed for {url} (HTTP status {:?}), retrying: {source}", source.status()),
             Err(error) => return Err(error),
         }
     }
@@ -133,6 +152,7 @@ pub async fn refresh(http: &reqwest::Client, client_id: &str, refresh_token: &st
     match token_request(http, &form).await? {
         Poll::Done(tokens) => Ok(into_tokens(tokens)),
         Poll::Pending | Poll::SlowDown => Err(Error::Other(relogin_message().to_owned())),
+        Poll::Unavailable(status) => Err(Error::Other(tr_fmt!("Microsoft returned error {}", "Microsoft вернул ошибку {}", status))),
     }
 }
 
@@ -141,9 +161,12 @@ fn into_tokens(tokens: TokenResponse) -> MicrosoftTokens {
 }
 
 async fn token_request(http: &reqwest::Client, form: &[(&str, &str)]) -> Result<Poll> {
-    let response = http.post(TOKEN_URL).form(form).send().await.map_err(|source| http_error(TOKEN_URL, source))?;
+    let response = http.post(TOKEN_URL).timeout(AUTH_TIMEOUT).form(form).send().await.map_err(|source| http_error(TOKEN_URL, source))?;
     if response.status().is_success() {
         return Ok(Poll::Done(response.json().await.map_err(|source| http_error(TOKEN_URL, source))?));
+    }
+    if response.status().is_server_error() {
+        return Ok(Poll::Unavailable(response.status()));
     }
     let body = response.text().await.unwrap_or_default();
     classify_token_error(&body)
@@ -217,12 +240,15 @@ pub async fn secrets_from_tokens(
     http: &reqwest::Client,
     tokens: MicrosoftTokens,
     previous_refresh_token: Option<&str>,
+    on_stage: &dyn Fn(LoginStage),
 ) -> Result<Secrets> {
     let refresh_token = tokens
         .refresh_token
         .or_else(|| previous_refresh_token.map(str::to_owned))
         .ok_or_else(|| Error::Other(tr("Microsoft did not return a refresh token", "Microsoft не вернул токен обновления").to_owned()))?;
 
+    on_stage(LoginStage::Xbox);
+    let started = Instant::now();
     let xbl_body = json!({
         "Properties": {
             "AuthMethod": "RPS",
@@ -232,7 +258,7 @@ pub async fn secrets_from_tokens(
         "RelyingParty": "http://auth.xboxlive.com",
         "TokenType": "JWT",
     });
-    let xbl: XboxResponse = send_json(http.post(XBL_URL).json(&xbl_body), XBL_URL, "Xbox Live").await?;
+    let xbl: XboxResponse = send_json(http.post(XBL_URL).timeout(AUTH_TIMEOUT).json(&xbl_body), XBL_URL, "Xbox Live").await?;
     let uhs = xbl
         .display_claims
         .xui
@@ -246,45 +272,63 @@ pub async fn secrets_from_tokens(
         "RelyingParty": "rp://api.minecraftservices.com/",
         "TokenType": "JWT",
     });
-    let response = http.post(XSTS_URL).json(&xsts_body).send().await.map_err(|source| http_error(XSTS_URL, source))?;
+    let response = http.post(XSTS_URL).timeout(AUTH_TIMEOUT).json(&xsts_body).send().await.map_err(|source| http_error(XSTS_URL, source))?;
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        tracing::warn!("Microsoft sign-in: XSTS refused (HTTP 401)");
         let body = response.text().await.unwrap_or_default();
         let code = serde_json::from_str::<XboxError>(&body).map_or(0, |error| error.x_err);
         return Err(Error::Other(xsts_error_message(code)));
     }
     if !response.status().is_success() {
+        tracing::warn!("Microsoft sign-in: XSTS failed (HTTP {})", response.status());
         return Err(Error::Other(tr_fmt!("Xbox Live (XSTS) returned error {}", "Xbox Live (XSTS) вернул ошибку {}", response.status())));
     }
     let xsts: XboxResponse = response.json().await.map_err(|source| http_error(XSTS_URL, source))?;
 
+    tracing::info!("Microsoft sign-in: Xbox Live and XSTS done in {} ms", started.elapsed().as_millis());
+
+    on_stage(LoginStage::Minecraft);
+    let started = Instant::now();
     let login_body = json!({ "identityToken": format!("XBL3.0 x={uhs};{}", xsts.token) });
     let response = http
         .post(MINECRAFT_LOGIN_URL)
+        .timeout(AUTH_TIMEOUT)
         .json(&login_body)
         .send()
         .await
         .map_err(|source| http_error(MINECRAFT_LOGIN_URL, source))?;
     if response.status() == reqwest::StatusCode::FORBIDDEN {
+        tracing::warn!("Microsoft sign-in: Minecraft login refused (HTTP 403)");
         return Err(Error::Other(client_not_approved_message().to_owned()));
     }
     if !response.status().is_success() {
+        tracing::warn!("Microsoft sign-in: Minecraft login failed (HTTP {})", response.status());
         return Err(Error::Other(tr_fmt!("Minecraft returned error {}", "Minecraft вернул ошибку {}", response.status())));
     }
     let login: MinecraftLogin = response.json().await.map_err(|source| http_error(MINECRAFT_LOGIN_URL, source))?;
 
+    tracing::info!("Microsoft sign-in: Minecraft login done in {} ms", started.elapsed().as_millis());
+
+    on_stage(LoginStage::Profile);
+    let started = Instant::now();
     let response = http
         .get(MINECRAFT_PROFILE_URL)
+        .timeout(AUTH_TIMEOUT)
         .bearer_auth(&login.access_token)
         .send()
         .await
         .map_err(|source| http_error(MINECRAFT_PROFILE_URL, source))?;
     if response.status() == reqwest::StatusCode::NOT_FOUND {
+        tracing::warn!("Microsoft sign-in: no Minecraft profile (HTTP 404)");
         return Err(Error::Other(no_profile_message().to_owned()));
     }
     if !response.status().is_success() {
+        tracing::warn!("Microsoft sign-in: profile request failed (HTTP {})", response.status());
         return Err(Error::Other(tr_fmt!("The Minecraft profile is unavailable: error {}", "Профиль Minecraft недоступен: ошибка {}", response.status())));
     }
     let profile: MinecraftProfile = response.json().await.map_err(|source| http_error(MINECRAFT_PROFILE_URL, source))?;
+
+    tracing::info!("Microsoft sign-in: profile done in {} ms", started.elapsed().as_millis());
 
     Ok(Secrets::Microsoft(MicrosoftSecrets {
         uuid: profile.id,

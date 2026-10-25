@@ -10,6 +10,7 @@ mod protect;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +22,11 @@ use crate::settings::{Account, AccountKind, GlobalSettings, write_json_private};
 use crate::tr_fmt;
 
 pub use elyby::{ElybySecrets, Login as ElybyLogin};
-pub use microsoft::{DeviceCode, MicrosoftSecrets};
+pub use microsoft::{DeviceCode, LoginStage, MicrosoftSecrets};
+
+/// Upper bound for one request of a sign-in or token refresh: the shared client has no timeout, and a silent
+/// server would otherwise leave the dialog waiting forever.
+pub(crate) const AUTH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Serialises read-modify-write cycles of `accounts.json` within this process.
 static UPDATE_LOCK: Mutex<()> = Mutex::new(());
@@ -180,16 +185,33 @@ pub fn remove_account(paths: &Paths, account_id: &str) -> Result<()> {
 }
 
 /// Finishes a Microsoft sign-in started with [`microsoft::request_device_code`]: waits for the user
-/// to enter the code, then gets the Minecraft profile and stores the account.
+/// to enter the code, then gets the Minecraft profile and stores the account. `on_stage` is told when each
+/// step starts.
 pub async fn complete_microsoft_login(
     paths: &Paths,
     http: &reqwest::Client,
     client_id: &str,
     device: &DeviceCode,
+    on_stage: &dyn Fn(LoginStage),
 ) -> Result<Account> {
-    let tokens = microsoft::poll_token(http, client_id, device).await?;
-    let secrets = microsoft::secrets_from_tokens(http, tokens, None).await?;
-    save_account(paths, secrets)
+    let result = async {
+        on_stage(LoginStage::Waiting);
+        let started = Instant::now();
+        let tokens = microsoft::poll_token(http, client_id, device).await?;
+        tracing::info!("Microsoft sign-in: code confirmed after {} s", started.elapsed().as_secs());
+        on_stage(LoginStage::Microsoft);
+        let secrets = microsoft::secrets_from_tokens(http, tokens, None, on_stage).await?;
+        save_account(paths, secrets)
+    }
+    .await;
+    match &result {
+        Ok(_) => {
+            on_stage(LoginStage::Done);
+            tracing::info!("Microsoft sign-in finished");
+        }
+        Err(error) => tracing::warn!("Microsoft sign-in failed: {error}"),
+    }
+    result
 }
 
 /// Result of [`elyby_login`].
@@ -205,7 +227,8 @@ pub async fn elyby_login(
     password: &str,
     totp: Option<&str>,
 ) -> Result<ElybyOutcome> {
-    match elyby::authenticate(http, username, password, totp).await? {
+    let login = elyby::authenticate(http, username, password, totp).await.inspect_err(|error| tracing::warn!("ely.by sign-in failed: {error}"))?;
+    match login {
         ElybyLogin::Done(secrets) => save_account(paths, secrets).map(ElybyOutcome::Done),
         ElybyLogin::TwoFactorRequired => Ok(ElybyOutcome::TwoFactorRequired),
     }
@@ -277,7 +300,7 @@ async fn fresh_microsoft_secrets(
             let rotated = MicrosoftSecrets { refresh_token: rotated.clone(), ..current.clone() };
             replace_secrets(paths, account_id, Secrets::Microsoft(rotated))?;
         }
-        microsoft::secrets_from_tokens(http, tokens, Some(&current.refresh_token)).await
+        microsoft::secrets_from_tokens(http, tokens, Some(&current.refresh_token), &|_| {}).await
     }
     .await;
     let secrets = match refreshed {

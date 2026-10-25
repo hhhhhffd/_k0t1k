@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{Secrets, http_error};
+use super::{AUTH_TIMEOUT, Secrets, http_error};
 use crate::download::{Checksum, download_checked};
 use crate::error::{Error, Result};
 use crate::i18n::tr;
@@ -67,9 +67,10 @@ pub async fn authenticate(http: &reqwest::Client, username: &str, password: &str
         None => password.to_owned(),
     };
     let body = json!({ "username": username, "password": password, "clientToken": client_token, "requestUser": true });
-    let response = http.post(&url).json(&body).send().await.map_err(|source| http_error(&url, source))?;
+    let response = http.post(&url).timeout(AUTH_TIMEOUT).json(&body).send().await.map_err(|source| http_error(&url, source))?;
     let status = response.status();
     if !status.is_success() {
+        tracing::warn!("ely.by sign-in refused (HTTP {status})");
         let text = response.text().await.unwrap_or_default();
         return match classify_error(status, &text, totp.is_some()) {
             Failure::TwoFactor => Ok(Login::TwoFactorRequired),
@@ -118,7 +119,7 @@ fn classify_error(status: reqwest::StatusCode, body: &str, sent_totp: bool) -> F
 /// offline play does not need it.
 pub async fn ensure_valid(http: &reqwest::Client, secrets: &ElybySecrets) -> Result<Option<ElybySecrets>> {
     let url = format!("{AUTH_URL}/validate");
-    let response = match http.post(&url).json(&json!({ "accessToken": secrets.access_token })).send().await {
+    let response = match http.post(&url).timeout(AUTH_TIMEOUT).json(&json!({ "accessToken": secrets.access_token })).send().await {
         Ok(response) => response,
         Err(error) => {
             tracing::warn!("cannot validate the ely.by token, using the stored one: {error}");
@@ -134,7 +135,7 @@ pub async fn ensure_valid(http: &reqwest::Client, secrets: &ElybySecrets) -> Res
 
     let url = format!("{AUTH_URL}/refresh");
     let body = json!({ "accessToken": secrets.access_token, "clientToken": secrets.client_token, "requestUser": true });
-    let response = http.post(&url).json(&body).send().await.map_err(|source| http_error(&url, source))?;
+    let response = http.post(&url).timeout(AUTH_TIMEOUT).json(&body).send().await.map_err(|source| http_error(&url, source))?;
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         return Err(Error::Other(relogin_message().to_owned()));
