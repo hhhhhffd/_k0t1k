@@ -22,6 +22,8 @@ import UiIcon from '../components/UiIcon.vue'
 import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
+import { usePacksStore } from '../stores/packs'
+import { useRatscanStore } from '../stores/ratscan'
 import { useTasksStore } from '../stores/tasks'
 import { formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'
 import { baseName, useFileDrop } from '../utils/useFileDrop'
@@ -29,6 +31,8 @@ import { baseName, useFileDrop } from '../utils/useFileDrop'
 const props = defineProps<{ id: string }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
+const ratscan = useRatscanStore()
+const packs = usePacksStore()
 const layout = useLayoutStore()
 const router = useRouter()
 const route = useRoute()
@@ -85,6 +89,8 @@ const { dragging } = useFileDrop(async (paths) => {
   const report = await tasks.guard(() => addLocalFiles(instance.value!.id, kind, paths))
   if (!report) return
   if (report.added.length) tasks.toast(t.transfer.addedFiles(report.added.length), 'ok')
+  ratscan.scanAdded(instance.value.id, report.added.filter((a) => a.kind === 'mod').map((a) => a.fileName))
+  void packs.offerConversion(instance.value.id, report.added.filter((a) => a.kind === 'resourcePack').map((a) => a.fileName))
   for (const skipped of report.skipped) {
     tasks.toast(t.transfer.skippedFile(baseName(skipped.path), t.transfer.skipped[skipped.reason]), 'error')
   }

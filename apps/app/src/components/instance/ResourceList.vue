@@ -1,18 +1,24 @@
 <script setup lang="ts">
-import { ArrowUpCircle, ArrowUpFromLine, Lock, LockOpen, Plus, RefreshCw, Search, Trash2 } from '@lucide/vue'
+import { ArrowUpCircle, ArrowUpFromLine, Lock, LockOpen, Plus, RefreshCw, Search, ShieldCheck, Trash2, Wrench } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
-import type { AvailableUpdate, BlockedFile, LocalResource, LocalResourceKind } from '../../api/types'
+import type { AvailableUpdate, BlockedFile, JarScan, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n'
+import { usePacksStore, type PackResult } from '../../stores/packs'
+import { badgeOf, useRatscanStore } from '../../stores/ratscan'
 import { useTasksStore } from '../../stores/tasks'
 import { errorMessage, formatBytes, originPlatform } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContentDialog from '../ContentDialog.vue'
+import ModalDialog from '../ModalDialog.vue'
+import ScanDetailsDialog from '../ScanDetailsDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
 const props = defineProps<{ instanceId: string; kind: LocalResourceKind; sharedNote?: string }>()
 const showContent = ref(false)
 const tasks = useTasksStore()
+const ratscan = useRatscanStore()
+const packs = usePacksStore()
 
 const resources = ref<LocalResource[]>([])
 const loading = ref(true)
@@ -35,9 +41,55 @@ async function load() {
   updates.value = new Map()
   resources.value = (await tasks.guard(() => api.listLocalResources(props.instanceId, props.kind))) ?? []
   loading.value = false
+  // Badges are an extra: a failure to read them must not hide the list.
+  const extras = props.kind === 'mod' ? ratscan.refresh(props.instanceId) : props.kind === 'resourcePack' ? packs.refresh(props.instanceId) : undefined
+  extras?.catch((e: unknown) => console.warn('cannot read the plugin results', e))
 }
 onMounted(load)
 watch(() => [props.instanceId, props.kind], load)
+watch(() => packs.changed, load)
+
+// ---- RatScan (mods) ----
+const jarsByName = computed(() => new Map((ratscan.jars[props.instanceId] ?? []).map((jar) => [jar.fileName, jar])))
+const scanning = computed(() => ratscan.progress?.instanceId === props.instanceId)
+const scanDetails = ref<JarScan | null>(null)
+async function scanMods() {
+  const scanned = await tasks.guard(() => ratscan.scan(props.instanceId))
+  if (scanned !== undefined) tasks.toast(scanned ? t.scan.done(scanned) : t.scan.nothingNew, 'ok')
+}
+const badgeClass = { clean: 'badge-ok', suspicious: 'badge-warn', dangerous: 'badge-danger', unknown: '' } as const
+const badgeText = computed(() => ({ clean: t.scan.clean, suspicious: t.scan.suspicious, dangerous: t.scan.dangerous, unknown: t.scan.unknown }))
+
+// ---- packconv (resource packs) ----
+const packBusy = ref<string | null>(null)
+const packResult = ref<(PackResult & { title: string }) | null>(null)
+const isZipPack = (r: LocalResource) => props.kind === 'resourcePack' && /\.zip(\.disabled)?$/i.test(r.fileName)
+async function convertPack(r: LocalResource) {
+  packBusy.value = r.fileName
+  const result = await tasks.guard(async () => {
+    const target = await packs.targetFor(props.instanceId)
+    if (!target) throw new Error(t.packs.noTarget)
+    return { ...(await packs.convert(props.instanceId, r.fileName, target)), title: t.packs.convertTo(target) }
+  })
+  packBusy.value = null
+  if (result) packResult.value = result
+  await load()
+}
+async function repairPack(r: LocalResource) {
+  packBusy.value = r.fileName
+  const result = await tasks.guard(async () => ({ ...(await packs.repair(props.instanceId, r.fileName)), title: t.packs.repair }))
+  packBusy.value = null
+  if (result) packResult.value = result
+  await load()
+}
+const targetVersion = ref<string | null>(null)
+watch(
+  () => [props.instanceId, props.kind],
+  async () => {
+    targetVersion.value = props.kind === 'resourcePack' ? await packs.targetFor(props.instanceId).catch(() => null) : null
+  },
+  { immediate: true },
+)
 
 async function toggle(r: LocalResource, enabled: boolean) {
   const ok = await tasks.guard(async () => {
@@ -75,6 +127,7 @@ async function applyUpdate(r: LocalResource) {
   tasks.showBlocked(report.blocked, props.instanceId)
   // core replaces the old file of an already installed project, so nothing is deleted here
   tasks.toast(t.instance.updated, 'ok')
+  noteAdded(report.installed.map((i) => i.fileName))
   await load()
 }
 
@@ -85,7 +138,9 @@ async function updateAll() {
   let updated = 0
   for (const update of pending) {
     try {
-      blocked.push(...(await api.installVersion(props.instanceId, update.latest, props.kind)).blocked)
+      const report = await api.installVersion(props.instanceId, update.latest, props.kind)
+      blocked.push(...report.blocked)
+      noteAdded(report.installed.map((i) => i.fileName))
       updated++
     } catch (e) {
       tasks.toast(t.updates.updateFailed(update.name, errorMessage(e)), 'error')
@@ -96,6 +151,12 @@ async function updateAll() {
   tasks.showBlocked(blocked, props.instanceId)
   if (updated) tasks.toast(t.updates.updatedAll(updated), 'ok')
   await load()
+}
+
+/** New files: scan jars in the background, offer to convert packs made for another version. */
+function noteAdded(fileNames: string[]) {
+  if (props.kind === 'mod') ratscan.scanAdded(props.instanceId, fileNames)
+  else if (props.kind === 'resourcePack') void packs.offerConversion(props.instanceId, fileNames)
 }
 
 const isLocked = (r: LocalResource) => r.origin?.['x-prismlauncher-lock-update'] === true
@@ -135,6 +196,9 @@ function closeContent() {
       <button v-if="updates.size" class="btn btn-primary" :disabled="!!bulk" @click="updateAll">
         <ArrowUpFromLine :size="15" />{{ bulk ? t.updates.updatingAll(bulk.done, bulk.total) : `${t.updates.updateAll} (${updates.size})` }}
       </button>
+      <button v-if="kind === 'mod'" class="btn" :disabled="scanning || !resources.length" @click="scanMods">
+        <ShieldCheck :size="15" :class="scanning ? 'animate-pulse' : ''" />{{ scanning ? t.scan.scanning(ratscan.progress!.done, ratscan.progress!.total) : t.scan.scanMods }}
+      </button>
       <button class="btn" :disabled="checking || !!bulk || !resources.length" @click="checkUpdates">
         <RefreshCw :size="15" :class="checking ? 'animate-spin' : ''" />{{ checking ? t.instance.checking : t.instance.checkUpdates }}
       </button>
@@ -156,6 +220,18 @@ function closeContent() {
             <span v-if="r.metadata?.version" class="badge">{{ r.metadata.version }}</span>
             <span v-if="!r.origin" class="badge" :title="t.instance.unknownOrigin">?</span>
             <span v-else class="badge badge-accent">{{ originPlatform(r.origin) === 'modrinth' ? 'Modrinth' : 'CurseForge' }}</span>
+            <button
+              v-if="kind === 'mod' && jarsByName.get(r.fileName)?.scan"
+              class="badge cursor-pointer"
+              :class="badgeClass[badgeOf(jarsByName.get(r.fileName)!.scan!.verdict)]"
+              :title="t.scan.details"
+              @click="scanDetails = jarsByName.get(r.fileName)!"
+            >{{ badgeText[badgeOf(jarsByName.get(r.fileName)!.scan!.verdict)] }}</button>
+            <span
+              v-if="kind === 'resourcePack' && packs.compat[instanceId]?.[r.fileName]?.mismatch"
+              class="badge badge-warn"
+              :title="t.packs.mismatchHint"
+            >{{ t.packs.madeFor(packs.compat[instanceId][r.fileName].madeFor ?? '?') }}</span>
           </div>
           <div class="truncate text-[12px] text-faint">{{ r.fileName }} · {{ formatBytes(r.size) }}<template v-if="r.metadata?.authors"> · {{ r.metadata.authors.join(', ') }}</template></div>
         </div>
@@ -170,6 +246,17 @@ function closeContent() {
         >
           <component :is="isLocked(r) ? Lock : LockOpen" :size="15" />
         </button>
+        <template v-if="isZipPack(r)">
+          <button
+            v-if="packs.compat[instanceId]?.[r.fileName]?.mismatch && targetVersion"
+            class="btn h-7"
+            :disabled="packBusy !== null"
+            @click="convertPack(r)"
+          >{{ packBusy === r.fileName ? t.packs.working : t.packs.convertTo(targetVersion) }}</button>
+          <button class="btn btn-ghost btn-icon text-muted" :disabled="packBusy !== null" :title="t.packs.repairHint" :aria-label="t.packs.repair" @click="repairPack(r)">
+            <Wrench :size="15" />
+          </button>
+        </template>
         <button v-if="updates.has(r.fileName)" class="btn btn-primary h-7" :disabled="!!bulk" @click="applyUpdate(r)">
           <ArrowUpCircle :size="14" />{{ t.instance.updateTo }} {{ updates.get(r.fileName)!.latest.versionNumber }}
         </button>
@@ -184,6 +271,17 @@ function closeContent() {
       @confirm="confirmDelete"
       @close="toDelete = null"
     />
+    <ScanDetailsDialog v-if="scanDetails" :instance-id="instanceId" :jar="scanDetails" @close="scanDetails = null" />
+    <ModalDialog v-if="packResult" :title="packResult.title" :width="480" @close="packResult = null">
+      <div class="flex flex-col gap-2">
+        <p>{{ t.packs.saved(packResult.savedAs) }}</p>
+        <p class="text-muted">{{ packResult.summary }}</p>
+        <ul v-if="packResult.warnings.length" class="selectable max-h-48 list-disc overflow-y-auto pl-5 text-[12px] text-warn">
+          <li v-for="(warning, i) in packResult.warnings" :key="i">{{ warning }}</li>
+        </ul>
+      </div>
+      <template #footer><button class="btn btn-primary" @click="packResult = null">{{ t.common.close }}</button></template>
+    </ModalDialog>
     <ContentDialog v-if="showContent" :instance-id="instanceId" :kind="kind" @close="closeContent" />
   </div>
 </template>

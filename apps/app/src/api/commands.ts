@@ -117,6 +117,16 @@
  *   check_for_update(force)                                  -> UpdateStatus   (without force, the result of the earlier check of this run; failures are logged by the backend)
  *   install_update(version)                                  -> void           (installs exactly that release (refused when the latest differs): downloads, verifies, replaces the exe and restarts;
  *                                                                              emits `progress` as task `update`; refused while a game runs or anything is downloading)
+ * Plugins (wasm plugins run in a Web Worker of the UI; see ARCHITECTURE.md)
+ *   list_plugins()                                           -> PluginInfo[]  (version and source of the copy that runs)
+ *   check_plugin_updates(force)                              -> PluginInfo[]  (force = "check now"; otherwise the startup rules: setting on, once a day)
+ *   read_plugin_file(id, version, name)                      -> ArrayBuffer   (a file of the installed copy; bundled copies are read from the UI assets)
+ *   ratscan_status(instanceId)                               -> JarScan[]     (all mod jars, enabled and disabled, with cached results)
+ *   ratscan_store(instanceId, sha1, pluginVersion, result)   -> void
+ *   ratscan_report(instanceId, sha1)                         -> ScanResult | null
+ *   read_resource_file(instanceId, kind, fileName)           -> ArrayBuffer   (binary IPC, up to 256 MiB)
+ *   save_resource_file(raw body, header x-args)              -> string        (new file in the resource folder, never replaces; resolves to the name used)
+ *   resourcepack_compat(instanceId)                          -> PackCompat[]  (zip packs: declared releases and whether they differ from the instance)
  * Events (backend -> frontend, via emit)
  *   microsoft-login-stage  LoginStage  (a step of finish_microsoft_login has started)
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
@@ -160,6 +170,11 @@ import type {
   LoaderVersion,
   LocalResource,
   LocalResourceKind,
+  JarScan,
+  PackCompat,
+  PluginId,
+  PluginInfo,
+  ScanResult,
   MinecraftVersion,
   ModpackImport,
   OnboardingInfo,
@@ -188,7 +203,8 @@ export type Unlisten = () => void
 type Args = Record<string, unknown>
 
 interface Backend {
-  invoke: (cmd: string, args?: Args) => Promise<unknown>
+  /** `args` is a Uint8Array for commands that take a raw body; the other arguments then travel in `headers`. */
+  invoke: (cmd: string, args?: Args | Uint8Array, headers?: Record<string, string>) => Promise<unknown>
   listen: (event: string, cb: (payload: unknown) => void) => Promise<Unlisten>
   dragDrop: (cb: (event: DragDropEvent) => void) => Promise<Unlisten>
 }
@@ -204,7 +220,7 @@ function loadBackend(): Promise<Backend> {
         import('@tauri-apps/api/event'),
         import('@tauri-apps/api/webviewWindow'),
       ]).then(([core, event, webviewWindow]) => ({
-        invoke: core.invoke,
+        invoke: (cmd, args, headers) => core.invoke(cmd, args, headers ? { headers } : undefined),
         listen: (name, cb) => event.listen(name, (e) => cb(e.payload)),
         dragDrop: (cb) =>
           webviewWindow.getCurrentWebviewWindow().onDragDropEvent((e) => {
@@ -219,6 +235,11 @@ function loadBackend(): Promise<Backend> {
 async function call<T>(cmd: string, args?: Args): Promise<T> {
   const backend = await loadBackend()
   return (await backend.invoke(cmd, args)) as T
+}
+
+async function callBinary<T>(cmd: string, body: Uint8Array, headers: Record<string, string>): Promise<T> {
+  const backend = await loadBackend()
+  return (await backend.invoke(cmd, body, headers)) as T
 }
 
 async function subscribe<T>(event: string, cb: (payload: T) => void): Promise<Unlisten> {
@@ -415,6 +436,24 @@ export const scanBlockedFiles = (instanceId: string, files: BlockedFile[], folde
 export const getDownloadsDir = () => call<string>('get_downloads_dir')
 export const setUpdateLock = (instanceId: string, kind: LocalResourceKind, fileName: string, locked: boolean) =>
   call<void>('set_update_lock', { instanceId, kind, fileName, locked })
+
+// ---- plugins ----
+export const listPlugins = () => call<PluginInfo[]>('list_plugins')
+export const checkPluginUpdates = (force: boolean) => call<PluginInfo[]>('check_plugin_updates', { force })
+export const readPluginFile = (id: PluginId, version: string, name: string) =>
+  call<ArrayBuffer>('read_plugin_file', { id, version, name })
+export const ratscanStatus = (instanceId: string) => call<JarScan[]>('ratscan_status', { instanceId })
+export const ratscanStore = (instanceId: string, sha1: string, pluginVersion: string, result: ScanResult) =>
+  call<void>('ratscan_store', { instanceId, sha1, pluginVersion, result })
+export const ratscanReport = (instanceId: string, sha1: string) => call<ScanResult | null>('ratscan_report', { instanceId, sha1 })
+export const readResourceFile = (instanceId: string, kind: LocalResourceKind, fileName: string) =>
+  call<ArrayBuffer>('read_resource_file', { instanceId, kind, fileName })
+/** Saves `bytes` as a new file (an existing file is never replaced); resolves to the name used. */
+export function saveResourceFile(instanceId: string, kind: LocalResourceKind, fileName: string, bytes: Uint8Array) {
+  const json = new TextEncoder().encode(JSON.stringify({ instanceId, kind, fileName }))
+  return callBinary<string>('save_resource_file', bytes, { 'x-args': btoa(String.fromCharCode(...json)) })
+}
+export const resourcepackCompat = (instanceId: string) => call<PackCompat[]>('resourcepack_compat', { instanceId })
 
 // ---- events ----
 export const onMicrosoftLoginStage = (cb: (stage: LoginStage) => void) => subscribe('microsoft-login-stage', cb)

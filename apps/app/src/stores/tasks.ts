@@ -8,6 +8,8 @@ export interface Toast {
   id: number
   kind: 'info' | 'error' | 'ok'
   text: string
+  /** A button inside the toast, e.g. "Convert"; clicking it dismisses the toast. */
+  action?: { label: string; run: () => void }
 }
 
 export const useTasksStore = defineStore('tasks', () => {
@@ -23,10 +25,10 @@ export const useTasksStore = defineStore('tasks', () => {
 
   const list = computed(() => [...tasks.values()])
 
-  function toast(text: string, kind: Toast['kind'] = 'info') {
+  function toast(text: string, kind: Toast['kind'] = 'info', action?: Toast['action']) {
     const id = ++toastId
-    toasts.value.push({ id, kind, text })
-    setTimeout(() => dismiss(id), kind === 'error' ? 8000 : 4000)
+    toasts.value.push({ id, kind, text, action })
+    setTimeout(() => dismiss(id), action ? 15_000 : kind === 'error' ? 8000 : 4000)
   }
   function dismiss(id: number) {
     toasts.value = toasts.value.filter((t) => t.id !== id)

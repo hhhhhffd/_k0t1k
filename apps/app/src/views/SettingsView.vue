@@ -18,15 +18,19 @@ import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { LANGUAGES, t } from '../i18n'
 import { useCustomizationStore } from '../stores/customization'
 import { useInstancesStore } from '../stores/instances'
+import { usePluginsStore } from '../stores/plugins'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
 import { useUpdateStore } from '../stores/update'
+import { formatRelative } from '../utils/format'
 import { THEMES, themeVars } from '../utils/theme'
 
 const store = useSettingsStore()
 const tasks = useTasksStore()
 const instances = useInstancesStore()
 const update = useUpdateStore()
+const plugins = usePluginsStore()
+const pluginNames = { ratscan: 'RatScan', packconv: 'packconv' } as const
 const customization = useCustomizationStore()
 const catOptions = computed(() => [
   { value: '', label: t.settings.noCat },
@@ -146,6 +150,7 @@ onMounted(async () => {
   // manual "Check now" only when the startup check is off
   if (!update.status && s.value?.updates.checkOnStartup) void update.check(false, true)
   system.value = (await tasks.guard(getSystemInfo)) ?? null
+  await tasks.guard(plugins.load)
   await loadManagedJava()
 })
 
@@ -484,6 +489,31 @@ async function addAccount() {
           </div>
         </template>
         <p v-if="update.error" class="selectable rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-[12px] break-words text-danger" role="alert">{{ update.error }}</p>
+      </section>
+      <section class="card flex flex-col gap-3 p-4">
+        <h3 class="text-[14px] font-semibold">{{ t.plugins.title }}</h3>
+        <p class="text-[12px] text-faint">{{ t.plugins.intro }}</p>
+        <div class="flex items-center gap-4">
+          <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.plugins.autoUpdate }}</span><span class="text-[12px] text-faint">{{ t.plugins.autoUpdateHint }}</span></span>
+          <ToggleSwitch v-if="s" v-model="s.updates.autoUpdatePlugins" :label="t.plugins.autoUpdate" />
+        </div>
+        <ul class="flex flex-col gap-2">
+          <li v-for="plugin in plugins.list" :key="plugin.id" class="rounded-lg border border-line bg-raised p-3">
+            <div class="flex items-center gap-2">
+              <span class="font-semibold">{{ pluginNames[plugin.id] }}</span>
+              <span class="badge">{{ plugin.version }}</span>
+              <span class="badge" :class="plugin.source === 'installed' ? 'badge-accent' : ''">{{ t.plugins.sources[plugin.source] }}</span>
+              <span class="ml-auto text-[12px] text-faint">{{ t.plugins.lastCheck }}: {{ plugin.lastCheck ? formatRelative(plugin.lastCheck) : t.plugins.never }}</span>
+            </div>
+            <p v-if="plugin.error" class="selectable mt-2 rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-[12px] break-words text-danger" role="alert">{{ t.plugins.error }}: {{ plugin.error }}</p>
+          </li>
+        </ul>
+        <div class="flex items-center gap-3">
+          <button class="btn" :disabled="plugins.checking" @click="plugins.check()">
+            <RefreshCw :size="15" :class="{ 'animate-spin': plugins.checking }" />{{ plugins.checking ? t.plugins.checking : t.plugins.checkNow }}
+          </button>
+        </div>
+        <p v-if="plugins.error" class="selectable rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-[12px] break-words text-danger" role="alert">{{ plugins.error }}</p>
       </section>
       </template>
     </div>

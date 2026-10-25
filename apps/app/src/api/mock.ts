@@ -58,6 +58,7 @@ import type {
   World,
 } from './types'
 import { COMPONENT_MINECRAFT, LOADER_UIDS } from './types'
+import { installTestHook, pluginCommand, type PluginMockContext } from './mockPlugins'
 
 type Args = Record<string, unknown>
 const listeners = new Map<string, Set<(payload: unknown) => void>>()
@@ -129,7 +130,7 @@ const defaultSettings: GlobalSettings = {
   ui: { language: 'en', theme: 'k0t1k', liteMode: false, customThemes: [] },
   behavior: { onGameLaunch: 'hide_to_tray', onClose: 'tray' },
   discord: { enabled: true },
-  updates: { checkOnStartup: true },
+  updates: { checkOnStartup: true, autoUpdatePlugins: true },
   onboarding: { keepPortableAt: null, createdShortcuts: [] },
   sharedFoldersDefault: ['resourcepacks', 'shaderpacks'],
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],
@@ -556,8 +557,9 @@ function exportEntries(inst: Instance, dir: string): ExportEntry[] {
 }
 
 // ---- command table ----
-async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
+async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Record<string, string>): Promise<unknown> {
   await sleep(60)
+  const a: Args = input instanceof Uint8Array ? {} : input
   switch (cmd) {
     case 'list_instances': return clone({ instances, errors: [] })
     case 'create_instance': {
@@ -945,9 +947,19 @@ async function invoke(cmd: string, a: Args = {}): Promise<unknown> {
       r.origin['x-prismlauncher-lock-update'] = a.locked as boolean
       return undefined
     }
-    default: throw new Error(`mock: неизвестная команда ${cmd}`)
+    default: {
+      const plugin = await pluginCommand(cmd, a, pluginContext, input instanceof Uint8Array ? input : undefined, headers)
+      if (plugin) return plugin.value
+      throw new Error(`mock: неизвестная команда ${cmd}`)
+    }
   }
 }
+
+const pluginContext: PluginMockContext = {
+  resourcesFor,
+  minecraftVersion: (instanceId) => findInstance(instanceId).components.find((c) => c.uid === COMPONENT_MINECRAFT)?.version ?? '',
+}
+installTestHook(pluginContext)
 
 export const mockBackend = {
   invoke,

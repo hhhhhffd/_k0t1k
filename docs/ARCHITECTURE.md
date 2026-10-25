@@ -252,6 +252,56 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
 - Setting `updates.checkOnStartup` (default true) only controls the silent startup check, which shows a notice in the
   status bar; Settings, About has the Updates block (release notes are rendered as plain text).
 
+## Plugins (`core::plugins`, `src-tauri/src/plugins.rs`, `src/plugins`)
+
+- Two wasm plugins from their own public repositories: **RatScan** (`ratscan`, `hhhhhffd/ratka_checker`: scans mod jars for
+  stealers and RATs) and **packconv** (`packconv`, `hhhhhffd/conventor-mc-rp`: converts and repairs resource packs between
+  Minecraft versions). Both are wasm-bindgen `--target web` builds with the export contract of plugin `api` 1 (`scan`;
+  `convert`, `repair`, `supportedVersions`). Breaking the contract means a new `api`; the launcher refuses an unknown one.
+- **Sandbox**: a plugin only runs in a dedicated module Web Worker (`src/plugins/worker.ts`, created lazily by
+  `host.ts`, one per plugin, kept alive). The main thread reads the glue and wasm and sends them over; the worker imports
+  the glue from a blob URL and initialises it with the wasm bytes. A worker has no Tauri IPC and no page access, so a plugin
+  sees only the bytes of the call. A call that runs longer than 120 s terminates the worker (the next call starts a new one).
+  The CSP gained `script-src blob: 'wasm-unsafe-eval'` and `worker-src 'self' blob:`. This is what the blob import needs if the
+  worker inherits the page policy; it also lets the main page run blob scripts, which nothing in the app creates. Not verified
+  inside WebView2.
+- **Bundled baseline**: `apps/app/public/plugins/<id>/` (glue, wasm, `plugin.json` without a signature), part of the frontend
+  assets and so of the signed exe. `plugins/SOURCES.md` records the repository commits they were built from. The Rust side
+  embeds the manifests with `include_str!`.
+- **Release format** (per plugin repo): tag `vX.Y.Z`; assets `plugin.json`, `plugin.json.sig` and each file listed in it.
+  `plugin.json` is `{id, version, api, minLauncher, files: {name: sha256}}`. The signature is the base64 of a raw Ed25519
+  signature over `"_k0t1k-plugin\n" + the exact bytes of plugin.json` (`plugins::manifest_message`), checked with a plugin
+  key embedded in `core::plugins`; it is not the self-update key. Asset URLs must start with
+  `https://github.com/<repo>/releases/download/` for the plugin's own repo.
+- **Update** (`plugins::update`, reuses `update::http_client`, `parse_version`, `verify_with`, `fetch_capped`): `/releases/latest`;
+  an update is accepted only when the manifest signature is valid, `id` matches, `api` is 1, `minLauncher` is not above the
+  launcher version, the tag equals `version`, `version` is newer than the running copy, and every file (at most 32 MiB each)
+  hashes to its manifest entry. It is installed into `<data>/plugins/<id>/<version>/` (staging folder, then rename), then the
+  `active` pointer file is replaced (temp file and rename). The previous version is kept, older ones are deleted. Any failure is
+  logged, stored as the plugin's `error` in `plugins/state.json` and leaves `active` as it was.
+- **Which copy runs** (`plugins::resolve`): the installed active version when its stored manifest still verifies, all files still
+  hash right (checked at every load) and it is not older than the bundled baseline; otherwise the bundled copy (a damaged installed
+  copy is logged and shown as the plugin's error). Installed files reach the UI as binary IPC (`read_plugin_file`), bundled ones
+  are fetched from the app assets.
+- **Checks**: at startup (backend task) when `updates.autoUpdatePlugins` is on (default, `#[serde(default)]`), per plugin at most
+  once in 24 h (`last_check` in `state.json`, also set after a failed attempt); Settings, About, Plugins has "Check for updates"
+  (forced), the toggle, versions, source and the last error.
+- **RatScan in the Mods tab**: "Scan mods" scans enabled and disabled jars; the backend reads each jar and sends it as raw bytes
+  (`read_resource_file`), the UI shows progress. Badges map the verdict: `clean`, `suspicious`, `malicious` is shown as
+  "dangerous", `unknown` as "not analyzed" (never as clean). A click opens the findings. Results are cached in
+  `<instance>/ratscan.json` by SHA-1 and plugin version (`core::scancache`, at most 1000 entries). Jars added by a drop, an
+  import, an install or update from Modrinth/CurseForge and the blocked-files scan are scanned in the background. Before launch
+  (`instances.launch`) an enabled dangerous mod asks "Launch anyway / Disable the mod and launch / Cancel"; only cached results
+  count, so a jar that was never scanned does not stop the game.
+- **packconv in the Resource packs tab**: the backend reads `pack.mcmeta` of zip packs (`core::packformat`, ranges as in
+  packconv: `pack_format`, `supported_formats`, `min_format`/`max_format`) and compares them with the format of the instance's
+  release (a table copied from packconv, since the wasm does not export it; snapshots have no format, so nothing is claimed).
+  A mismatch shows "made for X". "Convert to V" uses the newest supported version not above the instance version and saves
+  `<name> (V).zip`; "Repair" saves `<name> (repaired).zip`. Output goes through `save_resource_file` (raw body, arguments in an
+  `x-args` header) and never replaces a file (` (2)` is inserted when the name is taken); the original stays. A mismatched pack
+  that is dropped or installed gets a toast with a convert button.
+- The browser mock runs the same bundled wasm in the same worker; only file access is in memory (`api/mockPlugins.ts`).
+
 ## Later
 
 ely.by skins, custom clients (Lunar, LabyMod).

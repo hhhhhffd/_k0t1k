@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getDownloadsDir, isTauri, scanBlockedFiles } from '../api/commands'
 import type { BlockedFile } from '../api/types'
 import { t } from '../i18n'
+import { useRatscanStore } from '../stores/ratscan'
 import { useTasksStore } from '../stores/tasks'
 import { openExternal } from '../utils/external'
 import ModalDialog from './ModalDialog.vue'
@@ -14,6 +15,9 @@ const POLL_MS = 2000
 const props = defineProps<{ files: BlockedFile[]; instanceId: string }>()
 const emit = defineEmits<{ close: [] }>()
 const tasks = useTasksStore()
+const ratscan = useRatscanStore()
+/** Jars already handed to the background scan. */
+const scanned = new Set<string>()
 
 const watching = ref(false)
 /** The folder the user chose; `null` is the Downloads folder. */
@@ -47,6 +51,9 @@ async function scan() {
     return
   }
   found.value = new Set(result.found)
+  const fresh = result.found.filter((path) => path.startsWith('mods/') && !scanned.has(path))
+  fresh.forEach((path) => scanned.add(path))
+  ratscan.scanAdded(props.instanceId, fresh.map((path) => path.slice('mods/'.length)))
   if (!result.missing.length) stop()
 }
 

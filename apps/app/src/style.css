@@ -307,6 +307,22 @@ textarea.input {
   border-color: color-mix(in srgb, var(--c-accent) 40%, transparent);
   color: var(--c-accent);
 }
+.badge-ok,
+.badge-warn,
+.badge-danger {
+  background: color-mix(in srgb, var(--badge-color) 16%, transparent);
+  border-color: color-mix(in srgb, var(--badge-color) 45%, transparent);
+  color: var(--badge-color);
+}
+.badge-ok {
+  --badge-color: var(--c-ok);
+}
+.badge-warn {
+  --badge-color: var(--c-warn);
+}
+.badge-danger {
+  --badge-color: var(--c-danger);
+}
 .label {
   font-size: 12px;
   font-weight: 600;

@@ -3,6 +3,7 @@ import { computed, reactive, ref, shallowReactive } from 'vue'
 import * as api from '../api/commands'
 import type { GameCrashed, GameLogBatch, GameLogLine, Instance, InstanceRunState, ModpackImport, ProjectVersion, RunSession, RunState, SessionId } from '../api/types'
 import { t } from '../i18n'
+import { useRatscanStore } from './ratscan'
 import { useTasksStore } from './tasks'
 import { baseName } from '../utils/useFileDrop'
 
@@ -28,6 +29,7 @@ export interface PendingInstance {
 
 export const useInstancesStore = defineStore('instances', () => {
   const tasks = useTasksStore()
+  const ratscan = useRatscanStore()
   const instances = ref<Instance[]>([])
   const loaded = ref(false)
   /** Folder holding the instance folders; custom icons are files in it. */
@@ -122,7 +124,9 @@ export const useInstancesStore = defineStore('instances', () => {
     return upsert(result.instance)
   }
 
+  /** Resolves to undefined when the user cancels because an enabled mod is dangerous. */
   async function launch(id: string, accountId?: string, server?: string) {
+    if (!(await ratscan.confirmLaunch(id))) return undefined
     const alreadyRunning = liveSessionsOf(id).length > 0
     const sessionId = await api.launchInstance(id, accountId, server)
     // Minecraft locks a world while it is open, so a second copy cannot open the same one.

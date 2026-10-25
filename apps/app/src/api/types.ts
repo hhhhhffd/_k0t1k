@@ -176,7 +176,7 @@ export interface GlobalSettings {
   ui: { language: Language; theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
   discord: { enabled: boolean }
-  updates: { checkOnStartup: boolean }
+  updates: { checkOnStartup: boolean; autoUpdatePlugins: boolean }
   /** Owned by the onboarding commands: `save_settings` never overwrites it. */
   onboarding: { keepPortableAt: string | null; createdShortcuts: string[] }
   /** Folders that new instances (and imported modpacks) share. */
@@ -613,3 +613,94 @@ export interface UploadedLog {
 }
 /** Files dragged over the window (real paths, from Tauri's drag-drop events). */
 export type DragDropEvent = { type: 'enter' | 'drop'; paths: string[] } | { type: 'over' } | { type: 'leave' }
+
+// ---- plugins (wasm, see docs/ARCHITECTURE.md) ----
+
+export type PluginId = 'ratscan' | 'packconv'
+
+export interface PluginInfo {
+  id: PluginId
+  version: string
+  /** `bundled` = shipped inside the launcher, `installed` = a signed release downloaded from GitHub. */
+  source: 'bundled' | 'installed'
+  /** Files the worker loads (the wasm-bindgen glue and the wasm). */
+  files: string[]
+  lastCheck: string | null
+  error: string | null
+}
+
+/** RatScan verdicts; the UI shows `malicious` as "dangerous". */
+export type ScanVerdict = 'clean' | 'suspicious' | 'malicious' | 'unknown'
+export type ScanBadge = 'clean' | 'suspicious' | 'dangerous' | 'unknown'
+
+export interface ScanBrief {
+  verdict: ScanVerdict
+  riskScore: number | null
+  summary: string
+  scannedAt: string
+}
+
+/** A mod jar of an instance with its cached scan result (`scan` is null when it was not scanned by the running plugin version). */
+export interface JarScan {
+  fileName: string
+  enabled: boolean
+  size: number
+  sha1: string
+  scan: ScanBrief | null
+}
+
+export interface ScanEvidence {
+  archive_path?: string
+  class_name?: string
+  method_name?: string
+  resource_path?: string
+  operation?: string
+  value_preview?: string
+}
+
+export interface ScanFinding {
+  rule_id: string
+  category: string
+  kind?: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  score_contribution?: number
+  scope?: string
+  message: string
+  evidence?: ScanEvidence[]
+}
+
+/** What the RatScan plugin returns for a jar. */
+export interface ScanResult {
+  summary: string
+  report: {
+    verdict: ScanVerdict
+    risk_score: number
+    confidence?: string
+    findings: ScanFinding[]
+    limitations?: { code: string; message: string }[]
+  }
+}
+
+/** A zip resource pack's declared formats against the instance's Minecraft version. */
+export interface PackCompat {
+  fileName: string
+  /** Releases the pack declares, like `1.20-1.20.1`; null without a readable `pack.mcmeta`. */
+  madeFor: string | null
+  mismatch: boolean
+}
+
+export interface ConvertReport {
+  from: string
+  to: string
+  target_format: string
+  steps: string[]
+  warnings: string[]
+  files_in: number
+  files_out: number
+}
+
+export interface RepairReport {
+  repaired: { path: string; issues: string[] }[]
+  warnings: string[]
+  files: number
+}

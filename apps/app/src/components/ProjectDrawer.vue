@@ -5,6 +5,8 @@ import { getProjectVersions, installDatapack, installVersion, listWorlds } from 
 import type { LocalResourceKind, ProjectVersion, SearchHit, VersionFilter } from '../api/types'
 import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
+import { usePacksStore } from '../stores/packs'
+import { useRatscanStore } from '../stores/ratscan'
 import { useTasksStore } from '../stores/tasks'
 import { openExternal } from '../utils/external'
 import { formatBytes, formatCount, formatDate, LOADER_LABELS, loaderOf, minecraftVersionOf } from '../utils/format'
@@ -16,6 +18,8 @@ const props = defineProps<{ hit: SearchHit; kind: LocalResourceKind; instanceId:
 const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
+const ratscan = useRatscanStore()
+const packs = usePacksStore()
 
 const versions = ref<ProjectVersion[]>([])
 const loading = ref(true)
@@ -93,6 +97,9 @@ async function install(v: ProjectVersion) {
       installedIds.value = new Set(installedIds.value).add(v.id)
       tasks.toast(t.browse.installedOk(installed.fileName), 'ok')
     }
+    const added = report.installed.map((i) => i.fileName)
+    if (kind === 'mod') ratscan.scanAdded(target.value, added)
+    else if (kind === 'resourcePack') void packs.offerConversion(target.value, added)
   }
   busy.value = null
 }
