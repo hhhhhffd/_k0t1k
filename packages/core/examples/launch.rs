@@ -67,6 +67,7 @@ async fn main() -> Result<()> {
     let game_dir = instance_dir.join("minecraft");
     let natives_dir = instance_dir.join("natives");
     tokio::fs::create_dir_all(&game_dir).await.map_err(|source| Error::Io { path: game_dir.clone(), source })?;
+    k0t1k_core::client::install_files(&client, &game_dir, &profile, "e2e", &progress).await?;
     extract_natives(&paths, &profile, &natives_dir).await?;
     reconstruct_assets(&paths, &assets, &game_dir).await?;
 

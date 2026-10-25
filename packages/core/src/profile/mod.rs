@@ -7,6 +7,7 @@ mod version;
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashSet};
 
+use crate::client::ClientFiles;
 use crate::component::MINECRAFT_UID;
 use crate::error::{Error, Result};
 use crate::meta::{AssetIndexRef, LoggingConfig};
@@ -42,6 +43,8 @@ pub struct LaunchProfile {
     pub compatible_java_majors: Vec<u32>,
     pub compatible_java_name: Option<String>,
     pub logging: Option<LoggingConfig>,
+    /// Files of a client (LabyMod, ...) that belong in the game directory; see `crate::client`.
+    pub client_files: ClientFiles,
     pub runtime: RuntimeContext,
 }
 
@@ -80,6 +83,7 @@ impl LaunchProfile {
             compatible_java_majors: Vec::new(),
             compatible_java_name: None,
             logging: None,
+            client_files: ClientFiles::default(),
             runtime,
         };
         let mut has_minecraft = false;
@@ -113,6 +117,9 @@ impl LaunchProfile {
             profile.compatible_java_majors.extend(&file.compatible_java_majors);
             if let Some(name) = file.compatible_java_name.as_ref().filter(|name| !name.is_empty()) {
                 profile.compatible_java_name = Some(name.clone());
+            }
+            if file.client_files != ClientFiles::default() {
+                profile.client_files = file.client_files.clone();
             }
             if file.logging.is_some() {
                 profile.logging = file.logging.clone();

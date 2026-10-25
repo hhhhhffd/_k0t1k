@@ -7,6 +7,7 @@ mod types;
 
 use std::cmp::Reverse;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::Deserialize;
 use sha1::Sha1;
@@ -22,6 +23,9 @@ pub use types::{
     AssetIndexRef, LoggingConfig, LoggingFile, MojangLaunch, PackageEntry, PackageIndex, Requirement, VersionEntry,
     VersionFile, VersionList,
 };
+
+/// Per-request limit for files outside Prism meta, so a dead host cannot stall a launch.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 const META_URL: &str = "https://meta.prismlauncher.org/v1/";
 
@@ -106,6 +110,51 @@ impl MetaClient {
         let response = self.http.get(url).send().await.map_err(http)?;
         let bytes = response.error_for_status().map_err(http)?.bytes().await.map_err(http)?;
         Ok(bytes.to_vec())
+    }
+
+    /// The cached file when it is at most `max_age` old (or when offline), otherwise the response of `url`,
+    /// cached under `relative`. A failed request falls back to whatever is cached. For files outside Prism
+    /// meta (see `crate::client`), which have no index to validate against.
+    pub(crate) async fn fetch_url(&self, url: &str, relative: &str, max_age: Duration) -> Result<Vec<u8>> {
+        let cache_path = self.dir.join(relative);
+        let cached = read_cached(&cache_path).await?;
+        if let Some(bytes) = &cached {
+            let age = tokio::fs::metadata(&cache_path).await.at(&cache_path)?.modified().ok().and_then(|time| time.elapsed().ok());
+            if self.offline || age.is_some_and(|age| age <= max_age) {
+                return Ok(bytes.clone());
+            }
+        }
+        if self.offline {
+            return Err(Error::Other(format!("{relative} is not cached and offline mode is on")));
+        }
+        let http = |source| Error::Http { url: url.to_owned(), source };
+        let request = self.http.get(url).timeout(REQUEST_TIMEOUT).send().await;
+        let downloaded = match request {
+            Ok(response) => match response.error_for_status() {
+                Ok(response) => response.bytes().await.map_err(http),
+                Err(source) => Err(http(source)),
+            },
+            Err(source) => Err(http(source)),
+        };
+        match (downloaded, cached) {
+            (Ok(bytes), _) => {
+                write_cached(&cache_path, &bytes).await?;
+                Ok(bytes.to_vec())
+            }
+            (Err(error), Some(bytes)) => {
+                tracing::warn!("using cached {relative} because {url} is unreachable: {error}");
+                Ok(bytes)
+            }
+            (Err(error), None) => Err(error),
+        }
+    }
+
+    pub(crate) fn is_offline(&self) -> bool {
+        self.offline
+    }
+
+    pub(crate) fn dir(&self) -> &Path {
+        &self.dir
     }
 
     /// Returns the cached file when its hash matches, otherwise fetches and caches it.

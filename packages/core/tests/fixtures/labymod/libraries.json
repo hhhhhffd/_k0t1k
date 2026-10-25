@@ -1,0 +1,1008 @@
+{
+ "libraries": [
+  {
+   "name": "org.ow2.asm:asm-util:9.9.1",
+   "url": "https://releases.r2.labymod.net/libraries/org/ow2/asm/asm-util/9.9.1/asm-util-9.9.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "e51f5b0ae0b0c1960687ae970a2a3434d39d8abb",
+   "size": 94643,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.neoforged.javadoctor:gson-io:2.0.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/neoforged/javadoctor/gson-io/2.0.0/gson-io-2.0.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "84f94fa83ac3218e5b89802f2deec1115c0cbaa0",
+   "size": 5747,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-core:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-core/1.2.0/labylib-core-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "d037cfbfe14eb8dbed6e573960c162a9d9904cc7",
+   "size": 22068,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:dnsjava:4.0.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/dnsjava/4.0.0/dnsjava-4.0.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "9605a26f5115cd7571a1a5577eadb228ca875799",
+   "size": 525051,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:laby-dev-login:1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/laby-dev-login/1.0.2/laby-dev-login-1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "0b1713ec790675c85393c231fed8410c275db833",
+   "size": 23741,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.google.auto.service:auto-service-annotations:1.1.1",
+   "url": "https://releases.r2.labymod.net/libraries/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "da12a15cd058ba90a0ff55357fb521161af4736d",
+   "size": 3172,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.google.errorprone:error_prone_annotations:2.48.0",
+   "url": "https://releases.r2.labymod.net/libraries/com/google/errorprone/error_prone_annotations/2.48.0/error_prone_annotations-2.48.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "bbe30942a31d1778c74cb272321267eca82dc708",
+   "size": 20255,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "aopalliance:aopalliance:1.0",
+   "url": "https://releases.r2.labymod.net/libraries/aopalliance/aopalliance/1.0/aopalliance-1.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "0235ba8b489512805ac13a8f9ea77a1ca5ebe3e8",
+   "size": 4467,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labyconnect-client:1.0.24",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labyconnect-client/1.0.24/labyconnect-client-1.0.24.jar",
+   "minecraftVersion": "all",
+   "sha1": "8f5116a79c50927d4d27c2f0974284a59601a7ab",
+   "size": 17283,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-cosmetics:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-cosmetics/1.2.0/labylib-cosmetics-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "a5e7277d21f4eb9ea58e1da12e6b59bd9071116e",
+   "size": 59343,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.github.vatbub:mslinks:1.0.6.2",
+   "url": "https://releases.r2.labymod.net/libraries/com/github/vatbub/mslinks/1.0.6.2/mslinks-1.0.6.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "c05b2457b5bed0dce6a451245604871d2ece510b",
+   "size": 67773,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:laby3d-rhi-api:0.9.24",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/laby3d-rhi-api/0.9.24/laby3d-rhi-api-0.9.24.jar",
+   "minecraftVersion": "all",
+   "sha1": "04344d732b64aeb929d490ccdedb9c2565ae02e9",
+   "size": 88652,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.java.dev.jna:jna:5.17.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/java/dev/jna/jna/5.17.0/jna-5.17.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "33d12735bef894440780fce64f9758d420c7bae2",
+   "size": 2002589,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:laby3d-backend-opengl:0.9.24",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/laby3d-backend-opengl/0.9.24/laby3d-backend-opengl-0.9.24.jar",
+   "minecraftVersion": "all",
+   "sha1": "f140b8beddd4b42cd9132da683f439a9ed17d064",
+   "size": 96984,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.lwjgl:lwjgl-shaderc:3.4.3:natives-linux",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-shaderc/3.4.3/lwjgl-shaderc-3.4.3-natives-linux.jar",
+   "minecraftVersion": "all",
+   "sha1": "037faa5824f75901f4961e56805aedf68e13cf8b",
+   "size": 3872753,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.imgui:imgui-java-binding:1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/imgui/imgui-java-binding/1.0.2/imgui-java-binding-1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "53783ed9b042c508c8a0a97c26f8992a989cfc2c",
+   "size": 148943,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava",
+   "url": "https://releases.r2.labymod.net/libraries/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+   "minecraftVersion": "all",
+   "sha1": "b421526c5f297295adef1c886e5246c39d4ac629",
+   "size": 2199,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.junit.jupiter:junit-jupiter:5.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/org/junit/jupiter/junit-jupiter/5.13.4/junit-jupiter-5.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "93547b3eca48a61f65f735c1898d3ec196e34149",
+   "size": 6366,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.lwjgl:lwjgl-shaderc:3.4.3",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-shaderc/3.4.3/lwjgl-shaderc-3.4.3.jar",
+   "minecraftVersion": "all",
+   "sha1": "ba9fbc8fc4d50b3e4b436cc958ddb4abdb05867c",
+   "size": 153441,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "io.github.llamalad7:mixinextras-common:0.5.5",
+   "url": "https://releases.r2.labymod.net/libraries/io/github/llamalad7/mixinextras-common/0.5.5/mixinextras-common-0.5.5.jar",
+   "minecraftVersion": "all",
+   "sha1": "50d37e763fe461b5e9df961436b399e9b681ac35",
+   "size": 725859,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.google.auto:auto-common:1.2.1",
+   "url": "https://releases.r2.labymod.net/libraries/com/google/auto/auto-common/1.2.1/auto-common-1.2.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "f6da26895f759010f5f170c8044e84c1b17ef83e",
+   "size": 111326,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.opentest4j:opentest4j:1.3.0",
+   "url": "https://releases.r2.labymod.net/libraries/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "152ea56b3a72f655d4fd677fc0ef2596c3dd5e6e",
+   "size": 14304,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.apache.logging.log4j:log4j-core:2.26.0",
+   "url": "https://releases.r2.labymod.net/libraries/org/apache/logging/log4j/log4j-core/2.26.0/log4j-core-2.26.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "d267ca60b27ddb075e0b4e75e7875859717bf85f",
+   "size": 2015101,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.java.dev.jna:jna-platform-jpms:5.16.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/java/dev/jna/jna-platform-jpms/5.16.0/jna-platform-jpms-5.16.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "af1425dfa5e0d28f0f620d6989d0984dc4fa008b",
+   "size": 1376384,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.signed.net.labymod.imgui:imgui-java-natives-windows:1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/signed/net/labymod/imgui/imgui-java-natives-windows/1.0.2/imgui-java-natives-windows-1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "dc25f27237c30c7ed042464a3a8f2ea52dc0dd0d",
+   "size": 1876871,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.jcraft:jorbis:0.0.17",
+   "url": "https://releases.r2.labymod.net/libraries/org/jcraft/jorbis/0.0.17/jorbis-0.0.17.jar",
+   "minecraftVersion": "all",
+   "sha1": "8872d22b293e8f5d7d56ff92be966e6dc28ebdc6",
+   "size": 99701,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "ca.weblite:java-objc-bridge:1.1",
+   "url": "https://releases.r2.labymod.net/libraries/ca/weblite/java-objc-bridge/1.1/java-objc-bridge-1.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "1227f9e0666314f9de41477e3ec277e542ed7f7b",
+   "size": 1330045,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-blockmodel:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-blockmodel/1.2.0/labylib-blockmodel-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "ea3a674401230980b97b3c919814c1d37d7701f2",
+   "size": 70437,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:laby3d-compat-rhi:0.9.24",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/laby3d-compat-rhi/0.9.24/laby3d-compat-rhi-0.9.24.jar",
+   "minecraftVersion": "all",
+   "sha1": "52b97509b7e80a88fdbc29ac9d04074478284ca3",
+   "size": 77171,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/com/fasterxml/jackson/dataformat/jackson-dataformat-xml/2.13.4/jackson-dataformat-xml-2.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "b739978806ffc80967ba0efe43b1296c29c4cfe8",
+   "size": 122319,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:AutoRenamingTool:0.1.4+1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/AutoRenamingTool/0.1.4.1.0.2/AutoRenamingTool-0.1.4.1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "aba76a10e4ff6ec0c0fbdef8810d75924bee6859",
+   "size": 102297,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.neoforged.installertools:cli-utils:2.1.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/neoforged/installertools/cli-utils/2.1.2/cli-utils-2.1.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "e5a3115eb9e299117472675946be8a72e4990ad6",
+   "size": 9379,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.jetbrains.kotlin:kotlin-reflect:2.2.20",
+   "url": "https://releases.r2.labymod.net/libraries/org/jetbrains/kotlin/kotlin-reflect/2.2.20/kotlin-reflect-2.2.20.jar",
+   "minecraftVersion": "all",
+   "sha1": "665c83286bdf6e8ed541ff485e0d322ffeca8d2b",
+   "size": 3349361,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.junit.jupiter:junit-jupiter-params:5.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/org/junit/jupiter/junit-jupiter-params/5.13.4/junit-jupiter-params-5.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "0c8930eb7fcfbed0b191703ab53f48475a75bd17",
+   "size": 660823,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.fasterxml.jackson.core:jackson-databind:2.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/com/fasterxml/jackson/core/jackson-databind/2.13.4/jackson-databind-2.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "98b0edfa8e4084078f10b7b356c300ded4a71491",
+   "size": 1536894,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.lwjgl:lwjgl-vulkan:3.4.3",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-vulkan/3.4.3/lwjgl-vulkan-3.4.3.jar",
+   "minecraftVersion": "all",
+   "sha1": "ffdaf1898192059f059d66f9fa37e3debcac10e0",
+   "size": 8866042,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.junit.platform:junit-platform-engine:1.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/org/junit/platform/junit-platform-engine/1.13.4/junit-platform-engine-1.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "cdd49063ae6e25494d1a9a08f4a9ab5de2b73bcb",
+   "size": 268584,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-mojang:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-mojang/1.2.0/labylib-mojang-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "5ec026694944c9425710426261751c882ec44bae",
+   "size": 42297,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.google.auto.service:auto-service:1.1.1",
+   "url": "https://releases.r2.labymod.net/libraries/com/google/auto/service/auto-service/1.1.1/auto-service-1.1.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "bfeb4c40087b49e23700f074807d3f2a6d36d2d1",
+   "size": 12910,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-remote-zip:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-remote-zip/1.2.0/labylib-remote-zip-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "d9e9358cf6c713e474e196a88385711471e210e5",
+   "size": 24880,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.lwjgl:lwjgl-vma:3.4.3:natives-linux",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-vma/3.4.3/lwjgl-vma-3.4.3-natives-linux.jar",
+   "minecraftVersion": "all",
+   "sha1": "3a9a95d3e83f7fc49c6ed8d0e1c853b77662d90e",
+   "size": 64034,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:account-manager:1.5.3",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/account-manager/1.5.3/account-manager-1.5.3.jar",
+   "minecraftVersion": "all",
+   "sha1": "5ab98e2d3b06933496e21f8b5991b1c2bef9b897",
+   "size": 111840,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.lwjgl:lwjgl-spvc:3.4.3:natives-linux",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-spvc/3.4.3/lwjgl-spvc-3.4.3-natives-linux.jar",
+   "minecraftVersion": "all",
+   "sha1": "709eb01deec4bdafb7634b125a63fd8de172fc50",
+   "size": 1265592,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "pt.davidafsilva.apple:jkeychain:1.1.0",
+   "url": "https://releases.r2.labymod.net/libraries/pt/davidafsilva/apple/jkeychain/1.1.0/jkeychain-1.1.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "428c91b45e1a34f04cf092e8147a25afa2ede2ab",
+   "size": 12967,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.junit.jupiter:junit-jupiter-api:5.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/org/junit/jupiter/junit-jupiter-api/5.13.4/junit-jupiter-api-5.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "2817f736551fe4949b79924715ef6f594ee072f4",
+   "size": 240237,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.java.dev.jna:jna-platform:5.17.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/java/dev/jna/jna-platform/5.17.0/jna-platform-5.17.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "a4934c44d25a9d8c2ddf4203affd20330cb3426f",
+   "size": 1378617,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.codehaus.woodstox:stax2-api:4.2.1",
+   "url": "https://releases.r2.labymod.net/libraries/org/codehaus/woodstox/stax2-api/4.2.1/stax2-api-4.2.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "a3f7325c52240418c2ba257b103c3c550e140c83",
+   "size": 195909,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-http-jdk:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-http-jdk/1.2.0/labylib-http-jdk-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "ec83baaaef02218e75ae8accfce8e022a7e14268",
+   "size": 5408,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.imgui:imgui-java-lwjgl3:1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/imgui/imgui-java-lwjgl3/1.0.2/imgui-java-lwjgl3-1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "e7148b3954dc12c628613df2a7cf8dfda0c1f61f",
+   "size": 34021,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:AccessWidener:0.2.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/AccessWidener/0.2.2/AccessWidener-0.2.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "553754583c6ef733adefed3c2e0f58c062d9fd32",
+   "size": 27075,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.google.j2objc:j2objc-annotations:2.8",
+   "url": "https://releases.r2.labymod.net/libraries/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.jar",
+   "minecraftVersion": "all",
+   "sha1": "c85270e307e7b822f1086b93689124b89768e273",
+   "size": 9301,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:laby3d-api:0.9.24",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/laby3d-api/0.9.24/laby3d-api-0.9.24.jar",
+   "minecraftVersion": "all",
+   "sha1": "bd720d3a8d072c176a5b208fbf3ce327f3ec34e5",
+   "size": 266005,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-bedrock:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-bedrock/1.2.0/labylib-bedrock-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "9a196a221850c673c4d06caae136c86a69da981b",
+   "size": 95824,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "uk.co.caprica:vlcj-natives:4.12.0",
+   "url": "https://releases.r2.labymod.net/libraries/uk/co/caprica/vlcj-natives/4.12.0/vlcj-natives-4.12.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "ac0216f59e2946d04302e2af201b1db7e1d2c481",
+   "size": 95477,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-user:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-user/1.2.0/labylib-user-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "67ba693d603bc9c206098ab019067d914429d343",
+   "size": 31136,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.minecraftforge:srgutils:0.5.4",
+   "url": "https://releases.r2.labymod.net/libraries/net/minecraftforge/srgutils/0.5.4/srgutils-0.5.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "466ab65867111d63542b1753f98daab797b7a048",
+   "size": 72075,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.slf4j:slf4j-api:2.0.18",
+   "url": "https://releases.r2.labymod.net/libraries/org/slf4j/slf4j-api/2.0.18/slf4j-api-2.0.18.jar",
+   "minecraftVersion": "all",
+   "sha1": "78a9e7a37cd6360e0b818e86341b24123d28d4df",
+   "size": 69982,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "javax.inject:javax.inject:1",
+   "url": "https://releases.r2.labymod.net/libraries/javax/inject/javax.inject/1/javax.inject-1.jar",
+   "minecraftVersion": "all",
+   "sha1": "6975da39a7040257bd51d21a231b76c915872d38",
+   "size": 2497,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.apache.logging.log4j:log4j-slf4j2-impl:2.26.0",
+   "url": "https://releases.r2.labymod.net/libraries/org/apache/logging/log4j/log4j-slf4j2-impl/2.26.0/log4j-slf4j2-impl-2.26.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "668c0f0e813d83f00a7182533aa658ec7e7a0a0d",
+   "size": 30211,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.ow2.asm:asm:9.9.1",
+   "url": "https://releases.r2.labymod.net/libraries/org/ow2/asm/asm/9.9.1/asm-9.9.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "2ceea6ab43bcae1979b2a6d85fc0ca429877e5ab",
+   "size": 126252,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.ow2.asm:asm-commons:9.9.1",
+   "url": "https://releases.r2.labymod.net/libraries/org/ow2/asm/asm-commons/9.9.1/asm-commons-9.9.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "ab35de4c537184a09339069f1a3b3aacf2289149",
+   "size": 75010,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.signed.net.java.dev.jna:jna-jpms:5.16.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/signed/net/java/dev/jna/jna-jpms/5.16.0/jna-jpms-5.16.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "fef37f339e19cc46b7c904e22a2ca82db9c75323",
+   "size": 2030998,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.minecraft:launchwrapper:4.1.3",
+   "url": "https://releases.r2.labymod.net/libraries/net/minecraft/launchwrapper/4.1.3/launchwrapper-4.1.3.jar",
+   "minecraftVersion": "all",
+   "sha1": "e0a09f7e656a49b88f0e480d9c7fc4811f75aef5",
+   "size": 43135,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:sponge-mixin:0.5.12+0.17.4+mixin.0.8.7",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/sponge-mixin/0.5.12.0.17.4.mixin.0.8.7/sponge-mixin-0.5.12.0.17.4.mixin.0.8.7.jar",
+   "minecraftVersion": "all",
+   "sha1": "03b5fdf09f769d01ef3f646da21e695d9bf2af09",
+   "size": 1592346,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.imgui:imgui-java-natives-linux:1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/imgui/imgui-java-natives-linux/1.0.2/imgui-java-natives-linux-1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "01141d0057f523ad843055c6faf5751a20f696f2",
+   "size": 1703774,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labyconnect-protocol:1.0.24",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labyconnect-protocol/1.0.24/labyconnect-protocol-1.0.24.jar",
+   "minecraftVersion": "all",
+   "sha1": "3bb62f6f6f81bfe73d46a1314ae6ba7d3e181fd9",
+   "size": 288310,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.jetbrains:annotations:13.0",
+   "url": "https://releases.r2.labymod.net/libraries/org/jetbrains/annotations/13.0/annotations-13.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "919f0dfe192fb4e063e7dacadee7f8bb9a2672a9",
+   "size": 17536,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.mojang:logging:1.7.12",
+   "url": "https://releases.r2.labymod.net/libraries/com/mojang/logging/1.7.12/logging-1.7.12.jar",
+   "minecraftVersion": "all",
+   "sha1": "351cea64a5233361327d8d54c44277041beed97f",
+   "size": 19540,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-http-validation:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-http-validation/1.2.0/labylib-http-validation-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "64628561c434ff1f7c673832750e686ed9033412",
+   "size": 10369,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "uk.co.caprica:vlcj:4.12.1",
+   "url": "https://releases.r2.labymod.net/libraries/uk/co/caprica/vlcj/4.12.1/vlcj-4.12.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "1690481ab971e630f2abd15d1fbb9201094be027",
+   "size": 409408,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-validation:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-validation/1.2.0/labylib-validation-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "647e59435d292335dd9807b0ced45eeabfdf35c5",
+   "size": 21050,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-http:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-http/1.2.0/labylib-http-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "ca09501529f8275058fbed6e3de3510a08bef93e",
+   "size": 15568,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.lwjgl:lwjgl-vma:3.4.3",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-vma/3.4.3/lwjgl-vma-3.4.3.jar",
+   "minecraftVersion": "all",
+   "sha1": "816a6ac87f1e447e5346ca0e7a1078353f51fbd6",
+   "size": 110265,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.laby:labylib-http-cache:1.2.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/laby/labylib-http-cache/1.2.0/labylib-http-cache-1.2.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "9845a00f8376c3bebf12eee68112cb93043c8e5b",
+   "size": 10851,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.signed.net.labymod.jncrmx:discord-game-sdk4j:0.5.6",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/signed/net/labymod/jncrmx/discord-game-sdk4j/0.5.6/discord-game-sdk4j-0.5.6.jar",
+   "minecraftVersion": "all",
+   "sha1": "3e311c508ed0d9b55cb068276341f725917ae0c9",
+   "size": 237318,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.google.code.gson:gson:2.14.0",
+   "url": "https://releases.r2.labymod.net/libraries/com/google/code/gson/gson/2.14.0/gson-2.14.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "efc0e34ede4e3204eaefb84a00e55e8c86634382",
+   "size": 313604,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.signed.net.labymod.imgui:imgui-java-app:1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/signed/net/labymod/imgui/imgui-java-app/1.0.2/imgui-java-app-1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "d4b0845b9033bea80a5727ad596a1ef895af1fad",
+   "size": 6717759,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.fasterxml.jackson.core:jackson-annotations:2.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/com/fasterxml/jackson/core/jackson-annotations/2.13.4/jackson-annotations-2.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "858c6cc78e1f08a885b1613e1d817c829df70a6e",
+   "size": 75717,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "javax.annotation:javax.annotation-api:1.3.2",
+   "url": "https://releases.r2.labymod.net/libraries/javax/annotation/javax.annotation-api/1.3.2/javax.annotation-api-1.3.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "934c04d3cfef185a8008e7bf34331b79730a9d43",
+   "size": 26586,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.serverapi:api:1.0.14",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/serverapi/api/1.0.14/api-1.0.14.jar",
+   "minecraftVersion": "all",
+   "sha1": "d01c1f1af83f744c0465e407bff21149c8369418",
+   "size": 40355,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.fasterxml.jackson.core:jackson-core:2.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/com/fasterxml/jackson/core/jackson-core/2.13.4/jackson-core-2.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "0cf934c681294b97ef6d80082faeefbe1edadf56",
+   "size": 374895,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.serverapi:core:1.0.14",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/serverapi/core/1.0.14/core-1.0.14.jar",
+   "minecraftVersion": "all",
+   "sha1": "a06c5af0fd48236e4f39aa5da4f85a4a61346854",
+   "size": 107256,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "io.sentry:sentry:8.43.2",
+   "url": "https://releases.r2.labymod.net/libraries/io/sentry/sentry/8.43.2/sentry-8.43.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "44e452ec7dc8bc09bb81afaa9b4309d4347ed579",
+   "size": 1221492,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.google.code.findbugs:jsr305:3.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "25ea2e8b0c338a877313bd4672d3fe056ea78f0d",
+   "size": 19936,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.imgui:imgui-java-natives-macos:1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/imgui/imgui-java-natives-macos/1.0.2/imgui-java-natives-macos-1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "50789a15b02e21dc1446b050be091bef0f0c4eac",
+   "size": 1553020,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.fasterxml.woodstox:woodstox-core:6.3.1",
+   "url": "https://releases.r2.labymod.net/libraries/com/fasterxml/woodstox/woodstox-core/6.3.1/woodstox-core-6.3.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "bf29b07ca4dd81ef3c0bc18c8bd5617510a81c5d",
+   "size": 1585771,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.apache.logging.log4j:log4j-api:2.26.0",
+   "url": "https://releases.r2.labymod.net/libraries/org/apache/logging/log4j/log4j-api/2.26.0/log4j-api-2.26.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951",
+   "size": 351126,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.github.ben-manes.caffeine:caffeine:3.2.3",
+   "url": "https://releases.r2.labymod.net/libraries/com/github/ben-manes/caffeine/caffeine/3.2.3/caffeine-3.2.3.jar",
+   "minecraftVersion": "all",
+   "sha1": "c097f0f6d21a0e6db88ea55836e26419b30dfe19",
+   "size": 1020615,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.imgui:imgui-java-natives-macos-arm64:1.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/imgui/imgui-java-natives-macos-arm64/1.0.2/imgui-java-natives-macos-arm64-1.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "f1eec30680ce7cf02eb347258ab2ff29bf5f23d2",
+   "size": 1279880,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.jspecify:jspecify:1.0.0",
+   "url": "https://releases.r2.labymod.net/libraries/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "7425a601c1c7ec76645a78d22b8c6a627edee507",
+   "size": 3819,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.checkerframework:checker-qual:3.33.0",
+   "url": "https://releases.r2.labymod.net/libraries/org/checkerframework/checker-qual/3.33.0/checker-qual-3.33.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "de2b60b62da487644fc11f734e73c8b0b431238f",
+   "size": 223979,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.junit.platform:junit-platform-commons:1.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/org/junit/platform/junit-platform-commons/1.13.4/junit-platform-commons-1.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "8f63c7ed05b473d95cc63d1082054d7bfcf9c0e5",
+   "size": 158512,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.lwjgl:lwjgl-spvc:3.4.3",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-spvc/3.4.3/lwjgl-spvc-3.4.3.jar",
+   "minecraftVersion": "all",
+   "sha1": "98e5b5ef5159100b26a169a9aed6c24e820e3eaa",
+   "size": 150189,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.lwjgl:lwjgl:3.4.3:unsafe",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3-unsafe.jar",
+   "minecraftVersion": "all",
+   "sha1": "18fa7dbff2867bdcb70599ed5ee3c286741dedc2",
+   "size": 1182209,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.github.javaparser:javaparser-core:3.28.0",
+   "url": "https://releases.r2.labymod.net/libraries/com/github/javaparser/javaparser-core/3.28.0/javaparser-core-3.28.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "59829d055a8327d017e83316fc01b182335da9d6",
+   "size": 1472249,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "it.unimi.dsi:fastutil:8.5.18",
+   "url": "https://releases.r2.labymod.net/libraries/it/unimi/dsi/fastutil/8.5.18/fastutil-8.5.18.jar",
+   "minecraftVersion": "all",
+   "sha1": "a6cff377eecc19c2037bf31568a6d7106b50ba1f",
+   "size": 23965563,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.junit.jupiter:junit-jupiter-engine:5.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/org/junit/jupiter/junit-jupiter-engine/5.13.4/junit-jupiter-engine-5.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "d29fc8b6a28d21b8741f299ae4deb3e3aa68b2e8",
+   "size": 341150,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod:laby3d-api-opengl:0.9.24",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/laby3d-api-opengl/0.9.24/laby3d-api-opengl-0.9.24.jar",
+   "minecraftVersion": "all",
+   "sha1": "f63865f92969cf3db63f61e4c7046b929d2a159b",
+   "size": 182612,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "net.labymod.signed.com.github.usefulness:webp-imageio:0.8.0",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/signed/com/github/usefulness/webp-imageio/0.8.0/webp-imageio-0.8.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "e4ac001afed04b9581506b6932ce1ed5e0fa3b9a",
+   "size": 3276513,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.junit.platform:junit-platform-launcher:1.13.4",
+   "url": "https://releases.r2.labymod.net/libraries/org/junit/platform/junit-platform-launcher/1.13.4/junit-platform-launcher-1.13.4.jar",
+   "minecraftVersion": "all",
+   "sha1": "e72a4d00af6177569fd57df4c8c4bb241c6aa4b6",
+   "size": 223100,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "com.squareup:javapoet:1.13.0",
+   "url": "https://releases.r2.labymod.net/libraries/com/squareup/javapoet/1.13.0/javapoet-1.13.0.jar",
+   "minecraftVersion": "all",
+   "sha1": "d6562d385049f35eb50403fa86bb11cce76b866a",
+   "size": 106068,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.ow2.asm:asm-analysis:9.9.1",
+   "url": "https://releases.r2.labymod.net/libraries/org/ow2/asm/asm-analysis/9.9.1/asm-analysis-9.9.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "1ab8d9316ef7a67240087919a708246c37ed1660",
+   "size": 35170,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.jetbrains.kotlin:kotlin-stdlib:2.2.20",
+   "url": "https://releases.r2.labymod.net/libraries/org/jetbrains/kotlin/kotlin-stdlib/2.2.20/kotlin-stdlib-2.2.20.jar",
+   "minecraftVersion": "all",
+   "sha1": "5380b19fa1924399b62ce3a1faffebb2b4f82272",
+   "size": 1761444,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.joml:joml:1.10.7",
+   "url": "https://releases.r2.labymod.net/libraries/org/joml/joml/1.10.7/joml-1.10.7.jar",
+   "minecraftVersion": "all",
+   "sha1": "f8c3f2e7db281bde099342dd36133de4bbba390c",
+   "size": 778679,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.jetbrains:annotations:26.0.2",
+   "url": "https://releases.r2.labymod.net/libraries/org/jetbrains/annotations/26.0.2/annotations-26.0.2.jar",
+   "minecraftVersion": "all",
+   "sha1": "c7ce3cdeda3d18909368dfe5977332dfad326c6d",
+   "size": 31170,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  },
+  {
+   "name": "org.ow2.asm:asm-tree:9.9.1",
+   "url": "https://releases.r2.labymod.net/libraries/org/ow2/asm/asm-tree/9.9.1/asm-tree-9.9.1.jar",
+   "minecraftVersion": "all",
+   "sha1": "b6b1b3366296163b4b1f540731aad0a2baa484d8",
+   "size": 51963,
+   "natives": [],
+   "resolvedAt": 1792915774869
+  }
+ ],
+ "isolated_libraries": [
+  {
+   "name": "lwjgl-glfw",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-glfw/3.4.3/lwjgl-glfw-3.4.3-natives-linux.jar",
+   "versions": [
+    "1.8.9",
+    "1.21.11"
+   ]
+  },
+  {
+   "name": "lwjgl",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3-natives-macos-arm64.jar",
+   "versions": [
+    "1.8.9",
+    "1.21.11"
+   ]
+  },
+  {
+   "name": "lwjgl-glfw",
+   "url": "https://releases.r2.labymod.net/libraries/org/lwjgl/lwjgl-glfw/3.4.3/lwjgl-glfw-3.4.3-natives-macos-arm64.jar",
+   "versions": [
+    "1.8.9",
+    "1.21.11"
+   ]
+  },
+  {
+   "name": "lwjgl",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/signed/org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3-natives-windows-arm64.jar",
+   "versions": [
+    "1.8.9",
+    "1.21.11"
+   ]
+  },
+  {
+   "name": "lwjgl",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/signed/org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3-natives-windows-x86.jar",
+   "versions": [
+    "1.8.9",
+    "1.21.11"
+   ]
+  },
+  {
+   "name": "lwjgl-glfw",
+   "url": "https://releases.r2.labymod.net/libraries/net/labymod/signed/org/lwjgl/lwjgl-glfw/3.4.3/lwjgl-glfw-3.4.3-natives-windows.jar",
+   "versions": [
+    "1.8.9",
+    "1.21.11"
+   ]
+  }
+ ]
+}

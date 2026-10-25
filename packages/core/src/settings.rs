@@ -256,6 +256,8 @@ pub struct GlobalSettings {
     pub shared_folders_default: BTreeSet<SharedFolder>,
     pub accounts: Vec<Account>,
     pub selected_account_id: Option<String>,
+    /// Terms of game clients (see `client`) the user accepted, by key such as `labymod4`.
+    pub accepted_client_terms: BTreeSet<String>,
 }
 
 impl Default for GlobalSettings {
@@ -276,6 +278,7 @@ impl Default for GlobalSettings {
             shared_folders_default: BTreeSet::from([SharedFolder::Resourcepacks, SharedFolder::Shaderpacks]),
             accounts: Vec::new(),
             selected_account_id: None,
+            accepted_client_terms: BTreeSet::new(),
         }
     }
 }

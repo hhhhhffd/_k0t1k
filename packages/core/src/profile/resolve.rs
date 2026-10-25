@@ -96,10 +96,18 @@ fn default_version(components: &[ResolvedComponent], needed: &Needed) -> Result<
 /// intermediary), repeating until nothing changes. The result keeps the apply order; added
 /// components are marked `dependency_only` and placed right before their first dependee.
 pub async fn resolve_components(meta: &MetaClient, specs: Vec<ComponentSpec>) -> Result<Vec<ResolvedComponent>> {
+    crate::client::check_exclusive(&specs)?;
+    let minecraft_version =
+        specs.iter().find(|spec| spec.uid == MINECRAFT_UID).map(|spec| spec.version.clone()).unwrap_or_default();
     let mut components = Vec::with_capacity(specs.len());
     for spec in specs {
-        components.push(load(meta, spec).await?);
+        components.push(if crate::client::is_client_uid(&spec.uid) {
+            crate::client::load(meta, spec, &minecraft_version).await?
+        } else {
+            load(meta, spec).await?
+        });
     }
+    crate::client::apply(&mut components);
 
     loop {
         let needed = gather(&components)?;

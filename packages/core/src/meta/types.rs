@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::client::ClientFiles;
 use crate::profile::library::Library;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -114,6 +115,9 @@ pub struct VersionFile {
     pub compatible_java_name: Option<String>,
     #[serde(default)]
     pub logging: Option<LoggingConfig>,
+    /// Files a client (see `crate::client`) puts into the game directory; never part of Prism meta.
+    #[serde(skip)]
+    pub client_files: ClientFiles,
 }
 
 /// The launch-relevant fields of a version JSON from Mojang's launcher manifest.
