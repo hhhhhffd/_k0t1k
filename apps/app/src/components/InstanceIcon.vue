@@ -2,18 +2,38 @@
 import { Axe, Gem, Ghost, Leaf, Pickaxe, Skull, Sword, Zap, Box } from '@lucide/vue'
 import type { Component } from 'vue'
 import mascot from '../assets/mascot.png'
+import iconIndex from '../../../../icons/instances/index.json'
 
-// The launcher's neon instance icons; the keys are Prism's icon keys, so imported Prism instances keep theirs.
-const files = import.meta.glob<string>('../assets/instance-icons/*.svg', { eager: true, import: 'default' })
-const neonIcons = Object.fromEntries(
-  Object.entries(files).map(([path, url]) => [path.slice(path.lastIndexOf('/') + 1, -4).replace(/-/g, '_'), url]),
-)
-const ORDER = ['grass', 'dirt', 'stone', 'planks', 'brick', 'tnt', 'iron', 'gold', 'diamond', 'creeper', 'squarecreeper', 'skeleton', 'enderman', 'steve', 'herobrine', 'chicken', 'meat', 'enderpearl', 'netherstar', 'flame', 'gear', 'infinity', 'magitech', 'ftb_logo', 'ftb_glow']
+// The launcher's instance icons; `icons/instances/index.json` gives their keys and picker order.
+const files = import.meta.glob<string>('../../../../icons/instances/*.svg', { eager: true, import: 'default' })
+const iconUrl = (file: string) => files[`../../../../icons/instances/${file}`]!
 
 /** Built-in icons offered in the pickers, mascot first. */
 export const INSTANCE_ICONS: Record<string, string> = {
   mascot,
-  ...Object.fromEntries(ORDER.filter((key) => neonIcons[key]).map((key) => [key, neonIcons[key]!])),
+  ...Object.fromEntries(iconIndex.map((entry) => [entry.id, iconUrl(entry.file)])),
+}
+
+// Prism's icon keys (also used by earlier versions of the launcher), so imported and older instances get a matching icon.
+const PRISM_KEYS: Record<string, string> = {
+  grass: 'grass-block',
+  dirt: 'dirt-block',
+  stone: 'stone-block',
+  planks: 'planks-block',
+  brick: 'brick-block',
+  tnt: 'tnt-block',
+  iron: 'iron-block',
+  gold: 'gold-block',
+  diamond: 'diamond-block',
+  creeper: 'creeper-head',
+  squarecreeper: 'creeper-head',
+  skeleton: 'skeleton-head',
+  enderman: 'enderman-head',
+  chicken: 'chicken-head',
+  netherstar: 'star',
+  magitech: 'potion',
+  ftb_logo: 'modpack',
+  ftb_glow: 'modpack',
 }
 
 // Icons of earlier versions of the launcher: still drawn for instances that use them, no longer offered.
@@ -38,8 +58,9 @@ import { useInstancesStore } from '../stores/instances'
 const CUSTOM_PREFIX = 'custom:'
 const props = withDefaults(defineProps<{ icon: string; size?: number; instanceId?: string }>(), { size: 48 })
 const store = useInstancesStore()
-const legacy = computed(() => LEGACY_ICONS[props.icon])
-const builtIn = computed(() => INSTANCE_ICONS[props.icon] ?? INSTANCE_ICONS.grass!)
+// `sword` and `pickaxe` are keys in both sets; the current icon wins.
+const legacy = computed(() => (INSTANCE_ICONS[props.icon] ? undefined : LEGACY_ICONS[props.icon]))
+const builtIn = computed(() => INSTANCE_ICONS[props.icon] ?? INSTANCE_ICONS[PRISM_KEYS[props.icon] ?? 'default']!)
 
 // A custom icon is a file in the instance folder (its name changes with every new icon, so nothing stale is cached).
 const customUrl = computed(() => {

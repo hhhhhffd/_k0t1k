@@ -1,12 +1,11 @@
 # Instance icon style
 
-Reference: the launcher's own icons in `apps/app/src/assets/instance-icons/`.
+Used by the launcher's instance icon pickers (`apps/app/src/components/InstanceIcon.vue`).
 
 - **Look:** flat line art in bright colors, no fills, no gradients, no glow or other filters, no raster. Not pixel art.
 - **Grid:** `viewBox="0 0 64 64"`, artwork within roughly 8–56, centered.
 - **Stroke:** two passes of the same geometry:
-  1. colored stroke `2.6`, round caps and joins (the reference icons also blur it with a
-     `glow` filter; this set deliberately drops it);
+  1. colored stroke `2.6`, round caps and joins (no glow);
   2. white highlight on top: `stroke="#fff" stroke-opacity=".7" stroke-width=".9"`.
 - **Corners:** frames use `rx` 3–6; everything else gets its rounding from round joins.
 - **Blocks:** isometric cube. Top `32,9 54,21 32,33 10,21`, left face `10,21 32,33 32,57 10,45`,

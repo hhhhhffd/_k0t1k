@@ -1,6 +1,6 @@
 # Asset attribution
 
-The instance icons in `instance-icons/` are the launcher's own artwork.
+The instance icons in `icons/instances/` (repository root) are the launcher's own artwork.
 
 ## brands/
 
