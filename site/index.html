@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>_k0t1k Minecraft Launcher</title>
+<meta name="description" content="_k0t1k is a fast, portable Minecraft launcher for Windows with Prism Launcher-level features in a modern UI.">
+<meta name="color-scheme" content="dark light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="assets/mascot.png">
+<style>
+:root {
+  --base: #0b0910; --surface: #13101c; --raised: #1b1728; --hover: #251f37; --line: #2b2542;
+  --fg: #ece8f6; --muted: #a199ba; --faint: #6d6588;
+  --accent: #a259f7; --accent-fg: #ffffff; --accent-text: #b98bfa;
+  --glow: 0 0 24px rgb(162 89 247 / 0.28); --shadow: 0 12px 40px rgb(0 0 0 / 0.55);
+  --px: 4px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --base: #f1eff7; --surface: #ffffff; --raised: #f8f6fc; --hover: #ebe7f4; --line: #d9d3e8;
+    --fg: #1c1730; --muted: #5d5676; --faint: #6f6887;
+    --accent: #7c3aed; --accent-text: #6d28d9;
+    --glow: 0 0 20px rgb(124 58 237 / 0.18); --shadow: 0 12px 32px rgb(40 20 80 / 0.18);
+    color-scheme: light;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--base); color: var(--fg);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent-text); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.wrap { width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+.px { font-family: "Press Start 2P", ui-monospace, "Cascadia Mono", Consolas, monospace; line-height: 1.5; letter-spacing: 0; }
+html:not([lang="ru"]) .ru, html[lang="ru"] .en { display: none !important; }
+
+/* header */
+header.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--base) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 2px solid var(--line); }
+header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-size: 14px; }
+.brand img { width: 32px; height: 32px; image-rendering: pixelated; }
+nav.links { display: flex; gap: 20px; align-items: center; }
+nav.links a { color: var(--muted); text-decoration: none; font-size: 15px; }
+nav.links a:hover { color: var(--fg); }
+.lang { display: inline-flex; border: 2px solid var(--line); background: var(--surface); }
+.lang button { font: 700 13px/1 system-ui, sans-serif; color: var(--muted); background: none; border: 0; padding: 8px 10px; min-width: 40px; cursor: pointer; }
+.lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+@media (max-width: 640px) { nav.links a { display: none; } }
+
+/* hero */
+.hero { padding: 56px 0 40px; position: relative; overflow: hidden; }
+.hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 32px 32px; opacity: .35;
+  -webkit-mask-image: radial-gradient(ellipse at 70% 30%, #000, transparent 70%); mask-image: radial-gradient(ellipse at 70% 30%, #000, transparent 70%); }
+.hero .wrap { position: relative; display: grid; grid-template-columns: 1.4fr 1fr; gap: 32px; align-items: center; }
+.hero h1 { font-size: clamp(26px, 5vw, 48px); margin: 0 0 20px; }
+.hero h1 span { color: var(--accent); }
+.hero p.lead { font-size: 18px; color: var(--muted); max-width: 52ch; margin: 0 0 28px; }
+.cat { justify-self: center; position: relative; }
+.cat img { width: min(280px, 60vw); aspect-ratio: 1; image-rendering: pixelated; filter: drop-shadow(0 0 28px rgb(162 89 247 / .45)); animation: bob 3s steps(4) infinite; }
+.cat::after { content: ""; display: block; width: 55%; height: 12px; margin: 6px auto 0; background: var(--accent); opacity: .25; }
+@keyframes bob { 50% { transform: translateY(-8px); } }
+@media (max-width: 760px) { .hero .wrap { grid-template-columns: 1fr; } .cat { order: -1; } .hero { padding-top: 32px; } }
+
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 20px; font: 700 16px/1.2 system-ui, sans-serif; text-decoration: none; cursor: pointer;
+  background: var(--accent); color: var(--accent-fg); border: 0; box-shadow: 0 var(--px) 0 rgb(0 0 0 / .35), var(--glow); transition: transform .1s; }
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(2px); }
+.btn[aria-disabled="true"] { background: var(--raised); color: var(--muted); border: 2px dashed var(--faint); box-shadow: none; cursor: not-allowed; }
+.btn[aria-disabled="true"]:hover { transform: none; }
+.soon { font: 12px/1 "Press Start 2P", monospace; padding: 6px 8px; background: var(--accent); color: var(--accent-fg); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 36px; max-width: 520px; }
+.stat { background: var(--surface); border: 2px solid var(--line); padding: 12px; }
+.stat b { display: block; font-size: 15px; color: var(--accent-text); }
+.stat span { font-size: 13px; color: var(--muted); }
+
+/* sections */
+section { padding: 56px 0; }
+section > .wrap > h2 { font-size: clamp(16px, 3vw, 22px); margin: 0 0 12px; }
+section > .wrap > h2::before { content: "> "; color: var(--accent); }
+.sub { color: var(--muted); max-width: 70ch; margin: 0 0 28px; }
+.band { background: var(--surface); border-block: 2px solid var(--line); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.card { background: var(--raised); border: 2px solid var(--line); padding: 20px; position: relative; }
+.card h3 { margin: 0 0 8px; font-size: 17px; }
+.card p, .card li { color: var(--muted); margin: 0; font-size: 15px; }
+.card ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.band .card { background: var(--base); }
+
+.feat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .feat { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .feat { grid-template-columns: 1fr; } }
+.feat .card { padding-top: 64px; }
+.feat .card img { position: absolute; top: 14px; left: 16px; width: 36px; height: 36px; image-rendering: pixelated; }
+.feat .card:hover { border-color: var(--accent); box-shadow: var(--glow); }
+
+ol.steps { list-style: none; margin: 0 0 24px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: s; }
+@media (max-width: 760px) { ol.steps { grid-template-columns: 1fr; } }
+ol.steps li { counter-increment: s; background: var(--raised); border: 2px solid var(--line); padding: 20px 20px 20px 20px; }
+ol.steps li::before { content: counter(s); display: inline-block; font: 14px/1 "Press Start 2P", monospace; background: var(--accent); color: var(--accent-fg); padding: 8px 10px; margin-bottom: 12px; }
+ol.steps b { display: block; font-size: 17px; margin-bottom: 4px; }
+ol.steps span { color: var(--muted); font-size: 15px; }
+.tech { border-left: 4px solid var(--accent); padding: 4px 0 4px 16px; color: var(--muted); margin: 0; }
+
+/* gallery */
+.gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .gallery { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .gallery { grid-template-columns: 1fr; } }
+.shot { all: unset; box-sizing: border-box; display: block; cursor: zoom-in; background: var(--raised); border: 2px solid var(--line); padding: 8px; }
+.shot:hover, .shot:focus-visible { border-color: var(--accent); box-shadow: var(--glow); }
+.shot img { width: 100%; aspect-ratio: 8 / 5; object-fit: cover; object-position: top left; }
+.shot small { display: block; padding: 8px 4px 2px; color: var(--muted); font-size: 14px; }
+
+dialog#lb { border: 2px solid var(--accent); background: var(--surface); color: var(--fg); padding: 12px; max-width: min(1280px, 96vw); width: 96vw; max-height: 96vh; box-shadow: var(--shadow); }
+dialog#lb::backdrop { background: rgb(5 3 10 / .85); }
+dialog#lb img { width: 100%; max-height: calc(96vh - 90px); object-fit: contain; }
+.lb-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 8px; }
+.lb-bar p { margin: 0; color: var(--muted); font-size: 14px; }
+.lb-bar button { font: 700 14px system-ui, sans-serif; background: var(--accent); color: var(--accent-fg); border: 0; padding: 10px 14px; cursor: pointer; }
+
+.dl { text-align: center; }
+.dl .cat-sm { width: 96px; margin: 0 auto 16px; image-rendering: pixelated; }
+.dl .sub { margin-inline: auto; }
+
+footer { border-top: 2px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+footer p { margin: 0 0 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .cat img { animation: none; }
+  .btn { transition: none; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand px" href="#top" aria-label="_k0t1k"><img src="assets/mascot.png" alt="" width="32" height="32">_k0t1k</a>
+    <nav class="links" aria-label="Sections">
+      <a href="#features"><span class="en">Features</span><span class="ru">Возможности</span></a>
+      <a href="#screens"><span class="en">Screenshots</span><span class="ru">Скриншоты</span></a>
+      <a href="#download"><span class="en">Download</span><span class="ru">Скачать</span></a>
+    </nav>
+    <div class="lang" role="group" aria-label="Language / Язык">
+      <button type="button" data-set="en" aria-pressed="true" lang="en">EN</button>
+      <button type="button" data-set="ru" aria-pressed="false" lang="ru">RU</button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <h1 class="px"><span>_k0t1k</span><br>
+        <span class="en" style="color:var(--fg)">Minecraft launcher</span><span class="ru" style="color:var(--fg)">лаунчер Minecraft</span></h1>
+      <p class="lead en">A fast, portable Minecraft launcher for Windows with Prism Launcher-level features in a modern UI.</p>
+      <p class="lead ru">Быстрый портативный лаунчер Minecraft для Windows с возможностями уровня Prism Launcher и современным интерфейсом.</p>
+      <div class="hero-actions">
+        <a class="btn" href="#download"><span class="en">Get the launcher</span><span class="ru">Получить лаунчер</span></a>
+        <a class="btn" style="background:transparent;color:var(--fg);border:2px solid var(--line);box-shadow:none" href="#screens"><span class="en">See screenshots</span><span class="ru">Посмотреть скриншоты</span></a>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>~37 MB</b><span class="en">RAM while playing</span><span class="ru">ОЗУ во время игры</span></div>
+        <div class="stat"><b>0% CPU</b><span class="en">hidden in tray</span><span class="ru">в трее</span></div>
+        <div class="stat"><b>0</b><span class="en">system traces</span><span class="ru">следов в системе</span></div>
+      </div>
+    </div>
+    <div class="cat"><img src="assets/mascot.png" width="64" height="64" alt="The _k0t1k mascot: a pixel black cat with a purple outline" data-alt-ru="Талисман _k0t1k: пиксельный чёрный кот с фиолетовым контуром"></div>
+  </div>
+</div>
+
+<section id="what">
+  <div class="wrap">
+    <h2 class="px"><span class="en">What it is</span><span class="ru">Что это</span></h2>
+    <p class="sub en">_k0t1k is a fast, portable Minecraft launcher for Windows with Prism Launcher-level features in a modern UI.</p>
+    <p class="sub ru">_k0t1k это быстрый портативный лаунчер Minecraft для Windows с возможностями уровня Prism Launcher и современным интерфейсом.</p>
+  </div>
+</section>
+
+<section id="why" class="band">
+  <div class="wrap">
+    <h2 class="px"><span class="en">Why it exists</span><span class="ru">Зачем он нужен</span></h2>
+    <p class="sub en">Prism's power with a nicer, lighter UI.</p>
+    <p class="sub ru">Мощь Prism с более приятным и лёгким интерфейсом.</p>
+    <div class="two">
+      <div class="card">
+        <h3 class="en">Portable, zero system traces</h3><h3 class="ru">Портативный, без следов в системе</h3>
+        <p class="en">Data lives next to the exe. The WebView2 data too. Java runtimes are managed for you.</p>
+        <p class="ru">Данные хранятся рядом с exe, данные WebView2 тоже. Среды Java управляются лаунчером.</p>
+      </div>
+      <div class="card">
+        <h3 class="en">Tiny footprint while playing</h3><h3 class="ru">Минимум ресурсов во время игры</h3>
+        <p class="en">The launcher hides to the tray: about 37 MB of RAM and 0% CPU.</p>
+        <p class="ru">Лаунчер сворачивается в трей: около 37 МБ ОЗУ и 0% CPU.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2 class="px"><span class="en">Features</span><span class="ru">Возможности</span></h2>
+    <div class="feat">
+      <div class="card"><img src="assets/icons/puzzle.svg" alt="">
+        <h3 class="en">Mods, modpacks, packs</h3><h3 class="ru">Моды, модпаки, паки</h3>
+        <p class="en">Modrinth and CurseForge mods, modpacks and resource packs. FTB packs too.</p>
+        <p class="ru">Моды, модпаки и ресурспаки с Modrinth и CurseForge. Также паки FTB.</p></div>
+      <div class="card"><img src="assets/icons/gear.svg" alt="">
+        <h3 class="en">Loaders and Java</h3><h3 class="ru">Загрузчики и Java</h3>
+        <p class="en">Fabric, Quilt, Forge and NeoForge. Automatic Java download per version and automatic JVM memory tuning.</p>
+        <p class="ru">Fabric, Quilt, Forge и NeoForge. Автоматическая загрузка Java под каждую версию и автоматическая настройка памяти JVM.</p></div>
+      <div class="card"><img src="assets/icons/creeper.svg" alt="">
+        <h3 class="en">Accounts</h3><h3 class="ru">Аккаунты</h3>
+        <p class="en">Microsoft and ely.by accounts, plus offline mode.</p>
+        <p class="ru">Аккаунты Microsoft и ely.by, а также офлайн-режим.</p></div>
+      <div class="card"><img src="assets/icons/grass.svg" alt="">
+        <h3 class="en">Instances</h3><h3 class="ru">Экземпляры</h3>
+        <p class="en">Multiple instances and copies, groups, custom icons. Playtime tracking.</p>
+        <p class="ru">Много экземпляров и копии, группы, свои иконки. Учёт времени игры.</p></div>
+      <div class="card"><img src="assets/icons/diamond.svg" alt="">
+        <h3 class="en">Worlds and servers</h3><h3 class="ru">Миры и серверы</h3>
+        <p class="en">Manage worlds, datapacks, screenshots and servers, with servers.dat shared across instances. Join a server straight from the launcher.</p>
+        <p class="ru">Управление мирами, датапаками, скриншотами и серверами, servers.dat общий для всех экземпляров. Вход на сервер прямо из лаунчера.</p></div>
+      <div class="card"><img src="assets/icons/flame.svg" alt="">
+        <h3 class="en">Import and export</h3><h3 class="ru">Импорт и экспорт</h3>
+        <p class="en">Prism zip, .mrpack and CurseForge zip. Managed modpack updates and update-all. Drag &amp; drop.</p>
+        <p class="ru">Prism zip, .mrpack и CurseForge zip. Управляемые обновления модпаков и обновление всего сразу. Drag &amp; drop.</p></div>
+      <div class="card"><img src="assets/icons/tnt.svg" alt="">
+        <h3 class="en">Crash dialog</h3><h3 class="ru">Окно краша</h3>
+        <p class="en">One-click log upload to mclo.gs when the game crashes.</p>
+        <p class="ru">Загрузка лога на mclo.gs в один клик при вылете игры.</p></div>
+      <div class="card"><img src="assets/icons/netherstar.svg" alt="">
+        <h3 class="en">Themes and languages</h3><h3 class="ru">Темы и языки</h3>
+        <p class="en">Themes, user-made custom themes and a lite mode. English and Russian.</p>
+        <p class="ru">Темы, пользовательские темы и облегчённый режим. Английский и русский.</p></div>
+      <div class="card"><img src="assets/icons/gear.svg" alt="">
+        <h3 class="en">Signed auto-updates</h3><h3 class="ru">Подписанные автообновления</h3>
+        <p class="en">The launcher updates itself with signed releases.</p>
+        <p class="ru">Лаунчер обновляется сам, релизы подписаны.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how" class="band">
+  <div class="wrap">
+    <h2 class="px"><span class="en">How it works</span><span class="ru">Как это работает</span></h2>
+    <ol class="steps">
+      <li><b class="en">Download</b><b class="ru">Скачайте</b><span class="en">Grab the exe and put it in any folder.</span><span class="ru">Возьмите exe и положите в любую папку.</span></li>
+      <li><b class="en">Sign in</b><b class="ru">Войдите</b><span class="en">Use a Microsoft or ely.by account, or play offline.</span><span class="ru">Аккаунт Microsoft или ely.by, либо офлайн-режим.</span></li>
+      <li><b class="en">Play</b><b class="ru">Играйте</b><span class="en">Create an instance or install a modpack and press Play.</span><span class="ru">Создайте экземпляр или установите модпак и нажмите Играть.</span></li>
+    </ol>
+    <p class="tech en">Under the hood: a Rust core with Tauri 2 and a Vue interface. Requires Windows 10 or newer with WebView2.</p>
+    <p class="tech ru">Внутри: ядро на Rust, Tauri 2 и интерфейс на Vue. Нужна Windows 10 или новее с WebView2.</p>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="wrap">
+    <h2 class="px"><span class="en">Screenshots</span><span class="ru">Скриншоты</span></h2>
+    <p class="sub en">Click a screenshot to enlarge it. Press Esc to close.</p>
+    <p class="sub ru">Нажмите на скриншот, чтобы увеличить. Esc закрывает.</p>
+    <div class="gallery">
+      <button type="button" class="shot" data-full="assets/screens/library.webp"
+        data-alt="Library of instances grouped by folders, with the action panel for the selected instance" data-alt-ru="Библиотека экземпляров по группам и панель действий выбранного экземпляра">
+        <img src="assets/screens/library.webp" width="1920" height="1200" loading="lazy" alt="Library of instances grouped by folders, with the action panel for the selected instance">
+        <small class="en">Library</small><small class="ru">Библиотека</small></button>
+      <button type="button" class="shot" data-full="assets/screens/mods.webp"
+        data-alt="Instance page with the list of installed mods and toggles" data-alt-ru="Страница экземпляра со списком установленных модов и переключателями">
+        <img src="assets/screens/mods.webp" width="1920" height="1200" loading="lazy" alt="Instance page with the list of installed mods and toggles">
+        <small class="en">Mods of an instance</small><small class="ru">Моды экземпляра</small></button>
+      <button type="button" class="shot" data-full="assets/screens/modpacks.webp"
+        data-alt="New instance dialog browsing Modrinth modpacks" data-alt-ru="Диалог нового экземпляра с поиском модпаков Modrinth">
+        <img src="assets/screens/modpacks.webp" width="1920" height="1200" loading="lazy" alt="New instance dialog browsing Modrinth modpacks">
+        <small class="en">Modpacks from Modrinth and CurseForge</small><small class="ru">Модпаки из Modrinth и CurseForge</small></button>
+      <button type="button" class="shot" data-full="assets/screens/themes.webp"
+        data-alt="Appearance settings with the theme picker and language switch" data-alt-ru="Настройки внешнего вида: выбор темы и переключатель языка">
+        <img src="assets/screens/themes.webp" width="1920" height="1200" loading="lazy" alt="Appearance settings with the theme picker and language switch">
+        <small class="en">Themes</small><small class="ru">Темы</small></button>
+      <button type="button" class="shot" data-full="assets/screens/mint-theme.webp"
+        data-alt="The library in the green Mint theme" data-alt-ru="Библиотека в зелёной теме Mint">
+        <img src="assets/screens/mint-theme.webp" width="1920" height="1200" loading="lazy" alt="The library in the green Mint theme">
+        <small class="en">Mint theme</small><small class="ru">Тема Mint</small></button>
+      <button type="button" class="shot" data-full="assets/screens/russian.webp"
+        data-alt="The same settings page switched to Russian" data-alt-ru="Те же настройки, переключённые на русский язык">
+        <img src="assets/screens/russian.webp" width="1920" height="1200" loading="lazy" alt="The same settings page switched to Russian">
+        <small class="en">Russian interface</small><small class="ru">Русский интерфейс</small></button>
+    </div>
+  </div>
+</section>
+
+<section id="download" class="band dl">
+  <div class="wrap">
+    <img class="cat-sm" src="assets/mascot.png" width="96" height="96" alt="">
+    <h2 class="px" style="margin-bottom:12px"><span class="en">Download</span><span class="ru">Скачать</span></h2>
+    <p class="sub en">The repository is private during development, so releases are not public yet.</p>
+    <p class="sub ru">Пока идёт разработка, репозиторий закрыт, поэтому релизы ещё не опубликованы.</p>
+    <a class="btn" href="https://github.com/hhhhhffd/_k0t1k/releases/latest" aria-disabled="true" id="dl-btn">
+      <span class="en">Download for Windows</span><span class="ru">Скачать для Windows</span>
+      <span class="soon en">SOON</span><span class="soon ru">СКОРО</span></a>
+    <p class="sub en" style="margin-top:14px;font-size:14px">Windows 10 or newer with WebView2.</p>
+    <p class="sub ru" style="margin-top:14px;font-size:14px">Windows 10 или новее с WebView2.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>&copy; 2026 hhhhhffd. <span class="en">All rights reserved.</span><span class="ru">Все права защищены.</span></p>
+    <p class="en">Not affiliated with Mojang or Microsoft.</p>
+    <p class="ru">Не связан с Mojang или Microsoft.</p>
+  </div>
+</footer>
+
+<dialog id="lb" aria-label="Screenshot">
+  <img id="lb-img" src="" alt="">
+  <div class="lb-bar">
+    <p id="lb-cap"></p>
+    <button type="button" id="lb-close"><span class="en">Close (Esc)</span><span class="ru">Закрыть (Esc)</span></button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var dlg = document.getElementById('lb');
+
+  function setLang(l) {
+    root.lang = l;
+    document.querySelectorAll('.lang button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.set === l)); });
+    document.querySelectorAll('[data-alt-ru]').forEach(function (el) {
+      if (el.dataset.alt === undefined) el.dataset.alt = el.getAttribute('alt');
+      var v = l === 'ru' ? el.dataset.altRu : el.dataset.alt;
+      if (el.tagName === 'IMG') el.alt = v;
+      else el.querySelector('img').alt = v;
+    });
+    document.title = l === 'ru' ? '_k0t1k: лаунчер Minecraft' : '_k0t1k Minecraft Launcher';
+    if (dlg.open) fillLb();
+  }
+  function saved() { try { return localStorage.getItem('k0t1k-lang'); } catch (e) { return null; } }
+  function save(l) { try { localStorage.setItem('k0t1k-lang', l); } catch (e) { /* storage unavailable */ } }
+
+  document.querySelectorAll('.lang button').forEach(function (b) {
+    b.addEventListener('click', function () { setLang(b.dataset.set); save(b.dataset.set); });
+  });
+  var s = saved();
+  if (s === 'ru' || s === 'en') setLang(s);
+  else if ((navigator.language || '').slice(0, 2) === 'ru') setLang('ru');
+
+  var current = null;
+  function fillLb() {
+    var img = current.querySelector('img');
+    var lb = document.getElementById('lb-img');
+    lb.src = current.dataset.full;
+    lb.alt = img.alt;
+    document.getElementById('lb-cap').textContent = img.alt;
+  }
+  document.querySelectorAll('.shot').forEach(function (b) {
+    b.addEventListener('click', function () { current = b; fillLb(); dlg.showModal(); });
+  });
+  document.getElementById('lb-close').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener('close', function () { if (current) current.focus(); });
+
+  document.getElementById('dl-btn').addEventListener('click', function (e) { e.preventDefault(); });
+})();
+</script>
+</body>
+</html>
