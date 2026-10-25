@@ -153,6 +153,8 @@ fn launch_args(paths: &Paths, profile: &LaunchProfile, assets: &AssetIndex, opti
         ("assets_index_name", profile.asset_index.id.clone()),
         ("library_directory", path_string(&paths.libraries_dir())),
         ("natives_directory", path_string(&options.natives_dir)),
+        ("launcher_name", "k0t1k".to_owned()),
+        ("launcher_version", env!("CARGO_PKG_VERSION").to_owned()),
     ]);
 
     let mut jvm = vec!["-Duser.language=en".to_owned()];

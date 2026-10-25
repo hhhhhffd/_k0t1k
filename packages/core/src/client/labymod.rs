@@ -287,10 +287,7 @@ fn build(
     // Arguments handled by the launcher itself (library path, classpath) are not repeated.
     let jvm_args = plain(patch.arguments.jvm)
         .filter(|arg| {
-            !(arg == "-cp"
-                || arg == "${classpath}"
-                || arg.starts_with("-Djava.library.path=")
-                || arg.starts_with("-Dminecraft.launcher."))
+            !(arg == "-cp" || arg == "${classpath}" || arg.starts_with("-Djava.library.path="))
         })
         .collect();
     let (compatible_java_majors, compatible_java_name) = match patch.java_version {
