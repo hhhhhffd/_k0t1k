@@ -12,13 +12,12 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Duration, Utc};
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, IoContext, Result};
 use crate::paths::Paths;
-use crate::update::{self, GithubAsset, GithubRelease};
+use crate::update;
 
 /// The export contract (`default` init, `scan`, `convert`, ...) this launcher can call.
 pub const API: u64 = 1;
@@ -127,23 +126,10 @@ fn verify_release_with(
     Ok(parsed)
 }
 
-/// The download location of every file of `manifest`, all under the plugin's release downloads.
-fn asset_urls(assets: &[GithubAsset], manifest: &Manifest, plugin: &KnownPlugin) -> Result<Vec<(String, String)>> {
-    let prefix = plugin.asset_prefix();
-    manifest
-        .files
-        .keys()
-        .map(|name| {
-            let asset = assets.iter().find(|asset| &asset.name == name).ok_or_else(|| reject(format!("the release has no asset {name}")))?;
-            if !asset.browser_download_url.starts_with(&prefix) {
-                return Err(reject(format!("unexpected asset location {}", asset.browser_download_url)));
-            }
-            if asset.size == 0 || asset.size > MAX_FILE_BYTES as u64 {
-                return Err(reject(format!("unexpected size of {name}: {} bytes", asset.size)));
-            }
-            Ok((name.clone(), asset.browser_download_url.clone()))
-        })
-        .collect()
+/// Where `name` of the release `tag` is downloaded from: always under the plugin's own release downloads
+/// (`valid_file_name` has been checked for every manifest entry, so `name` cannot leave that folder).
+fn asset_url(plugin: &KnownPlugin, tag: &str, name: &str) -> String {
+    format!("{}{tag}/{name}", plugin.asset_prefix())
 }
 
 /// Checks `bytes` against the hash the manifest lists for `name`.
@@ -308,6 +294,8 @@ fn prune(root: &Path, active: &str, previous: Option<&str>) {
 pub struct PluginRecord {
     pub last_check: Option<DateTime<Utc>>,
     pub error: Option<String>,
+    /// The last attempt hit a rate limit or a network problem: not a failure of the plugin, retried sooner.
+    pub delayed: bool,
 }
 
 pub type PluginStates = BTreeMap<String, PluginRecord>;
@@ -340,9 +328,10 @@ pub fn save_states(paths: &Paths, states: &PluginStates) -> Result<()> {
     std::fs::rename(&pending, &file).at(&file)
 }
 
-/// Whether the startup check may ask GitHub again.
+/// Whether the startup check may ask GitHub again: once a day, or after an hour when the last attempt was delayed.
 pub fn check_due(record: Option<&PluginRecord>, now: DateTime<Utc>) -> bool {
-    record.and_then(|record| record.last_check).is_none_or(|last| now - last >= CHECK_INTERVAL)
+    let interval = if record.is_some_and(|record| record.delayed) { update::RETRY_AFTER_TRANSIENT } else { CHECK_INTERVAL };
+    record.and_then(|record| record.last_check).is_none_or(|last| now - last >= interval)
 }
 
 // ---- updating ----
@@ -350,52 +339,23 @@ pub fn check_due(record: Option<&PluginRecord>, now: DateTime<Utc>) -> bool {
 /// Looks for a newer release of `plugin` than `current` and installs it. Returns the new version, or
 /// `None` when there is nothing newer (including no release at all).
 pub async fn update(client: &reqwest::Client, paths: &Paths, plugin: &KnownPlugin, launcher: &str, current: &str) -> Result<Option<String>> {
-    update_with(PUBLIC_KEY, client, paths, plugin, launcher, current, &format!("https://api.github.com/repos/{}/releases/latest", plugin.repo)).await
-}
-
-async fn update_with(
-    public_key: &str,
-    client: &reqwest::Client,
-    paths: &Paths,
-    plugin: &KnownPlugin,
-    launcher: &str,
-    current: &str,
-    release_url: &str,
-) -> Result<Option<String>> {
-    let http = |source| Error::Http { url: release_url.to_owned(), source };
-    let response = client
-        .get(release_url)
-        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-        .timeout(update::API_TIMEOUT)
-        .send()
-        .await
-        .map_err(http)?;
-    if response.status() == StatusCode::NOT_FOUND {
+    let Some(latest) = update::latest_version(plugin.repo).await? else {
         return Ok(None);
-    }
-    let release: GithubRelease = response.error_for_status().map_err(http)?.json().await.map_err(http)?;
-    if release.draft || release.prerelease || !update::is_newer(&release.tag_name, current)? {
-        return Ok(None);
-    }
-    let asset = |name: &str| {
-        release
-            .assets
-            .iter()
-            .find(|asset| asset.name == name)
-            .map(|asset| asset.browser_download_url.clone())
-            .filter(|url| url.starts_with(&plugin.asset_prefix()))
-            .ok_or_else(|| reject(format!("the release has no usable asset {name}")))
     };
-    let manifest_bytes = update::fetch_capped(client, &asset(MANIFEST_ASSET)?, MAX_MANIFEST_BYTES, "plugin.json").await?;
-    let signature = update::fetch_capped(client, &asset(SIGNATURE_ASSET)?, MAX_SIGNATURE_BYTES, "signature file").await?;
+    let tag = format!("v{}", update::normalized(latest));
+    if !update::is_newer(&tag, current)? {
+        return Ok(None);
+    }
+    let manifest_bytes = update::fetch_capped(client, &asset_url(plugin, &tag, MANIFEST_ASSET), MAX_MANIFEST_BYTES, "plugin.json").await?;
+    let signature = update::fetch_capped(client, &asset_url(plugin, &tag, SIGNATURE_ASSET), MAX_SIGNATURE_BYTES, "signature file").await?;
     let signature = String::from_utf8(signature).map_err(|_| reject("the signature is not text"))?;
-    let manifest = verify_release_with(public_key, &manifest_bytes, &signature, plugin, launcher, &release.tag_name, current)?;
+    let manifest = verify_release_with(PUBLIC_KEY, &manifest_bytes, &signature, plugin, launcher, &tag, current)?;
 
     let mut files = Vec::new();
-    for (name, url) in asset_urls(&release.assets, &manifest, plugin)? {
-        let bytes = update::fetch_capped(client, &url, MAX_FILE_BYTES, &name).await?;
-        verify_file(&manifest, &name, &bytes)?;
-        files.push((name, bytes));
+    for name in manifest.files.keys() {
+        let bytes = update::fetch_capped(client, &asset_url(plugin, &tag, name), MAX_FILE_BYTES, name).await?;
+        verify_file(&manifest, name, &bytes)?;
+        files.push((name.clone(), bytes));
     }
     let (paths, plugin_copy, installed_manifest) = (paths.clone(), *plugin, manifest.clone());
     tokio::task::spawn_blocking(move || install(&paths, &plugin_copy, &installed_manifest, &manifest_bytes, &signature, &files))
@@ -469,27 +429,14 @@ mod tests {
         verify_file(&manifest, "ratscan_wasm_bg.wasm", b"test").unwrap();
     }
 
-    fn asset(name: &str, url: &str) -> GithubAsset {
-        GithubAsset { name: name.to_owned(), browser_download_url: url.to_owned(), size: 10 }
-    }
-
     #[test]
-    fn asset_urls_must_be_under_the_plugin_repository() {
-        let manifest = verify(MANIFEST, SIG, "0.1.0", "v0.2.0", "0.1.0").unwrap();
-        let base = "https://github.com/hhhhhffd/ratka_checker/releases/download/v0.2.0";
-        let good = [asset("ratscan_wasm.js", &format!("{base}/ratscan_wasm.js")), asset("ratscan_wasm_bg.wasm", &format!("{base}/ratscan_wasm_bg.wasm"))];
-        assert_eq!(asset_urls(&good, &manifest, &PLUGIN).unwrap().len(), 2);
-        let foreign = [asset("ratscan_wasm.js", "https://evil.example/ratscan_wasm.js"), asset("ratscan_wasm_bg.wasm", &format!("{base}/x"))];
-        assert!(asset_urls(&foreign, &manifest, &PLUGIN).is_err());
-        let other_repo = [
-            asset("ratscan_wasm.js", "https://github.com/someone/else/releases/download/v0.2.0/ratscan_wasm.js"),
-            asset("ratscan_wasm_bg.wasm", &format!("{base}/x")),
-        ];
-        assert!(asset_urls(&other_repo, &manifest, &PLUGIN).is_err());
-        assert!(asset_urls(&good[..1], &manifest, &PLUGIN).is_err(), "missing asset");
-        let mut huge = asset("ratscan_wasm.js", &format!("{base}/ratscan_wasm.js"));
-        huge.size = MAX_FILE_BYTES as u64 + 1;
-        assert!(asset_urls(&[huge, asset("ratscan_wasm_bg.wasm", &format!("{base}/x"))], &manifest, &PLUGIN).is_err());
+    fn asset_urls_are_under_the_plugin_release_downloads() {
+        assert_eq!(
+            asset_url(&PLUGIN, "v0.2.0", "ratscan_wasm.js"),
+            "https://github.com/hhhhhffd/ratka_checker/releases/download/v0.2.0/ratscan_wasm.js"
+        );
+        let other = KnownPlugin { id: "packconv", repo: "hhhhhffd/conventor-mc-rp" };
+        assert!(asset_url(&other, "v0.1.0", "plugin.json").starts_with("https://github.com/hhhhhffd/conventor-mc-rp/releases/download/"));
     }
 
     #[test]
@@ -551,13 +498,23 @@ mod tests {
     }
 
     #[test]
-    fn check_is_due_once_a_day() {
+    fn check_is_due_once_a_day_or_an_hour_after_a_delay() {
         let now = Utc::now();
-        let at = |hours| PluginRecord { last_check: Some(now - Duration::hours(hours)), error: None };
+        let ago = |minutes, delayed, error: Option<&str>| PluginRecord {
+            last_check: Some(now - Duration::minutes(minutes)),
+            error: error.map(str::to_owned),
+            delayed,
+        };
         assert!(check_due(None, now));
         assert!(check_due(Some(&PluginRecord::default()), now));
-        assert!(!check_due(Some(&at(1)), now));
-        assert!(check_due(Some(&at(25)), now));
+        assert!(!check_due(Some(&ago(60, false, None)), now));
+        assert!(!check_due(Some(&ago(23 * 60, false, None)), now));
+        assert!(check_due(Some(&ago(25 * 60, false, None)), now));
+        // A rate limit or a network error is retried after an hour, not a day.
+        assert!(!check_due(Some(&ago(30, true, None)), now));
+        assert!(check_due(Some(&ago(61, true, None)), now));
+        // A real failure keeps the daily pace.
+        assert!(!check_due(Some(&ago(61, false, Some("x"))), now));
     }
 
     #[test]
@@ -566,49 +523,33 @@ mod tests {
         let paths = Paths::new(dir.path());
         assert!(load_states(&paths).is_empty());
         let mut states = PluginStates::new();
-        states.insert("ratscan".into(), PluginRecord { last_check: Some(Utc::now()), error: Some("x".into()) });
+        states.insert("ratscan".into(), PluginRecord { last_check: Some(Utc::now()), error: Some("x".into()), delayed: true });
         save_states(&paths, &states).unwrap();
         assert_eq!(load_states(&paths), states);
         std::fs::write(dir.path().join("plugins/state.json"), "{").unwrap();
         assert!(load_states(&paths).is_empty());
     }
 
-    /// Serves a fake GitHub release API plus assets on localhost, so `update_with` runs end to end.
-    async fn serve(routes: Vec<(String, Vec<u8>)>) -> String {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
-        tokio::spawn(async move {
-            loop {
-                let (mut socket, _) = listener.accept().await.unwrap();
-                let mut request = vec![0; 2048];
-                let read = socket.read(&mut request).await.unwrap();
-                let line = String::from_utf8_lossy(&request[..read]).lines().next().unwrap_or_default().to_owned();
-                let body = routes.iter().find(|(path, _)| line.contains(&format!(" {path} "))).map(|(_, body)| body.clone());
-                let head = if body.is_some() { "200 OK" } else { "404 Not Found" };
-                let body = body.unwrap_or_default();
-                let response = format!("HTTP/1.1 {head}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
-                let _ = socket.write_all(response.as_bytes()).await;
-                let _ = socket.write_all(&body).await;
-            }
-        });
-        base
-    }
-
+    /// Live check against the real plugin repositories; run by hand:
+    /// `cargo test -p k0t1k-core live_ -- --ignored --nocapture`.
     #[tokio::test]
-    async fn a_foreign_asset_url_leaves_the_active_version_untouched() {
-        // The local server is not under github.com, so the prefix check refuses the release.
-        let dir = tempfile::tempdir().unwrap();
-        let paths = Paths::new(dir.path());
-        let placeholder = serve(vec![]).await;
-        let release = format!(
-            r#"{{"tag_name":"v0.2.0","assets":[{{"name":"plugin.json","browser_download_url":"{placeholder}/m","size":10}},{{"name":"plugin.json.sig","browser_download_url":"{placeholder}/s","size":10}}]}}"#
-        );
-        let base = serve(vec![("/release".into(), release.into_bytes())]).await;
-        let result = update_with(KEY, &reqwest::Client::new(), &paths, &PLUGIN, "0.1.0", "0.1.0", &format!("{base}/release")).await;
-        assert!(result.is_err());
-        assert!(!dir.path().join("plugins").exists());
-        let missing = update_with(KEY, &reqwest::Client::new(), &paths, &PLUGIN, "0.1.0", "0.1.0", &format!("{base}/nothing")).await;
-        assert_eq!(missing.unwrap(), None);
+    #[ignore = "needs the network"]
+    async fn live_releases_are_found_and_verify() {
+        let client = update::http_client();
+        for plugin in [PLUGIN, KnownPlugin { id: "packconv", repo: "hhhhhffd/conventor-mc-rp" }] {
+            let dir = tempfile::tempdir().unwrap();
+            let paths = Paths::new(dir.path());
+            // From 0.0.0 the release is newer: downloaded, signature and file hashes verified, installed.
+            let installed = update(&client, &paths, &plugin, "0.1.1", "0.0.0").await.unwrap();
+            println!("{}: installed {installed:?}", plugin.id);
+            assert_eq!(installed.as_deref(), Some("0.1.0"));
+            let resolved = resolve(&paths, &plugin, "0.1.1", "0.0.0");
+            println!("{}: runs {} from {:?}, problem {:?}", plugin.id, resolved.version, resolved.source, resolved.problem);
+            assert_eq!((resolved.source, resolved.problem), (Source::Installed, None));
+            // Against the bundled 0.1.0 there is nothing newer.
+            let again = update(&client, &paths, &plugin, "0.1.1", "0.1.0").await.unwrap();
+            println!("{}: with bundled 0.1.0 -> {again:?}", plugin.id);
+            assert_eq!(again, None);
+        }
     }
 }

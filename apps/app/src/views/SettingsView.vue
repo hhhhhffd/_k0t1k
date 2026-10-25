@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { AppWindow, Bug, Check, Download, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
+import { AppWindow, Bug, Check, Download, Coffee, ExternalLink, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openLauncherFolder, openSharedFolder, setDataDir, uninstall } from '../api/commands'
@@ -142,6 +142,7 @@ const updateSummary = computed(() => {
   const status = update.status
   if (!status) return ''
   if (status.status === 'available') return t.update.available(status.release.version)
+  if (status.delayed) return t.update.delayed
   return status.status === 'upToDate' ? t.update.upToDate : t.update.unavailable
 })
 const updateBlockedReason = computed(() => {
@@ -481,14 +482,11 @@ async function addAccount() {
           <button class="btn" :disabled="update.checking || update.installing" @click="update.check(true)">
             <RefreshCw :size="15" :class="{ 'animate-spin': update.checking }" />{{ update.checking ? t.update.checking : t.update.checkNow }}
           </button>
-          <span class="text-muted" role="status">{{ updateSummary }}</span>
+          <span :class="update.status?.delayed ? 'text-warn' : 'text-muted'" role="status">{{ updateSummary }}</span>
         </div>
         <template v-if="update.release">
-          <div class="flex flex-col gap-1">
-            <span class="text-faint">{{ t.update.notes }}</span>
-            <pre class="selectable max-h-48 overflow-y-auto rounded-lg border border-line bg-raised p-3 font-sans text-[12px] break-words whitespace-pre-wrap">{{ update.release.notes || t.update.noNotes }}</pre>
-          </div>
           <div class="flex items-center gap-3">
+            <button class="btn" @click="openExternal(update.release.notesUrl)"><ExternalLink :size="15" />{{ t.update.notes }}</button>
             <button class="btn btn-primary" :disabled="update.installing || !!updateBlockedReason" @click="update.install()">
               <Download :size="15" />{{ update.installing ? t.update.installing : t.update.install }}
             </button>
@@ -515,7 +513,8 @@ async function addAccount() {
               <span class="badge" :class="plugin.source === 'installed' ? 'badge-accent' : ''">{{ t.plugins.sources[plugin.source] }}</span>
               <span class="ml-auto text-[12px] text-faint">{{ t.plugins.lastCheck }}: {{ plugin.lastCheck ? formatRelative(plugin.lastCheck) : t.plugins.never }}</span>
             </div>
-            <p v-if="plugin.error" class="selectable mt-2 rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-[12px] break-words text-danger" role="alert">{{ t.plugins.error }}: {{ plugin.error }}</p>
+            <p v-if="plugin.delayed" class="mt-2 rounded-lg border border-warn/50 bg-warn/10 px-3 py-2 text-[12px] break-words text-warn" role="status">{{ t.plugins.delayed }}</p>
+            <p v-else-if="plugin.error" class="selectable mt-2 rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-[12px] break-words text-danger" role="alert">{{ t.plugins.error }}: {{ plugin.error }}</p>
           </li>
         </ul>
         <div class="flex items-center gap-3">

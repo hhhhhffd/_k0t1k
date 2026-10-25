@@ -258,18 +258,29 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
 ## Updates (`core::update`, `src-tauri/src/update.rs`)
 
 - Self-update from GitHub Releases  not `tauri-plugin-updater` (it expects an installer; the launcher is a portable exe).
-  `GET /repos/hhhhhffd/_k0t1k/releases/latest` without any token; the tag `vX.Y.Z` is compared with the app version as
-  plain numbers (no pre-release tags). A 404 (private repository, no release) or a release without both assets is
-  `unavailable`, not an error. The result of a check is kept for the run, so a recreated window shows the notice
-  without asking again; a failed check is logged by the backend and shown only for the "Check now" button.
+  No GitHub REST API (unauthenticated it is 60 requests an hour per IP, which testers behind one address exhaust):
+  `GET https://github.com/hhhhhffd/_k0t1k/releases/latest` is sent with redirects disabled (`update::latest_version`, a
+  separate client) and answers 302 with `Location: .../releases/tag/vX.Y.Z`. Only that exact shape is accepted (host, repo,
+  `v` + canonical `X.Y.Z`); the tag is compared with the app version as plain numbers (no pre-release tags). A 404 or a
+  redirect to `.../releases` (private repository, no release) is `unavailable`, not an error; any other location is
+  refused. Asset URLs are built from the version: `.../releases/download/vX.Y.Z/<asset>`. The Settings UI shows a
+  "Release notes" button that opens `.../releases/tag/vX.Y.Z` externally.
+  The result of a check is kept for the run, so a recreated window shows the notice without asking again; a failed
+  check is logged by the backend and shown only for the "Check now" button.
+- **Transient problems** (`update::is_transient`: HTTP 403/429/5xx, no answer, timeout) are not errors: the check answers
+  `unavailable` with `delayed: true` (not remembered, so the next check asks again) and Settings shows a calm warn-colored
+  "GitHub is limiting requests right now" line. Other failures reach the UI as a short localized text (`tr`) and the
+  technical error goes to `launcher.log`. There is no throttle on the launcher's check (once per run, and on request).
 - Assets: `_k0t1k.exe` and `_k0t1k.exe.sig`. The signature is the base64 of a raw Ed25519 signature over
   `"_k0t1k-update\n<version>\n<hex sha256 of the exe>"` (`core::update::signed_message`), so a signed exe cannot be
   republished under a newer tag. The client rebuilds the message from the tag, hashes the download while streaming and
   verifies with the embedded public key (`ed25519-dalek` `verify_strict`); a file that fails is deleted, never installed.
   The release must be newer than the running version. Limits: asset URLs must start with
-  `https://github.com/hhhhhffd/_k0t1k/releases/download/` (URLs are not sent to the UI), the exe is at most 200 MiB and
-  must match the asset's `size` exactly, the signature file at most 1 KiB; update requests use their own client with
-  connect and read timeouts. `scripts/release.sh <exe> [notes]` checks that the exe contains
+  `https://github.com/hhhhhffd/_k0t1k/releases/download/` (checked again in `download`; URLs are not sent to the UI), the
+  exe is at most 200 MiB and, when the response has `Content-Length`, the download must match it exactly (the signature
+  is the integrity check, there is no API `size` any more), the signature file at most 1 KiB; update requests use their
+  own client with connect and read timeouts. Downloads follow redirects (GitHub serves assets from
+  `release-assets.githubusercontent.com`) but only over https and at most 5 of them. `scripts/release.sh <exe> [notes]` checks that the exe contains
   `k0t1k-launcher/<version>`, that the tree is clean and HEAD is pushed, signs with `K0T1K_UPDATE_KEY` (default
   `~/.config/k0t1k/update-signing-key.pem`, never in the repo), refuses when the tag exists or the signature does not
   verify against the embedded key, and runs `gh release create ... --target <HEAD>`.
@@ -285,7 +296,7 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
 - Manual recovery: if the new exe starts but is broken, it is not rolled back automatically; until the next successful
   start `<exe>.old` is the previous version, so deleting the new exe and renaming `.old` back restores it.
 - Setting `updates.checkOnStartup` (default true) only controls the silent startup check, which shows a notice in the
-  status bar; Settings, About has the Updates block (release notes are rendered as plain text).
+  status bar; Settings, About has the Updates block.
 
 ## Plugins (`core::plugins`, `src-tauri/src/plugins.rs`, `src/plugins`)
 
@@ -306,20 +317,24 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
 - **Release format** (per plugin repo): tag `vX.Y.Z`; assets `plugin.json`, `plugin.json.sig` and each file listed in it.
   `plugin.json` is `{id, version, api, minLauncher, files: {name: sha256}}`. The signature is the base64 of a raw Ed25519
   signature over `"_k0t1k-plugin\n" + the exact bytes of plugin.json` (`plugins::manifest_message`), checked with a plugin
-  key embedded in `core::plugins`; it is not the self-update key. Asset URLs must start with
-  `https://github.com/<repo>/releases/download/` for the plugin's own repo.
-- **Update** (`plugins::update`, reuses `update::http_client`, `parse_version`, `verify_with`, `fetch_capped`): `/releases/latest`;
-  an update is accepted only when the manifest signature is valid, `id` matches, `api` is 1, `minLauncher` is not above the
+  key embedded in `core::plugins`; it is not the self-update key. Asset URLs are built as
+  `https://github.com/<repo>/releases/download/<tag>/<name>` for the plugin's own repo (file names in the manifest are
+  plain names, so they cannot leave that folder).
+- **Update** (`plugins::update`, reuses `update::http_client`, `parse_version`, `verify_with`, `fetch_capped`): the latest tag is read from the
+  redirect of `github.com/<repo>/releases/latest` exactly as for the launcher (no REST API); an update is accepted only when the manifest signature is valid, `id` matches, `api` is 1, `minLauncher` is not above the
   launcher version, the tag equals `version`, `version` is newer than the running copy, and every file (at most 32 MiB each)
   hashes to its manifest entry. It is installed into `<data>/plugins/<id>/<version>/` (staging folder, then rename), then the
   `active` pointer file is replaced (temp file and rename). The previous version is kept, older ones are deleted. Any failure is
-  logged, stored as the plugin's `error` in `plugins/state.json` and leaves `active` as it was.
+  logged with its technical detail and leaves `active` as it was. In `plugins/state.json` a rejected release or a bad download
+  is stored as a short localized `error`; a transient problem (`update::is_transient`: 403/429/5xx, network, timeout) is stored
+  as `delayed: true` instead and Settings shows a calm warn-colored "GitHub is limiting requests right now" notice.
 - **Which copy runs** (`plugins::resolve`): the installed active version when its stored manifest still verifies, all files still
   hash right (checked at every load) and it is not older than the bundled baseline; otherwise the bundled copy (a damaged installed
   copy is logged and shown as the plugin's error). Installed files reach the UI as binary IPC (`read_plugin_file`), bundled ones
   are fetched from the app assets.
 - **Checks**: at startup (backend task) when `updates.autoUpdatePlugins` is on (default, `#[serde(default)]`), per plugin at most
-  once in 24 h (`last_check` in `state.json`, also set after a failed attempt); Settings, About, Plugins has "Check for updates"
+  once in 24 h (`last_check` in `state.json`, also set after a failed attempt), or once in an hour after a `delayed` one
+  (`plugins::check_due`); Settings, About, Plugins has "Check for updates"
   (forced), the toggle, versions, source and the last error.
 - **RatScan in the Mods tab**: "Scan mods" scans enabled and disabled jars; the backend reads each jar and sends it as raw bytes
   (`read_resource_file`), the UI shows progress. Badges map the verdict: `clean`, `suspicious`, `malicious` is shown as

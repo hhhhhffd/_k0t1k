@@ -647,15 +647,15 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     case 'save_settings': settings = clone(a.settings as GlobalSettings); persistSettings(); return undefined
     case 'get_system_info':
       return { totalRamMib: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir, portable: false, exeDir: 'C:\\Program Files\\_k0t1k' } satisfies SystemInfo
-    // `?update=available|error|blocked|none` previews the update states
+    // `?update=available|error|blocked|none|delayed` previews the update states
     case 'check_for_update': {
       await sleep(500)
       const mode = new URLSearchParams(location.search).get('update')
-      if (mode === 'error') throw new Error('mock: HTTP error for https://api.github.com/repos/hhhhhffd/_k0t1k/releases/latest: timed out')
-      const base = { currentVersion: '0.1.0', installBlocked: mode === 'blocked' ? 'This is a development build, it cannot replace itself' : null }
-      if (mode === 'none') return { ...base, status: 'unavailable' } satisfies UpdateStatus
+      if (mode === 'error') throw new Error('mock: The update could not be verified or downloaded. Details are in launcher.log.')
+      const base = { currentVersion: '0.1.0', delayed: mode === 'delayed', installBlocked: mode === 'blocked' ? 'This is a development build, it cannot replace itself' : null }
+      if (mode === 'none' || mode === 'delayed') return { ...base, status: 'unavailable' } satisfies UpdateStatus
       if (mode === null) return { ...base, status: 'upToDate' } satisfies UpdateStatus
-      return { ...base, status: 'available', release: { version: '0.2.0', size: 23_456_789, notes: '## What is new\n- Launcher updates\n- <b>not html</b>' } } satisfies UpdateStatus
+      return { ...base, status: 'available', release: { version: '0.2.0', notesUrl: 'https://github.com/hhhhhffd/_k0t1k/releases/tag/v0.2.0' } } satisfies UpdateStatus
     }
     case 'install_update': await sleep(1500); throw new Error('mock: restart is not available in the browser')
     case 'set_data_dir': dataDir = (a.path as string | null) ?? '%APPDATA%\\_k0t1k'; return true

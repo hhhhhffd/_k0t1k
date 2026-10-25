@@ -226,8 +226,8 @@ export interface SystemInfo {
 /** A launcher release newer than the running one. `notes` is the release body, plain text. */
 export interface ReleaseInfo {
   version: string
-  notes: string
-  size: number
+  /** The release page on GitHub, where the release notes are. */
+  notesUrl: string
 }
 
 /**
@@ -236,6 +236,8 @@ export interface ReleaseInfo {
  */
 export type UpdateStatus = {
   currentVersion: string
+  /** GitHub limited requests or could not be reached right now; the next check may work. */
+  delayed: boolean
   installBlocked: string | null
 } & ({ status: 'upToDate' | 'unavailable' } | { status: 'available'; release: ReleaseInfo })
 
@@ -641,6 +643,8 @@ export interface PluginInfo {
   files: string[]
   lastCheck: string | null
   error: string | null
+  /** The last check hit a rate limit or a network problem; not an error, retried within the hour. */
+  delayed: boolean
 }
 
 /** RatScan verdicts; the UI shows `malicious` as "dangerous". */

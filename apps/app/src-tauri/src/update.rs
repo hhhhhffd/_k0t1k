@@ -32,6 +32,8 @@ pub struct UpdateStatus {
     current_version: String,
     #[serde(flatten)]
     check: UpdateCheck,
+    /// GitHub limited requests or could not be reached; `check` is `unavailable` and the next check may work.
+    delayed: bool,
     /// Why the update cannot be installed from here (dev build, unknown exe path); `None` when it can.
     install_blocked: Option<String>,
 }
@@ -83,16 +85,36 @@ pub fn remove_leftovers() {
     }
 }
 
+/// A short message for the UI instead of the technical error, which goes to the log. A rate limit or a
+/// network problem is not an alarming failure.
+fn failure(error: &k0t1k_core::Error) -> AppError {
+    tracing::warn!("update failed: {error}");
+    AppError::new(if update::is_transient(error) {
+        tr("GitHub is limiting requests right now. We'll check again later.", "GitHub временно ограничил запросы. Проверим позже.")
+    } else {
+        tr("The update could not be verified or downloaded. Details are in launcher.log.", "Не удалось проверить или скачать обновление. Подробности в launcher.log.")
+    })
+}
+
 /// Looks for a newer release. Without `force` the result of an earlier check in this run is returned.
-/// A failed check is logged here, so a silent startup check may ignore the error.
+/// A failed check is logged here, so a silent startup check may ignore the error. A rate limit or a
+/// network problem is a normal answer (`delayed`) that is not remembered, so the next check asks again.
 #[tauri::command]
 pub async fn check_for_update(app: AppHandle, force: bool) -> CommandResult<UpdateStatus> {
     if !force && let Some(status) = LAST_CHECK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone() {
         return Ok(status);
     }
     let current_version = app.package_info().version.to_string();
-    let check = update::check(&update::http_client(), &current_version).await.inspect_err(|error| tracing::warn!("update check failed: {error}"))?;
-    let status = UpdateStatus { current_version, check, install_blocked: install_blocked() };
+    let install_blocked = install_blocked();
+    let check = match update::check(&current_version).await {
+        Ok(check) => check,
+        Err(error) if update::is_transient(&error) => {
+            tracing::warn!("update check delayed: {error}");
+            return Ok(UpdateStatus { current_version, check: UpdateCheck::Unavailable, delayed: true, install_blocked });
+        }
+        Err(error) => return Err(failure(&error)),
+    };
+    let status = UpdateStatus { current_version, check, delayed: false, install_blocked };
     *LAST_CHECK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(status.clone());
     Ok(status)
 }
@@ -184,7 +206,7 @@ async fn install(app: &AppHandle, state: &AppState, version: &str) -> CommandRes
     let exe = std::env::current_exe()?;
     let current_version = app.package_info().version.to_string();
     let client = update::http_client();
-    let UpdateCheck::Available { release } = update::check(&client, &current_version).await? else {
+    let UpdateCheck::Available { release } = update::check(&current_version).await.map_err(|error| failure(&error))? else {
         return Err(AppError::new(tr("No update is available", "Обновление недоступно")));
     };
     if release.version != version {
@@ -197,7 +219,7 @@ async fn install(app: &AppHandle, state: &AppState, version: &str) -> CommandRes
     let (new, old) = (sibling(&exe, ".new"), sibling(&exe, ".old"));
     let title = tr("Launcher update", "Обновление лаунчера");
     let progress = progress_fn(app, update::TASK, title);
-    tracked(app, update::TASK, title, async { Ok(update::download(&client, &release, &current_version, &new, &progress).await?) }).await?;
+    tracked(app, update::TASK, title, async { update::download(&client, &release, &current_version, &new, &progress).await.map_err(|error| failure(&error)) }).await?;
 
     // From here nothing new may start; the check after the flag sees everything that started before it.
     QUITTING.store(true, Ordering::SeqCst);
