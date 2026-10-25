@@ -2,11 +2,11 @@
 
 Reference: the launcher's own icons in `apps/app/src/assets/instance-icons/`.
 
-- **Look:** flat neon line art, no fills, no gradients, no raster. Not pixel art.
+- **Look:** flat line art in bright colors, no fills, no gradients, no glow or other filters, no raster. Not pixel art.
 - **Grid:** `viewBox="0 0 64 64"`, artwork within roughly 8–56, centered.
 - **Stroke:** two passes of the same geometry:
-  1. colored stroke `2.6`, round caps and joins, through the shared `glow` filter
-     (`feGaussianBlur stdDeviation="2"`, blur merged twice under the source);
+  1. colored stroke `2.6`, round caps and joins (the reference icons also blur it with a
+     `glow` filter; this set deliberately drops it);
   2. white highlight on top: `stroke="#fff" stroke-opacity=".7" stroke-width=".9"`.
 - **Corners:** frames use `rx` 3–6; everything else gets its rounding from round joins.
 - **Blocks:** isometric cube. Top `32,9 54,21 32,33 10,21`, left face `10,21 32,33 32,57 10,45`,
