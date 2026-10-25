@@ -183,7 +183,7 @@ impl AppState {
 
     /// Starts a new session of the instance in the `Preparing` state; other sessions of the same
     /// instance may be running. The receiver turns `true` when a kill is requested.
-    pub fn reserve(&self, instance_id: &str, name: &str) -> (SessionId, watch::Receiver<bool>) {
+    pub fn reserve(&self, instance_id: &str, name: &str) -> CommandResult<(SessionId, watch::Receiver<bool>)> {
         let session_id = self.next_session.fetch_add(1, Ordering::Relaxed);
         let started_at = Utc::now();
         let mut logs = self.logs();
@@ -205,7 +205,15 @@ impl AppState {
         );
         drop(logs);
         let (cancel, killed) = watch::channel(false);
-        self.running().insert(
+        // Checked under the lock the updater also takes after it raises the flag, so a launch either
+        // is seen by the updater or sees the flag.
+        let mut running = self.running();
+        if crate::update::quitting() {
+            drop(running);
+            self.logs().sessions.remove(&session_id);
+            return Err(AppError::new(k0t1k_core::i18n::tr("The launcher is restarting to install an update", "Лаунчер перезапускается для установки обновления")));
+        }
+        running.insert(
             session_id,
             RunEntry {
                 instance_id: instance_id.to_owned(),
@@ -216,7 +224,7 @@ impl AppState {
                 cancel,
             },
         );
-        (session_id, killed)
+        Ok((session_id, killed))
     }
 
     /// Running sessions followed by finished ones whose log is kept.
@@ -325,9 +333,9 @@ mod tests {
         let location = DataLocation { root: root.clone(), exe_dir: root, source: DataDirSource::Custom };
         let state = AppState::new(location).unwrap();
 
-        let (a, _) = state.reserve("inst", "Inst");
-        let (b, _) = state.reserve("inst", "Inst");
-        let (other, _) = state.reserve("other", "Other");
+        let (a, _) = state.reserve("inst", "Inst").unwrap();
+        let (b, _) = state.reserve("inst", "Inst").unwrap();
+        let (other, _) = state.reserve("other", "Other").unwrap();
         assert_eq!((state.session_number(a), state.session_number(b), state.session_number(other)), (Some(1), Some(2), Some(1)));
         assert!(state.is_running("inst"));
 
@@ -344,7 +352,7 @@ mod tests {
         // Finished sessions keep their logs, but only the newest few per instance.
         let mut ended = vec![a, b];
         for _ in 0..KEPT_FINISHED_SESSIONS {
-            ended.push(state.reserve("inst", "Inst").0);
+            ended.push(state.reserve("inst", "Inst").unwrap().0);
         }
         for id in &ended {
             state.running().remove(id);
@@ -365,7 +373,7 @@ mod tests {
         let root = std::env::temp_dir().join("k0t1k-state-secret-test");
         let location = DataLocation { root: root.clone(), exe_dir: root, source: DataDirSource::Custom };
         let state = AppState::new(location).unwrap();
-        let (session, _) = state.reserve("inst", "Inst");
+        let (session, _) = state.reserve("inst", "Inst").unwrap();
         state.add_log_secret(session, "secret-access-token");
         state.add_log_secret(session, "0");
         let entry = state.record_log(session, "stdout", "(Session ID is token:secret-access-token:uuid) 0");

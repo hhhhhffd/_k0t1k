@@ -1,6 +1,7 @@
 //! Events sent to the UI: `progress`, `game-log` (batched), `instance-state` and `game-crashed`.
 
 use std::future::Future;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -74,6 +75,28 @@ struct GameCrashedPayload<'a> {
     crash: &'a CrashInfo,
 }
 
+/// Tasks running inside [`tracked`] (imports, downloads, transfers); the updater does not restart under them.
+static ACTIVE_TASKS: AtomicUsize = AtomicUsize::new(0);
+
+struct ActiveTask;
+
+impl ActiveTask {
+    fn begin() -> Self {
+        ACTIVE_TASKS.fetch_add(1, Ordering::AcqRel);
+        Self
+    }
+}
+
+impl Drop for ActiveTask {
+    fn drop(&mut self) {
+        ACTIVE_TASKS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+pub fn active_tasks() -> usize {
+    ACTIVE_TASKS.load(Ordering::Acquire)
+}
+
 fn emit<P: Serialize + Clone>(app: &AppHandle, event: &str, payload: P) {
     if let Err(error) = app.emit(event, payload) {
         tracing::warn!("cannot emit {event}: {error}");
@@ -119,7 +142,10 @@ pub fn cancelled(app: &AppHandle, task: &str, title: &str) {
 
 /// Runs `work` and ends the task row with `finished`, or with `error` when it fails.
 pub async fn tracked<T>(app: &AppHandle, task: &str, title: &str, work: impl Future<Output = CommandResult<T>>) -> CommandResult<T> {
-    let result = work.await;
+    let result = {
+        let _active = ActiveTask::begin();
+        work.await
+    };
     let mut end = payload(task, title, tr("Done", "Готово"), 1, 1);
     match &result {
         Ok(_) => end.finished = true,

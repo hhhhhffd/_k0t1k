@@ -11,12 +11,13 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use k0t1k_core::i18n::tr;
+use k0t1k_core::tr_fmt;
 use k0t1k_core::update::{self, UpdateCheck};
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
 use crate::error::{AppError, CommandResult};
-use crate::events::{progress_fn, tracked};
+use crate::events::{self, progress_fn, tracked};
 use crate::onboarding::{PORTABLE_HERE, WAIT_FOR, spawn_detached};
 use crate::state::AppState;
 
@@ -49,11 +50,22 @@ fn install_blocked() -> Option<String> {
     if cfg!(debug_assertions) {
         return Some(tr("This is a development build, it cannot replace itself", "Это сборка для разработки, она не может заменить себя").to_owned());
     }
-    if let Err(error) = std::env::current_exe() {
-        tracing::warn!("cannot determine the launcher executable: {error}");
-        return Some(tr("The launcher's executable path is unknown", "Не удалось определить путь к exe лаунчера").to_owned());
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(error) => {
+            tracing::warn!("cannot determine the launcher executable: {error}");
+            return Some(tr("The launcher's executable path is unknown", "Не удалось определить путь к exe лаунчера").to_owned());
+        }
+    };
+    // The swap creates and renames files next to the exe, so the folder must be writable (not Program Files, say).
+    let probe = sibling(&exe, ".write-test");
+    match std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(&probe).and_then(|_| std::fs::remove_file(&probe)) {
+        Ok(()) => None,
+        Err(error) => {
+            tracing::warn!("the launcher folder is not writable: {error}");
+            Some(tr_fmt!("The launcher's folder is not writable: {}", "В папку лаунчера нельзя писать: {}", error))
+        }
     }
-    None
 }
 
 /// Deletes the files a finished or failed update leaves next to the exe. Failures are logged.
@@ -74,81 +86,136 @@ pub fn remove_leftovers() {
 /// Looks for a newer release. Without `force` the result of an earlier check in this run is returned.
 /// A failed check is logged here, so a silent startup check may ignore the error.
 #[tauri::command]
-pub async fn check_for_update(app: AppHandle, state: State<'_, AppState>, force: bool) -> CommandResult<UpdateStatus> {
+pub async fn check_for_update(app: AppHandle, force: bool) -> CommandResult<UpdateStatus> {
     if !force && let Some(status) = LAST_CHECK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone() {
         return Ok(status);
     }
     let current_version = app.package_info().version.to_string();
-    let check = update::check(&state.http, &current_version).await.inspect_err(|error| tracing::warn!("update check failed: {error}"))?;
+    let check = update::check(&update::http_client(), &current_version).await.inspect_err(|error| tracing::warn!("update check failed: {error}"))?;
     let status = UpdateStatus { current_version, check, install_blocked: install_blocked() };
     *LAST_CHECK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(status.clone());
     Ok(status)
 }
 
-fn ensure_no_game_running(state: &AppState) -> CommandResult<()> {
-    if state.running().is_empty() {
-        Ok(())
+/// Set once an update is about to replace the exe: no game or install may start after it (see
+/// `AppState::reserve` and `game::spawn_game_install`, which check it under the locks `ensure_idle` takes).
+static QUITTING: AtomicBool = AtomicBool::new(false);
+
+pub fn quitting() -> bool {
+    QUITTING.load(Ordering::SeqCst)
+}
+
+/// Fails while a game, a game or Java install, or any tracked task (imports, downloads, transfers) is active.
+fn ensure_idle(state: &AppState) -> CommandResult<()> {
+    let busy = !state.running().is_empty()
+        || !state.game_installs().is_empty()
+        || state.install_lock.try_lock().is_err()
+        || events::active_tasks() > 0;
+    if busy {
+        Err(AppError::new(tr(
+            "Finish or stop running games and downloads before updating",
+            "Завершите или остановите запущенные игры и загрузки перед обновлением",
+        )))
     } else {
-        Err(AppError::new(tr("Close the running game before updating", "Закройте запущенную игру перед обновлением")))
+        Ok(())
     }
 }
 
-/// Puts `new` in place of `exe`, keeping the old file as `old`. Any failure leaves `exe` as it was.
-fn swap_files(exe: &Path, new: &Path, old: &Path) -> std::io::Result<()> {
+/// What a failed [`swap_files`] left behind.
+#[derive(Debug)]
+struct SwapError {
+    error: std::io::Error,
+    /// `false` when the original exe could not be put back and only `<exe>.old` has it.
+    restored: bool,
+}
+
+/// Puts `new` in place of `exe`, keeping the old file as `old`. Any failure leaves `exe` as it was,
+/// or says (`restored`) that it could not.
+fn swap_files(exe: &Path, new: &Path, old: &Path) -> Result<(), SwapError> {
+    let early = |error| SwapError { error, restored: true };
     match std::fs::remove_file(old) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(early(error)),
         _ => {}
     }
-    std::fs::rename(exe, old)?;
+    std::fs::rename(exe, old).map_err(early)?;
     if let Err(error) = std::fs::rename(new, exe) {
-        std::fs::rename(old, exe).map_err(|rollback| {
-            std::io::Error::new(rollback.kind(), format!("{error}; and the original executable could not be restored from {}: {rollback}", old.display()))
-        })?;
-        return Err(error);
+        let restored = std::fs::rename(old, exe).is_ok();
+        return Err(SwapError { error, restored });
     }
     Ok(())
 }
 
-/// Downloads the latest release, replaces the exe and restarts. Refused while a game runs.
+fn manual_recovery(exe: &Path, old: &Path, cause: &dyn std::fmt::Display) -> AppError {
+    AppError::new(tr_fmt!(
+        "The update failed ({cause}) and the launcher could not be put back. Rename {old} to {exe} to restore it.",
+        "Обновление не удалось ({cause}), и лаунчер не удалось вернуть на место. Переименуйте {old} в {exe}, чтобы восстановить его.",
+        old = old.display(),
+        exe = exe.display()
+    ))
+}
+
+/// Downloads the release the user saw (`version`), replaces the exe and restarts. Refused while a game
+/// runs or anything else is being downloaded or installed.
 #[tauri::command]
-pub async fn install_update(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+pub async fn install_update(app: AppHandle, state: State<'_, AppState>, version: String) -> CommandResult<()> {
     if let Some(reason) = install_blocked() {
         return Err(AppError::new(reason));
     }
-    ensure_no_game_running(&state)?;
+    ensure_idle(&state)?;
     if INSTALLING.swap(true, Ordering::AcqRel) {
         return Err(AppError::new(tr("The update is already being installed", "Обновление уже устанавливается")));
     }
-    let result = install(&app, &state).await;
+    let result = install(&app, &state, &version).await;
     // After success the process exits; after a failure another attempt may be made.
+    QUITTING.store(false, Ordering::SeqCst);
     INSTALLING.store(false, Ordering::Release);
     result
 }
 
-async fn install(app: &AppHandle, state: &AppState) -> CommandResult<()> {
+fn remove_new(new: &Path) {
+    if let Err(error) = std::fs::remove_file(new)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!("cannot remove {}: {error}", new.display());
+    }
+}
+
+async fn install(app: &AppHandle, state: &AppState, version: &str) -> CommandResult<()> {
     let exe = std::env::current_exe()?;
     let current_version = app.package_info().version.to_string();
-    let UpdateCheck::Available { release } = update::check(&state.http, &current_version).await? else {
+    let client = update::http_client();
+    let UpdateCheck::Available { release } = update::check(&client, &current_version).await? else {
         return Err(AppError::new(tr("No update is available", "Обновление недоступно")));
     };
+    if release.version != version {
+        return Err(AppError::new(tr_fmt!(
+            "Version {} was released meanwhile, check for updates again",
+            "Тем временем вышла версия {}, проверьте обновления ещё раз",
+            release.version
+        )));
+    }
     let (new, old) = (sibling(&exe, ".new"), sibling(&exe, ".old"));
     let title = tr("Launcher update", "Обновление лаунчера");
     let progress = progress_fn(app, update::TASK, title);
-    let swapped = tracked(app, update::TASK, title, async {
-        update::download(&state.http, &release, &new, &progress).await?;
-        // A game may have been started during the download.
-        ensure_no_game_running(state)?;
-        let (exe, new, old) = (exe.clone(), new.clone(), old.clone());
-        tokio::task::spawn_blocking(move || swap_files(&exe, &new, &old)).await??;
-        Ok(())
-    })
-    .await;
-    if let Err(error) = swapped {
-        if let Err(cleanup) = std::fs::remove_file(&new)
-            && cleanup.kind() != std::io::ErrorKind::NotFound
-        {
-            tracing::warn!("cannot remove {}: {cleanup}", new.display());
+    tracked(app, update::TASK, title, async { Ok(update::download(&client, &release, &current_version, &new, &progress).await?) }).await?;
+
+    // From here nothing new may start; the check after the flag sees everything that started before it.
+    QUITTING.store(true, Ordering::SeqCst);
+    let swapped = match ensure_idle(state) {
+        Ok(()) => {
+            let paths = (exe.clone(), new.clone(), old.clone());
+            tokio::task::spawn_blocking(move || swap_files(&paths.0, &paths.1, &paths.2)).await?.map_err(|failure| {
+                if failure.restored { AppError::from(failure.error) } else { manual_recovery(&exe, &old, &failure.error) }
+            })
         }
+        Err(error) => Err(error),
+    };
+    if let Err(error) = swapped {
+        // Without a restored exe `.new` is the only other copy, so it is kept.
+        if !exe.exists() {
+            return Err(error);
+        }
+        remove_new(&new);
         return Err(error);
     }
 
@@ -158,9 +225,7 @@ async fn install(app: &AppHandle, state: &AppState) -> CommandResult<()> {
     }
     if let Err(error) = spawn_detached(&exe, &args) {
         // The new exe cannot start: put the old one back, so the launcher keeps working.
-        std::fs::rename(&old, &exe).map_err(|rollback| {
-            AppError::new(format!("{error}; and the original executable could not be restored from {}: {rollback}", old.display()))
-        })?;
+        std::fs::rename(&old, &exe).map_err(|rollback| manual_recovery(&exe, &old, &format!("{error}; {rollback}")))?;
         return Err(error);
     }
     let app = app.clone();

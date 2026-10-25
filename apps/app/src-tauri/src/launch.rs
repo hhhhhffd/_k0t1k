@@ -60,7 +60,7 @@ pub async fn launch_instance(
 
     // Every launch is its own session: the instance may already be running, and concurrent
     // preparations are fine (installs are serialised by `install_lock`).
-    let (session_id, kill_requests) = state.reserve(&instance_id, &instance.name);
+    let (session_id, kill_requests) = state.reserve(&instance_id, &instance.name)?;
     let number = state.session_number(session_id).unwrap_or(1);
     events::instance_state(&app, session_id, &instance_id, number, RunState::Preparing, None);
     tauri::async_runtime::spawn(run_session(

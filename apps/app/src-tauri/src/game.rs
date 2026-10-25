@@ -41,6 +41,11 @@ pub fn spawn_game_install(app: AppHandle, state: AppState, instance: Instance, c
     let title = tr_fmt!("Downloading the game: {}", "Загрузка игры: {}", instance.name);
     // Held until the handle is registered: the task removes itself from the map when it ends.
     let mut installs = state.game_installs();
+    // Checked under the lock the updater takes after raising the flag. The next launch installs the game instead.
+    if crate::update::quitting() {
+        tracing::info!("not installing the game of {} while the launcher restarts for an update", instance.id);
+        return;
+    }
     let handle = tauri::async_runtime::spawn({
         let state = state.clone();
         let (task, title, id) = (task, title.clone(), instance.id.clone());
