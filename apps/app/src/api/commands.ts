@@ -113,6 +113,9 @@
  *   scan_blocked_files(instanceId, files: BlockedFile[], folder: string | null) -> BlockedScan (copies matches by SHA-1; null folder = Downloads)
  *   get_downloads_dir()                                      -> string
  *   set_update_lock(instanceId, kind, fileName, locked)      -> void
+ * Launcher update (GitHub Releases, Ed25519-signed exe)
+ *   check_for_update(force)                                  -> UpdateStatus   (without force, the result of the earlier check of this run; failures are logged by the backend)
+ *   install_update()                                         -> void           (downloads, verifies, replaces the exe and restarts; emits `progress` as task `update`; refused while a game runs)
  * Events (backend -> frontend, via emit)
  *   progress        ProgressEvent    (a task ends with `finished` or `error`)
  *   game-log        GameLogBatch     (lines of one session, batched)
@@ -171,6 +174,7 @@ import type {
   SessionId,
   SharedFolder,
   SystemInfo,
+  UpdateStatus,
   UninstallPlan,
   UploadedLog,
   VersionFilter,
@@ -266,6 +270,8 @@ export const deleteManagedJava = (dir: string) => call<void>('delete_managed_jav
 export const getSettings = () => call<GlobalSettings>('get_settings')
 export const saveSettings = (settings: GlobalSettings) => call<void>('save_settings', { settings })
 export const getSystemInfo = () => call<SystemInfo>('get_system_info')
+export const checkForUpdate = (force: boolean) => call<UpdateStatus>('check_for_update', { force })
+export const installUpdate = () => call<void>('install_update')
 export const openDataDir = () => call<void>('open_data_dir')
 export const openLauncherFolder = (folder: LauncherFolder) => call<void>('open_launcher_folder', { folder })
 export const listIconLibrary = () => call<string[]>('list_icon_library')

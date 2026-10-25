@@ -173,6 +173,7 @@ export interface GlobalSettings {
   ui: { language: Language; theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
   discord: { enabled: boolean }
+  updates: { checkOnStartup: boolean }
   /** Owned by the onboarding commands: `save_settings` never overwrites it. */
   onboarding: { keepPortableAt: string | null; createdShortcuts: string[] }
   /** Folders that new instances (and imported modpacks) share. */
@@ -204,6 +205,22 @@ export interface SystemInfo {
   /** Folder of the executable. */
   exeDir: string
 }
+
+/** A launcher release newer than the running one. `notes` is the release body, plain text. */
+export interface ReleaseInfo {
+  version: string
+  notes: string
+  size: number | null
+}
+
+/**
+ * Result of `check_for_update`. `unavailable` = no release can be read (none published, or the repository is private).
+ * `installBlocked` is the reason installing is impossible from here (development build, unknown exe path), else null.
+ */
+export type UpdateStatus = {
+  currentVersion: string
+  installBlocked: string | null
+} & ({ status: 'upToDate' | 'unavailable' } | { status: 'available'; release: ReleaseInfo })
 
 /** Why the launcher asks where to live: its folder is Desktop/Downloads/Documents, or it runs from the temp folder (a zip). */
 export interface OnboardingInfo {

@@ -17,12 +17,14 @@ import { useInstancesStore } from './stores/instances'
 import { useLayoutStore } from './stores/layout'
 import { useSettingsStore } from './stores/settings'
 import { useTasksStore } from './stores/tasks'
+import { useUpdateStore } from './stores/update'
 import OnboardingView from './views/OnboardingView.vue'
 
 const settings = useSettingsStore()
 const instances = useInstancesStore()
 const tasks = useTasksStore()
 const layout = useLayoutStore()
+const update = useUpdateStore()
 const customization = useCustomizationStore()
 
 // `undefined` until the backend has said whether the launcher still has to ask where to live
@@ -37,6 +39,7 @@ onMounted(async () => {
   await tasks.guard(() => Promise.all([settings.load(), instances.init()]))
   // after the settings: theme files and the chosen cat or icon set apply on top of them
   await customization.refresh()
+  if (settings.settings?.updates.checkOnStartup) void update.check(false, true)
   const report = await tasks.guard(getRelocationReport)
   if (!report) return
   if (report.problems.length) relocationReport.value = report

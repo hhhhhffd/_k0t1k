@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { AppWindow, Check, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
+import { AppWindow, Check, Download, Coffee, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openLauncherFolder, openSharedFolder, setDataDir, uninstall } from '../api/commands'
@@ -20,11 +20,13 @@ import { useCustomizationStore } from '../stores/customization'
 import { useInstancesStore } from '../stores/instances'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
+import { useUpdateStore } from '../stores/update'
 import { THEMES, themeVars } from '../utils/theme'
 
 const store = useSettingsStore()
 const tasks = useTasksStore()
 const instances = useInstancesStore()
+const update = useUpdateStore()
 const customization = useCustomizationStore()
 const catOptions = computed(() => [
   { value: '', label: t.settings.noCat },
@@ -125,7 +127,23 @@ async function deleteJava(usage: ManagedJavaUsage) {
   await loadManagedJava()
 }
 
+const downloadPercent = computed(() => {
+  const task = tasks.tasks.find((x) => x.task === 'update')
+  return task?.total ? Math.min(100, Math.round((task.done / task.total) * 100)) : null
+})
+const updateSummary = computed(() => {
+  const status = update.status
+  if (!status) return ''
+  if (status.status === 'available') return t.update.available(status.release.version)
+  return status.status === 'upToDate' ? t.update.upToDate : t.update.unavailable
+})
+const updateBlockedReason = computed(() => {
+  if (update.gameRunning) return t.update.afterGame
+  return update.status?.installBlocked ?? ''
+})
+
 onMounted(async () => {
+  if (!update.status) void update.check(false, true)
   system.value = (await tasks.guard(getSystemInfo)) ?? null
   await loadManagedJava()
 })
@@ -424,7 +442,8 @@ async function addAccount() {
         <p v-if="restartNeeded" class="rounded-lg border border-warn/50 bg-warn/10 px-4 py-3 text-warn" role="status">{{ t.settings.restartNotice }}</p>
       </template>
 
-      <section v-else class="card flex items-start gap-4 p-4">
+      <template v-else>
+      <section class="card flex items-start gap-4 p-4">
         <img :src="mascot" alt="" class="pixelated size-20" />
         <div class="flex flex-col gap-1">
           <div class="font-mono text-xl font-bold">_k0t1k</div>
@@ -436,6 +455,36 @@ async function addAccount() {
           </dl>
         </div>
       </section>
+      <section class="card flex flex-col gap-3 p-4">
+        <h3 class="text-[14px] font-semibold">{{ t.update.title }}</h3>
+        <div class="flex items-center gap-4">
+          <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.update.checkOnStartup }}</span><span class="text-[12px] text-faint">{{ t.update.checkOnStartupHint }}</span></span>
+          <ToggleSwitch v-if="s" v-model="s.updates.checkOnStartup" :label="t.update.checkOnStartup" />
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="btn" :disabled="update.checking || update.installing" @click="update.check(true)">
+            <RefreshCw :size="15" :class="{ 'animate-spin': update.checking }" />{{ update.checking ? t.update.checking : t.update.checkNow }}
+          </button>
+          <span class="text-muted" role="status">{{ updateSummary }}</span>
+        </div>
+        <template v-if="update.release">
+          <div class="flex flex-col gap-1">
+            <span class="text-faint">{{ t.update.notes }}</span>
+            <pre class="selectable max-h-48 overflow-y-auto rounded-lg border border-line bg-raised p-3 font-sans text-[12px] break-words whitespace-pre-wrap">{{ update.release.notes || t.update.noNotes }}</pre>
+          </div>
+          <div class="flex items-center gap-3">
+            <button class="btn btn-primary" :disabled="update.installing || !!updateBlockedReason" @click="update.install()">
+              <Download :size="15" />{{ update.installing ? t.update.installing : t.update.install }}
+            </button>
+            <div v-if="update.installing" class="h-1.5 flex-1 overflow-hidden rounded-full bg-raised" role="progressbar" :aria-label="t.update.installing" :aria-valuenow="downloadPercent ?? undefined" aria-valuemax="100">
+              <div class="h-full rounded-full bg-accent transition-[width]" :style="{ width: `${downloadPercent ?? 100}%` }" />
+            </div>
+            <span v-else-if="updateBlockedReason" class="text-[12px] text-warn">{{ updateBlockedReason }}</span>
+          </div>
+        </template>
+        <p v-if="update.error" class="selectable rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-[12px] break-words text-danger" role="alert">{{ update.error }}</p>
+      </section>
+      </template>
     </div>
     <ModalDialog v-if="uninstallPlan" :title="t.settings.uninstallTitle" :width="520" @close="uninstallPlan = null">
       <div class="flex flex-col gap-3">
