@@ -1,8 +1,11 @@
 /target
 node_modules
 dist
-.serena/cache
 *.log
 .env
 .claude/worktrees
 .playwright-mcp
+
+# Working notes and local tool config, kept out of the repo
+docs/prism/
+.serena/
