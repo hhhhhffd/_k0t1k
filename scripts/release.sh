@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Publishes a built _k0t1k.exe as a GitHub release that the launcher's updater accepts.
 # Usage: scripts/release.sh <path to _k0t1k.exe> [notes text | notes file]
-# The version comes from the workspace Cargo.toml. The signing key is $K0T1K_UPDATE_KEY
+# The version comes from the workspace Cargo.toml. The signature covers
+#   "_k0t1k-update\n<version>\n<hex sha256 of the exe>"
+# (see core::update::signed_message), so the exe cannot be republished under another version. The signing key is $K0T1K_UPDATE_KEY
 # (default ~/.config/k0t1k/update-signing-key.pem); it must never be copied into the repo.
 set -euo pipefail
 
@@ -20,6 +22,23 @@ version=$(awk '/^\[workspace\.package\]/{f=1;next} /^\[/{f=0} f&&/^version[[:spa
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "cannot read a X.Y.Z version from Cargo.toml (got '$version')" >&2; exit 1; }
 tag="v$version"
 
+# The exe must be a build of this version: the updater's user agent string embeds it.
+if ! grep -aqF "k0t1k-launcher/$version" "$exe"; then
+  echo "$exe does not contain k0t1k-launcher/$version: it was not built from this version" >&2
+  exit 1
+fi
+# The release is tagged at HEAD, so HEAD must be the committed, published source of the exe.
+if [[ -n $(git -C "$root" status --porcelain --untracked-files=no) ]]; then
+  echo "the working tree has uncommitted changes" >&2
+  exit 1
+fi
+head=$(git -C "$root" rev-parse HEAD)
+upstream=$(git -C "$root" rev-parse -q --verify '@{upstream}') || { echo "the current branch has no upstream; push it first" >&2; exit 1; }
+if ! git -C "$root" merge-base --is-ancestor "$head" "$upstream"; then
+  echo "HEAD $head is not pushed to the upstream branch" >&2
+  exit 1
+fi
+
 if gh release view "$tag" >/dev/null 2>&1; then
   echo "release $tag already exists" >&2
   exit 1
@@ -32,18 +51,20 @@ fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cp "$exe" "$work/_k0t1k.exe"
-openssl pkeyutl -sign -rawin -inkey "$key" -in "$work/_k0t1k.exe" -out "$work/sig.bin"
+hash=$(sha256sum "$work/_k0t1k.exe" | cut -d' ' -f1)
+printf '_k0t1k-update\n%s\n%s' "$version" "$hash" > "$work/message"
+openssl pkeyutl -sign -rawin -inkey "$key" -in "$work/message" -out "$work/sig.bin"
 base64 -w0 "$work/sig.bin" > "$work/_k0t1k.exe.sig"
 
 # Verify against the embedded public key: wrap the raw key in an Ed25519 SubjectPublicKeyInfo header.
 { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; printf '%s' "$PUBLIC_KEY_B64" | base64 -d; } > "$work/pub.der"
 openssl pkey -pubin -inform DER -in "$work/pub.der" -out "$work/pub.pem"
-if ! openssl pkeyutl -verify -rawin -pubin -inkey "$work/pub.pem" -in "$work/_k0t1k.exe" -sigfile "$work/sig.bin" >/dev/null; then
+if ! openssl pkeyutl -verify -rawin -pubin -inkey "$work/pub.pem" -in "$work/message" -sigfile "$work/sig.bin" >/dev/null; then
   echo "the signature does not verify against the embedded public key; wrong signing key?" >&2
   exit 1
 fi
 
-args=(release create "$tag" "$work/_k0t1k.exe#_k0t1k.exe" "$work/_k0t1k.exe.sig" --title "_k0t1k $version")
+args=(release create "$tag" "$work/_k0t1k.exe#_k0t1k.exe" "$work/_k0t1k.exe.sig" --title "_k0t1k $version" --target "$head")
 if [[ -z $notes ]]; then
   args+=(--notes "")
 elif [[ -f $notes ]]; then

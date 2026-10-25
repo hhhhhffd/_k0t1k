@@ -222,20 +222,33 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
 
 ## Updates (`core::update`, `src-tauri/src/update.rs`)
 
-- Self-update from GitHub Releases, not `tauri-plugin-updater` (it expects an installer; the launcher is a portable exe).
+- Self-update from GitHub Releases  not `tauri-plugin-updater` (it expects an installer; the launcher is a portable exe).
   `GET /repos/hhhhhffd/_k0t1k/releases/latest` without any token; the tag `vX.Y.Z` is compared with the app version as
   plain numbers (no pre-release tags). A 404 (private repository, no release) or a release without both assets is
   `unavailable`, not an error. The result of a check is kept for the run, so a recreated window shows the notice
   without asking again; a failed check is logged by the backend and shown only for the "Check now" button.
-- Assets: `_k0t1k.exe` and `_k0t1k.exe.sig` (base64 of a raw Ed25519 signature over the exe). The public key is embedded;
-  `ed25519-dalek` `verify_strict` runs on the downloaded file and a file that fails is deleted, never installed.
-  `scripts/release.sh <exe> [notes]` signs with `K0T1K_UPDATE_KEY` (default `~/.config/k0t1k/update-signing-key.pem`, never in
-  the repo), refuses when the tag exists or the signature does not verify against the embedded key, and runs `gh release create`.
-- Install (`install_update`): refused while any session is live (re-checked after the download) and in debug builds or off
-  Windows (`installBlocked` carries the reason). The download goes to `<exe>.new`, then the running exe is renamed to
-  `<exe>.old`, `.new` takes its place (any failure renames `.old` back) and the new exe is started with `--wait-for <pid>`,
-  the same mechanism as onboarding, so it waits for this process to exit before the single-instance mutex is created.
-  The next start deletes `.old` and `.new`, logging failures. Progress is the `update` task of the `progress` event.
+- Assets: `_k0t1k.exe` and `_k0t1k.exe.sig`. The signature is the base64 of a raw Ed25519 signature over
+  `"_k0t1k-update\n<version>\n<hex sha256 of the exe>"` (`core::update::signed_message`), so a signed exe cannot be
+  republished under a newer tag. The client rebuilds the message from the tag, hashes the download while streaming and
+  verifies with the embedded public key (`ed25519-dalek` `verify_strict`); a file that fails is deleted, never installed.
+  The release must be newer than the running version. Limits: asset URLs must start with
+  `https://github.com/hhhhhffd/_k0t1k/releases/download/` (URLs are not sent to the UI), the exe is at most 200 MiB and
+  must match the asset's `size` exactly, the signature file at most 1 KiB; update requests use their own client with
+  connect and read timeouts. `scripts/release.sh <exe> [notes]` checks that the exe contains
+  `k0t1k-launcher/<version>`, that the tree is clean and HEAD is pushed, signs with `K0T1K_UPDATE_KEY` (default
+  `~/.config/k0t1k/update-signing-key.pem`, never in the repo), refuses when the tag exists or the signature does not
+  verify against the embedded key, and runs `gh release create ... --target <HEAD>`.
+- Install (`install_update(version)`): installs exactly the release the user saw (refused when the latest differs). Refused
+  in debug builds, off Windows, or when the exe folder is not writable (`installBlocked` carries the reason), and while a
+  game runs, a game or Java install runs, or any `tracked` task is active (re-checked after the download, after raising
+  the `QUITTING` flag that `AppState::reserve` and `spawn_game_install` check under the locks the updater takes, so nothing
+  starts between the last check and exit). The download goes to `<exe>.new` (synced to disk), then the running exe is renamed
+  to `<exe>.old`, `.new` takes its place (any failure renames `.old` back; if even that fails `.new` is kept and the error
+  names `.old` for manual recovery) and the new exe is started with `--wait-for <pid>`, the same mechanism as onboarding,
+  so it waits for this process to exit before the single-instance mutex is created. The next start deletes `.old` and
+  `.new`, logging failures. Progress is the `update` task of the `progress` event.
+- Manual recovery: if the new exe starts but is broken, it is not rolled back automatically; until the next successful
+  start `<exe>.old` is the previous version, so deleting the new exe and renaming `.old` back restores it.
 - Setting `updates.checkOnStartup` (default true) only controls the silent startup check, which shows a notice in the
   status bar; Settings, About has the Updates block (release notes are rendered as plain text).
 
