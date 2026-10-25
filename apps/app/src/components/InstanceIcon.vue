@@ -3,9 +3,9 @@ import { Axe, Gem, Ghost, Leaf, Pickaxe, Skull, Sword, Zap, Box } from '@lucide/
 import type { Component } from 'vue'
 import mascot from '../assets/mascot.png'
 
-// Prism Launcher's pixel instance icons; the keys are Prism's icon keys, so imported Prism instances keep theirs.
-const files = import.meta.glob<string>('../assets/instance-icons/*.png', { eager: true, import: 'default' })
-const pixelIcons = Object.fromEntries(
+// The launcher's neon instance icons; the keys are Prism's icon keys, so imported Prism instances keep theirs.
+const files = import.meta.glob<string>('../assets/instance-icons/*.svg', { eager: true, import: 'default' })
+const neonIcons = Object.fromEntries(
   Object.entries(files).map(([path, url]) => [path.slice(path.lastIndexOf('/') + 1, -4).replace(/-/g, '_'), url]),
 )
 const ORDER = ['grass', 'dirt', 'stone', 'planks', 'brick', 'tnt', 'iron', 'gold', 'diamond', 'creeper', 'squarecreeper', 'skeleton', 'enderman', 'steve', 'herobrine', 'chicken', 'meat', 'enderpearl', 'netherstar', 'flame', 'gear', 'infinity', 'magitech', 'ftb_logo', 'ftb_glow']
@@ -13,7 +13,7 @@ const ORDER = ['grass', 'dirt', 'stone', 'planks', 'brick', 'tnt', 'iron', 'gold
 /** Built-in icons offered in the pickers, mascot first. */
 export const INSTANCE_ICONS: Record<string, string> = {
   mascot,
-  ...Object.fromEntries(ORDER.filter((key) => pixelIcons[key]).map((key) => [key, pixelIcons[key]!])),
+  ...Object.fromEntries(ORDER.filter((key) => neonIcons[key]).map((key) => [key, neonIcons[key]!])),
 }
 
 // Icons of earlier versions of the launcher: still drawn for instances that use them, no longer offered.
@@ -64,5 +64,5 @@ const box = computed(() => ({ width: `${props.size}px`, height: `${props.size}px
   >
     <component :is="legacy.icon" :size="size * 0.52" color="#fff" :stroke-width="2" />
   </span>
-  <img v-else :src="builtIn" alt="" class="pixelated shrink-0 object-contain" :style="box" />
+  <img v-else :src="builtIn" alt="" class="shrink-0 object-contain" :class="{ pixelated: builtIn === mascot }" :style="box" />
 </template>

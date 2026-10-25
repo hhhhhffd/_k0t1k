@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<defs><filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<g fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"><g stroke="#ff4dff"><line x1="14" y1="50" x2="38" y2="26"/><path d="M44 10 L46 18 L54 20 L46 22 L44 30 L42 22 L34 20 L42 18z"/></g><g stroke="#3cf0ff"><line x1="20" y1="16" x2="20" y2="22"/><line x1="17" y1="19" x2="23" y2="19"/><line x1="50" y1="40" x2="50" y2="46"/><line x1="47" y1="43" x2="53" y2="43"/></g></g>
+<g fill="none" stroke="#fff" stroke-opacity=".7" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"><g><line x1="14" y1="50" x2="38" y2="26"/><path d="M44 10 L46 18 L54 20 L46 22 L44 30 L42 22 L34 20 L42 18z"/></g><g><line x1="20" y1="16" x2="20" y2="22"/><line x1="17" y1="19" x2="23" y2="19"/><line x1="50" y1="40" x2="50" y2="46"/><line x1="47" y1="43" x2="53" y2="43"/></g></g>
+</svg>
