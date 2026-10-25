@@ -459,7 +459,7 @@ async fn prepare(
     let extra_jvm_args = cmdline::split(&settings.jvm_args)?;
     let (min_memory_mb, max_memory_mb) = if settings.memory.auto {
         let tuning = tune(total_memory_mib());
-        log.line("launcher", &format!("Автоподбор памяти (как в Prism): {}-{} МиБ", tuning.min_mib, tuning.max_mib));
+        log.line("launcher", &format!("Автоподбор памяти: {}-{} МиБ", tuning.min_mib, tuning.max_mib));
         (tuning.min_mib, tuning.max_mib)
     } else {
         (settings.memory.min_mib, settings.memory.max_mib)

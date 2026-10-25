@@ -61,7 +61,7 @@ async function run() {
     }),
   )
   if (report === undefined) return
-  tasks.toast(report ? t.transfer.exportedPack(report.listed, report.overrides) : t.transfer.exportedZip, 'ok')
+  tasks.toast(report ? t.transfer.exportedPack : t.transfer.exportedZip, 'ok')
 }
 </script>
 
