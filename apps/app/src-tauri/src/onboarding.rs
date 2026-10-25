@@ -40,9 +40,9 @@ const WAIT_FOR_EXIT: Duration = Duration::from_secs(30);
 const DELETE_ATTEMPTS: u32 = 10;
 const DELETE_PAUSE: Duration = Duration::from_millis(300);
 
-const WAIT_FOR: &str = "--wait-for";
+pub(crate) const WAIT_FOR: &str = "--wait-for";
 const FINISH_RELOCATION: &str = "--finish-relocation";
-const PORTABLE_HERE: &str = "--portable-here";
+pub(crate) const PORTABLE_HERE: &str = "--portable-here";
 const DESKTOP_SHORTCUT: &str = "--desktop-shortcut";
 const START_MENU_SHORTCUT: &str = "--start-menu-shortcut";
 
@@ -417,7 +417,7 @@ fn install_exe(exe: &Path, chosen: &Path) -> CommandResult<PathBuf> {
 }
 
 /// Starts `exe` as a separate process that outlives this one.
-fn spawn_detached(exe: &Path, args: &[OsString]) -> CommandResult<()> {
+pub(crate) fn spawn_detached(exe: &Path, args: &[OsString]) -> CommandResult<()> {
     let mut command = Command::new(exe);
     command.args(args);
     if let Some(dir) = exe.parent() {

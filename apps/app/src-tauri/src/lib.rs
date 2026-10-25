@@ -20,6 +20,7 @@ mod settings;
 mod state;
 mod transfer;
 mod tray;
+mod update;
 mod versions;
 mod window;
 mod worlds;
@@ -59,6 +60,7 @@ pub fn run() {
             let onboarding = state.location.source == datadir::DataDirSource::Onboarding;
             if !onboarding {
                 logging::init(&state.paths);
+                update::remove_leftovers();
                 state.instances.remove_leftover_staging();
                 k0t1k_core::java::remove_leftover_staging(&state.paths);
             }
@@ -171,6 +173,8 @@ pub fn run() {
             transfer::scan_blocked_files,
             transfer::get_downloads_dir,
             transfer::set_update_lock,
+            update::check_for_update,
+            update::install_update,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the _k0t1k application")
