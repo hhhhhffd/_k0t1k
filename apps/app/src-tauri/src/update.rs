@@ -1,9 +1,9 @@
 //! Launcher self-update. Core finds, downloads and verifies the new executable (`k0t1k_core::update`);
-//! this module swaps files and restarts. The launcher is a portable exe, so there is no installer:
-//! the running exe is renamed to `<exe>.old` (Windows allows renaming a running image), the verified
-//! `<exe>.new` takes its name, and the new process is started with `--wait-for <pid>`, which makes it
-//! wait for this process to exit before the single-instance plugin is created. The next start deletes
-//! the leftovers.
+//! this module swaps files and restarts. The launcher is a portable exe on Windows and an AppImage on
+//! Linux, so there is no installer: the running file is renamed to `<file>.old` (Windows allows renaming
+//! a running image, Linux keeps the mounted AppImage open), the verified `<file>.new` takes its name,
+//! and the new process is started with `--wait-for <pid>`, which makes it wait for this process to exit
+//! before the single-instance plugin is created. The next start deletes the leftovers.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -45,19 +45,31 @@ fn sibling(exe: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// The file an update replaces: the exe on Windows, the AppImage on Linux (the running executable is
+/// inside the AppImage's read-only mount or a temporary extraction of it).
+fn launcher_file() -> Result<PathBuf, String> {
+    if cfg!(target_os = "linux") {
+        std::env::var_os("APPIMAGE").map(PathBuf::from).ok_or_else(|| {
+            tr("Updates are installed only into the AppImage, and this launcher was not started from one", "Обновления ставятся только в AppImage, а этот лаунчер запущен не из него").to_owned()
+        })
+    } else {
+        std::env::current_exe().map_err(|error| {
+            tracing::warn!("cannot determine the launcher executable: {error}");
+            tr("The launcher's executable path is unknown", "Не удалось определить путь к exe лаунчера").to_owned()
+        })
+    }
+}
+
 fn install_blocked() -> Option<String> {
-    if !cfg!(windows) {
-        return Some(tr("Installing updates is only supported on Windows", "Установка обновлений поддерживается только в Windows").to_owned());
+    if !cfg!(any(windows, target_os = "linux")) {
+        return Some(tr("Installing updates is only supported on Windows and Linux", "Установка обновлений поддерживается только в Windows и Linux").to_owned());
     }
     if cfg!(debug_assertions) {
         return Some(tr("This is a development build, it cannot replace itself", "Это сборка для разработки, она не может заменить себя").to_owned());
     }
-    let exe = match std::env::current_exe() {
+    let exe = match launcher_file() {
         Ok(exe) => exe,
-        Err(error) => {
-            tracing::warn!("cannot determine the launcher executable: {error}");
-            return Some(tr("The launcher's executable path is unknown", "Не удалось определить путь к exe лаунчера").to_owned());
-        }
+        Err(reason) => return Some(reason),
     };
     // The swap creates and renames files next to the exe, so the folder must be writable (not Program Files, say).
     let probe = sibling(&exe, ".write-test");
@@ -72,7 +84,7 @@ fn install_blocked() -> Option<String> {
 
 /// Deletes the files a finished or failed update leaves next to the exe. Failures are logged.
 pub fn remove_leftovers() {
-    let Ok(exe) = std::env::current_exe() else {
+    let Ok(exe) = launcher_file() else {
         return;
     };
     for suffix in [".old", ".new"] {
@@ -206,7 +218,7 @@ fn remove_new(new: &Path) {
 }
 
 async fn install(app: &AppHandle, state: &AppState, version: &str) -> CommandResult<()> {
-    let exe = std::env::current_exe()?;
+    let exe = launcher_file().map_err(AppError::new)?;
     let current_version = app.package_info().version.to_string();
     let client = update::http_client();
     let UpdateCheck::Available { release } = update::check(&current_version).await.map_err(|error| failure(&error))? else {
@@ -223,6 +235,12 @@ async fn install(app: &AppHandle, state: &AppState, version: &str) -> CommandRes
     let title = tr("Launcher update", "Обновление лаунчера");
     let progress = progress_fn(app, update::TASK, title);
     tracked(app, update::TASK, title, async { update::download(&client, &release, &current_version, &new, &progress).await.map_err(|error| failure(&error)) }).await?;
+    // The AppImage must stay executable; the download is created with the default mode.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&new, std::fs::Permissions::from_mode(0o755))?;
+    }
 
     // From here nothing new may start; the check after the flag sees everything that started before it.
     QUITTING.store(true, Ordering::SeqCst);

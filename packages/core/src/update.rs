@@ -1,9 +1,10 @@
 //! Launcher self-update from GitHub Releases: finds a newer release and downloads the new executable
 //! after checking its Ed25519 signature. Swapping the running executable is the app's job.
 //!
-//! A release carries two assets: `_k0t1k.exe` and `_k0t1k.exe.sig`, the base64 of a raw 64-byte pure
-//! Ed25519 signature over [`signed_message`]: a fixed prefix, the version and the SHA-256 of the exe
-//! (`scripts/release.sh` makes it). Binding the version stops an old signed exe from being republished
+//! A release carries the launcher for each system with a signature beside it: `_k0t1k.exe` and
+//! `_k0t1k.exe.sig` for Windows, `_k0t1k-x86_64.AppImage` and `_k0t1k-x86_64.AppImage.sig` for Linux. A
+//! signature is the base64 of a raw 64-byte pure Ed25519 signature over [`signed_message`]: a fixed
+//! prefix, the version and the SHA-256 of the file (`scripts/release.sh` makes it). Binding the version stops an old signed exe from being republished
 //! under a newer tag. Only the public key is embedded here.
 //!
 //! GitHub's REST API is not used: unauthenticated it allows 60 requests an hour per IP, which a shared
@@ -30,13 +31,20 @@ use crate::progress::{ProgressEvent, ProgressFn};
 const REPO: &str = "hhhhhffd/_k0t1k";
 /// Raw 32-byte Ed25519 public key, base64. The private half is kept off the repository.
 const PUBLIC_KEY: &str = "NrARzBayytnggNAo7TAAGOuAUyNb44vAMpDhECFZs4U=";
+/// The release asset this build updates itself from, and its signature.
+#[cfg(not(target_os = "linux"))]
 const EXE_ASSET: &str = "_k0t1k.exe";
+#[cfg(not(target_os = "linux"))]
 const SIG_ASSET: &str = "_k0t1k.exe.sig";
+#[cfg(target_os = "linux")]
+const EXE_ASSET: &str = "_k0t1k-x86_64.AppImage";
+#[cfg(target_os = "linux")]
+const SIG_ASSET: &str = "_k0t1k-x86_64.AppImage.sig";
 /// Stable task id of the download, as shown in the UI's task list.
 pub const TASK: &str = "update";
 /// A signature is 88 base64 characters; anything much larger is not one.
 const MAX_SIGNATURE_BYTES: usize = 1024;
-/// The launcher is about 20 MB; a release asset far beyond that is not ours.
+/// The exe is about 10 MB and the AppImage about 80 MB; a release asset far beyond that is not ours.
 const MAX_EXE_BYTES: u64 = 200 * 1024 * 1024;
 /// Assets are only accepted from this release download location.
 const ASSET_URL_PREFIX: &str = concat!("https://github.com/", "hhhhhffd/_k0t1k", "/releases/download/");
@@ -404,8 +412,8 @@ mod tests {
         let UpdateCheck::Available { release } = check_version(Some((0, 2, 0)), "0.1.0").unwrap() else { panic!("not available") };
         assert_eq!(release.version, "0.2.0");
         assert_eq!(release.notes_url, format!("{LOCATION_BASE}/tag/v0.2.0"));
-        assert_eq!(release.exe_url, format!("{ASSET_URL_PREFIX}v0.2.0/_k0t1k.exe"));
-        assert_eq!(release.sig_url, format!("{ASSET_URL_PREFIX}v0.2.0/_k0t1k.exe.sig"));
+        assert_eq!(release.exe_url, format!("{ASSET_URL_PREFIX}v0.2.0/{EXE_ASSET}"));
+        assert_eq!(release.sig_url, format!("{ASSET_URL_PREFIX}v0.2.0/{EXE_ASSET}.sig"));
         let sent = serde_json::to_string(&release).unwrap();
         assert!(!sent.contains("download"), "{sent}");
     }
