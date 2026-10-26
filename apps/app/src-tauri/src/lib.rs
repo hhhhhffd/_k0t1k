@@ -76,7 +76,7 @@ pub fn run() {
             }
             app.manage(state);
             window::create(app.handle())?;
-            if !onboarding {
+            if !onboarding && window::HAS_TRAY {
                 tray::create(app.handle())?;
             }
             Ok(())

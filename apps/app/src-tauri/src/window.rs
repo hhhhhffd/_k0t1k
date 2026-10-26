@@ -140,8 +140,12 @@ fn destroy(app: &AppHandle) {
     }
 }
 
+/// Linux gets no tray icon (GNOME shows none without an extension), so nothing hides into it there:
+/// the window stays open while a game runs and closing it exits.
+pub const HAS_TRAY: bool = !cfg!(target_os = "linux");
+
 pub fn on_game_started(app: &AppHandle, mode: OnGameLaunch) {
-    if mode == OnGameLaunch::KeepOpen {
+    if mode == OnGameLaunch::KeepOpen || !HAS_TRAY {
         return;
     }
     background(app, move |app| {
@@ -182,11 +186,15 @@ pub fn request_close(app: &AppHandle) {
             exit(app);
             return;
         }
-        let on_close = match GlobalSettings::load(&app.state::<AppState>().paths) {
-            Ok(settings) => settings.behavior.on_close,
-            Err(error) => {
-                tracing::error!("cannot read the settings, closing to the tray: {error}");
-                OnClose::Tray
+        let on_close = if !HAS_TRAY {
+            OnClose::Exit
+        } else {
+            match GlobalSettings::load(&app.state::<AppState>().paths) {
+                Ok(settings) => settings.behavior.on_close,
+                Err(error) => {
+                    tracing::error!("cannot read the settings, closing to the tray: {error}");
+                    OnClose::Tray
+                }
             }
         };
         match on_close {

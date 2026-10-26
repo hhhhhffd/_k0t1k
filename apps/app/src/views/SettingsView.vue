@@ -369,6 +369,8 @@ async function addAccount() {
       </template>
 
       <section v-else-if="section === 'behavior'" class="card flex flex-col gap-4 p-4">
+        <!-- Linux has no tray, so the window always stays open and closing it exits -->
+        <template v-if="system?.os !== 'linux'">
         <div class="flex flex-col gap-2">
           <span><span class="block font-medium">{{ t.settings.onGameLaunch }}</span><span class="text-[12px] text-faint">{{ t.settings.onGameLaunchHint }}</span></span>
           <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.onGameLaunch">
@@ -398,6 +400,7 @@ async function addAccount() {
             >{{ o.label }}</button>
           </div>
         </div>
+        </template>
         <div class="flex items-center gap-4">
           <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.discord }}</span><span class="text-[12px] text-faint">{{ t.settings.discordHint }}</span></span>
           <ToggleSwitch v-model="s.discord.enabled" :label="t.settings.discord" />
