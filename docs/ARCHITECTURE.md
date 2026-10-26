@@ -196,6 +196,8 @@ swept at the next start.
 Goal: while a game runs the launcher costs ~15-30 MB and no CPU. WebView2's processes are the heavy part, so
 the main window is destroyed (not hidden) and the Rust process alone keeps running behind a tray icon.
 
+- Linux has no tray (GNOME shows none without an extension; `window::HAS_TRAY`): the window stays open while a game
+  runs, closing it exits, and the two settings below are hidden there.
 - The tray icon exists for the whole run. Left click opens the window (recreating it); the menu has "Открыть _k0t1k",
   a "Запущенные игры" submenu with an "Остановить: <label>" item per running session (label "<name>", or
   "<name> #<n>" for later launches and for instances with several sessions; rebuilt on every `instance-state`,
@@ -271,7 +273,8 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
   `unavailable` with `delayed: true` (not remembered, so the next check asks again) and Settings shows a calm warn-colored
   "GitHub is limiting requests right now" line. Other failures reach the UI as a short localized text (`tr`) and the
   technical error goes to `launcher.log`. There is no throttle on the launcher's check (once per run, and on request).
-- Assets: `_k0t1k.exe` and `_k0t1k.exe.sig`. The signature is the base64 of a raw Ed25519 signature over
+- Assets: `_k0t1k.exe` and `_k0t1k.exe.sig` (Windows), `_k0t1k-x86_64.AppImage` and `_k0t1k-x86_64.AppImage.sig`
+  (Linux), picked at compile time. The signature is the base64 of a raw Ed25519 signature over
   `"_k0t1k-update\n<version>\n<hex sha256 of the exe>"` (`core::update::signed_message`), so a signed exe cannot be
   republished under a newer tag. The client rebuilds the message from the tag, hashes the download while streaming and
   verifies with the embedded public key (`ed25519-dalek` `verify_strict`); a file that fails is deleted, never installed.
@@ -280,18 +283,20 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
   exe is at most 200 MiB and, when the response has `Content-Length`, the download must match it exactly (the signature
   is the integrity check, there is no API `size` any more), the signature file at most 1 KiB; update requests use their
   own client with connect and read timeouts. Downloads follow redirects (GitHub serves assets from
-  `release-assets.githubusercontent.com`) but only over https and at most 5 of them. `scripts/release.sh <exe> [notes]` checks that the exe contains
-  `k0t1k-launcher/<version>`, that the tree is clean and HEAD is pushed, signs with `K0T1K_UPDATE_KEY` (default
+  `release-assets.githubusercontent.com`) but only over https and at most 5 of them. `scripts/release.sh [--appimage <AppImage>] <exe> [notes]` checks that the exe (and the binary
+  extracted from the AppImage) contains `k0t1k-launcher/<version>`, that the tree is clean and HEAD is pushed, signs with `K0T1K_UPDATE_KEY` (default
   `~/.config/k0t1k/update-signing-key.pem`, never in the repo), refuses when the tag exists or the signature does not
   verify against the embedded key, and runs `gh release create ... --target <HEAD>`.
 - Install (`install_update(version)`): installs exactly the release the user saw (refused when the latest differs). Refused
-  in debug builds, off Windows, or when the exe folder is not writable (`installBlocked` carries the reason), and while a
+  in debug builds, off Windows and Linux, on Linux when not started from an AppImage (`$APPIMAGE` names the file to
+  replace; `current_exe` is inside its mount), or when the folder is not writable (`installBlocked` carries the reason), and while a
   game runs, a game or Java install runs, or any `tracked` task is active (re-checked after the download, after raising
   the `QUITTING` flag that `AppState::reserve` and `spawn_game_install` check under the locks the updater takes, so nothing
   starts between the last check and exit). The download goes to `<exe>.new` (synced to disk), then the running exe is renamed
   to `<exe>.old`, `.new` takes its place (any failure renames `.old` back; if even that fails `.new` is kept and the error
   names `.old` for manual recovery) and the new exe is started with `--wait-for <pid>`, the same mechanism as onboarding,
-  so it waits for this process to exit before the single-instance mutex is created. The next start deletes `.old` and
+  so it waits for this process to exit before the single-instance mutex is created (on Linux the wait polls
+  `/proc/<pid>/stat`; the new AppImage is made executable before the swap). The next start deletes `.old` and
   `.new`, logging failures. Progress is the `update` task of the `progress` event.
 - Manual recovery: if the new exe starts but is broken, it is not rolled back automatically; until the next successful
   start `<exe>.old` is the previous version, so deleting the new exe and renaming `.old` back restores it.
