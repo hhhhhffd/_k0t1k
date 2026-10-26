@@ -1,5 +1,6 @@
 //! Where the launcher keeps its data: next to the executable (portable, like Prism), in a folder
 //! chosen through `data-dir.txt`, or in the user profile when the executable's folder is read-only.
+//! Outside Windows it is always the user profile.
 
 use std::path::{Path, PathBuf};
 
@@ -74,7 +75,10 @@ pub fn resolve(portable_here: bool) -> CommandResult<DataLocation> {
             Ok(()) => return Ok(DataLocation { root, exe_dir, source: DataDirSource::Custom }),
             Err(error) => tracing::warn!("ignoring {OVERRIDE_FILE}: {error}"),
         }
-    } else if cfg!(windows) && !portable_here && onboarding::needed(&exe_dir)? {
+    } else if !cfg!(windows) {
+        // The executable is an AppImage, mounted read-only or extracted to a temporary folder that is
+        // deleted after the run, or a macOS app bundle: data next to it would be lost.
+    } else if !portable_here && onboarding::needed(&exe_dir)? {
         // Nothing may be written next to the exe before the user has decided.
         return Ok(DataLocation { root: onboarding::temporary_root(), exe_dir, source: DataDirSource::Onboarding });
     } else if let Err(error) = ensure_writable(&exe_dir) {
