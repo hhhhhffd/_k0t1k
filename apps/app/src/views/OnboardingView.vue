@@ -13,7 +13,6 @@ const props = defineProps<{ info: OnboardingInfo }>()
 const tasks = useTasksStore()
 
 const desktopShortcut = ref(true)
-const startMenuShortcut = ref(true)
 const dontAsk = ref(false)
 // set once a command succeeded: the launcher is about to restart and the window to close
 const busy = ref<'install' | 'keep' | null>(null)
@@ -21,7 +20,7 @@ const busy = ref<'install' | 'keep' | null>(null)
 async function install(target: string) {
   busy.value = 'install'
   const done = await tasks.guard(async () => {
-    await relocate(target, desktopShortcut.value, startMenuShortcut.value)
+    await relocate(target, desktopShortcut.value)
     return true
   })
   if (!done) busy.value = null
@@ -65,9 +64,6 @@ async function keepHere() {
         </div>
         <label class="flex items-center gap-3">
           <ToggleSwitch v-model="desktopShortcut" :label="t.onboarding.desktopShortcut" :disabled="busy !== null" />{{ t.onboarding.desktopShortcut }}
-        </label>
-        <label class="flex items-center gap-3">
-          <ToggleSwitch v-model="startMenuShortcut" :label="t.onboarding.startMenuShortcut" :disabled="busy !== null" />{{ t.onboarding.startMenuShortcut }}
         </label>
         <div class="flex flex-wrap items-center gap-3">
           <button class="btn btn-primary" :disabled="busy !== null" @click="install(props.info.defaultTarget)">

@@ -180,7 +180,7 @@ async function changeDataDir(reset: boolean) {
 }
 
 async function makeShortcuts() {
-  if (await tasks.guard(() => createShortcuts(true, true))) tasks.toast(t.settings.shortcutsCreated, 'ok')
+  if (await tasks.guard(() => createShortcuts())) tasks.toast(t.settings.shortcutsCreated, 'ok')
 }
 
 async function askUninstall() {
@@ -455,10 +455,14 @@ async function addAccount() {
           </dl>
           <div class="flex flex-wrap gap-2">
             <button class="btn" @click="tasks.guard(openDataDir)"><FolderOpen :size="15" />{{ t.settings.openFolder }}</button>
-            <button class="btn" @click="changeDataDir(false)">{{ t.settings.changeDataDir }}</button>
-            <button class="btn btn-ghost" @click="changeDataDir(true)"><RotateCcw :size="15" />{{ t.settings.resetDataDir }}</button>
+            <!-- the override file lives next to the executable, which is read-only inside an AppImage -->
+            <template v-if="system.os === 'windows'">
+              <button class="btn" @click="changeDataDir(false)">{{ t.settings.changeDataDir }}</button>
+              <button class="btn btn-ghost" @click="changeDataDir(true)"><RotateCcw :size="15" />{{ t.settings.resetDataDir }}</button>
+            </template>
           </div>
-          <div class="flex flex-wrap gap-2 border-t border-line pt-3">
+          <!-- shortcuts and uninstall are implemented on Windows only -->
+          <div v-if="system.os === 'windows'" class="flex flex-wrap gap-2 border-t border-line pt-3">
             <button class="btn" @click="makeShortcuts"><Link :size="15" />{{ t.settings.createShortcuts }}</button>
             <button class="btn btn-danger" @click="askUninstall"><Trash2 :size="15" />{{ t.settings.uninstall }}</button>
           </div>

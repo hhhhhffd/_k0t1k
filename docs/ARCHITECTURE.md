@@ -181,9 +181,9 @@ swept at the next start.
 
 - `relocate`: copies the exe to the target (`%LOCALAPPDATA%\Programs\_k0t1k`, or `<chosen>\_k0t1k` when the chosen
   folder is not empty) as `.part` + rename, starts it with `--wait-for <pid> --finish-relocation <old exe>
-  [--desktop-shortcut] [--start-menu-shortcut]` and exits. The new process waits for the pid *before* the
+  [--desktop-shortcut]` and exits. The new process waits for the pid *before* the
   single-instance plugin exists (the mutex dies with the old process), moves our known entries
-  (`placement::OWNED_NAMES`) from the old folder, deletes the old exe (retries), creates `.lnk` files through
+  (`placement::OWNED_NAMES`) from the old folder, deletes the old exe (retries), creates the desktop `.lnk` through
   `IShellLinkW` and records them in `settings.onboarding.createdShortcuts`. Problems are returned once by
   `get_relocation_report` and shown in a dialog. A failure before the spawn leaves the old exe working.
 - `keep_portable_here(remember)`: stores the choice (or only passes `--portable-here` for one run) and restarts.

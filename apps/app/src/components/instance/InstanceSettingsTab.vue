@@ -59,7 +59,9 @@ function chooseJava(path: string) {
 
 async function pickJava() {
   if (!isTauri || !draft.settings.java) return
-  const picked = await open({ multiple: false, directory: false, title: t.iset.pickJavaTitle, filters: [{ name: 'Java', extensions: ['exe'] }] })
+  // Java on Linux and macOS is a `java` file without an extension, which an `exe` filter would hide
+  const filters = navigator.userAgent.includes('Windows') ? [{ name: 'Java', extensions: ['exe'] }] : undefined
+  const picked = await open({ multiple: false, directory: false, title: t.iset.pickJavaTitle, filters })
   if (typeof picked === 'string') {
     draft.settings.java.path = picked
     markDirty()

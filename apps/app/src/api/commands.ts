@@ -57,11 +57,11 @@
  * Onboarding / install (Windows; the launcher asks where to live when its exe sits in Desktop, Downloads or Documents,
  *   or in the temp folder, and starts on a temporary data root until the user decides)
  *   get_onboarding()                                         -> OnboardingInfo | null  (null = no decision pending; show the normal UI)
- *   relocate(target, desktopShortcut, startMenuShortcut)     -> void  (copies the exe to `target`, or `target\_k0t1k` when the folder is
+ *   relocate(target, desktopShortcut)                        -> void  (copies the exe to `target`, or `target\_k0t1k` when the folder is
  *                                                                      not empty, restarts from there and exits; errors leave the old exe working)
  *   keep_portable_here(remember)                             -> void  (restarts in place; `remember` stores the choice in settings.onboarding)
  *   get_relocation_report()                                  -> RelocationReport | null  (once, after a restart caused by `relocate`)
- *   create_shortcuts(desktop, startMenu)                     -> string[]  (created .lnk paths; recorded for uninstall)
+ *   create_shortcuts()                                       -> string[]  (the created desktop .lnk; recorded for uninstall)
  *   get_uninstall_plan()                                     -> UninstallPlan  (errors when uninstalling is refused: user folder, running games)
  *   uninstall()                                              -> void  (a detached cmd deletes the launcher after exit)
  * Accounts (settings.accounts mirrors the result; tokens live in accounts.json and never reach the UI)
@@ -319,12 +319,10 @@ export const setDataDir = (path: string | null) => call<boolean>('set_data_dir',
 
 // ---- onboarding / install ----
 export const getOnboarding = () => call<OnboardingInfo | null>('get_onboarding')
-export const relocate = (target: string, desktopShortcut: boolean, startMenuShortcut: boolean) =>
-  call<void>('relocate', { target, desktopShortcut, startMenuShortcut })
+export const relocate = (target: string, desktopShortcut: boolean) => call<void>('relocate', { target, desktopShortcut })
 export const keepPortableHere = (remember: boolean) => call<void>('keep_portable_here', { remember })
 export const getRelocationReport = () => call<RelocationReport | null>('get_relocation_report')
-export const createShortcuts = (desktop: boolean, startMenu: boolean) =>
-  call<string[]>('create_shortcuts', { desktop, startMenu })
+export const createShortcuts = () => call<string[]>('create_shortcuts')
 export const getUninstallPlan = () => call<UninstallPlan>('get_uninstall_plan')
 export const uninstall = () => call<void>('uninstall')
 

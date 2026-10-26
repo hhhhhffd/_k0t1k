@@ -44,7 +44,6 @@ pub(crate) const WAIT_FOR: &str = "--wait-for";
 const FINISH_RELOCATION: &str = "--finish-relocation";
 pub(crate) const PORTABLE_HERE: &str = "--portable-here";
 const DESKTOP_SHORTCUT: &str = "--desktop-shortcut";
-const START_MENU_SHORTCUT: &str = "--start-menu-shortcut";
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct StartupArgs {
@@ -55,7 +54,6 @@ pub struct StartupArgs {
     /// The executable this one replaces.
     pub finish_relocation: Option<PathBuf>,
     pub desktop_shortcut: bool,
-    pub start_menu_shortcut: bool,
 }
 
 impl StartupArgs {
@@ -74,7 +72,6 @@ impl StartupArgs {
                 }
                 Some(PORTABLE_HERE) => parsed.portable_here = true,
                 Some(DESKTOP_SHORTCUT) => parsed.desktop_shortcut = true,
-                Some(START_MENU_SHORTCUT) => parsed.start_menu_shortcut = true,
                 _ => {}
             }
         }
@@ -150,7 +147,7 @@ fn finish_relocation(old_exe: &Path, args: &StartupArgs, report: &mut Relocation
         move_owned_entries(old_dir, new_dir, report);
     }
     delete_with_retries(old_exe, report);
-    let (created, problems) = create_shortcuts_for(&new_exe, args.desktop_shortcut, args.start_menu_shortcut);
+    let (created, problems) = create_shortcuts_for(&new_exe, args.desktop_shortcut);
     report.created_shortcuts = created;
     report.problems.extend(problems);
 }
@@ -223,7 +220,7 @@ fn delete_with_retries(file: &Path, report: &mut RelocationReport) {
     }
 }
 
-fn shortcut_paths(desktop: bool, start_menu: bool) -> (Vec<PathBuf>, Vec<String>) {
+fn shortcut_paths(desktop: bool) -> (Vec<PathBuf>, Vec<String>) {
     let mut paths = Vec::new();
     let mut problems = Vec::new();
     if desktop {
@@ -232,18 +229,12 @@ fn shortcut_paths(desktop: bool, start_menu: bool) -> (Vec<PathBuf>, Vec<String>
             None => problems.push("cannot find the Desktop folder for a shortcut".to_owned()),
         }
     }
-    if start_menu {
-        match dirs::data_dir() {
-            Some(dir) => paths.push(dir.join(r"Microsoft\Windows\Start Menu\Programs").join(SHORTCUT_NAME)),
-            None => problems.push("cannot find the Start menu folder for a shortcut".to_owned()),
-        }
-    }
     (paths, problems)
 }
 
 /// Creates the requested shortcuts to `exe`; returns the created ones and the failures.
-fn create_shortcuts_for(exe: &Path, desktop: bool, start_menu: bool) -> (Vec<PathBuf>, Vec<String>) {
-    let (paths, mut problems) = shortcut_paths(desktop, start_menu);
+fn create_shortcuts_for(exe: &Path, desktop: bool) -> (Vec<PathBuf>, Vec<String>) {
+    let (paths, mut problems) = shortcut_paths(desktop);
     let mut created = Vec::new();
     for lnk in paths {
         let result = match lnk.parent() {
@@ -428,7 +419,7 @@ pub(crate) fn spawn_detached(exe: &Path, args: &[OsString]) -> CommandResult<()>
 
 /// Installs into `target` (see `placement::install_target`) and restarts from there.
 #[tauri::command]
-pub async fn relocate(app: AppHandle, state: State<'_, AppState>, target: String, desktop_shortcut: bool, start_menu_shortcut: bool) -> CommandResult<()> {
+pub async fn relocate(app: AppHandle, state: State<'_, AppState>, target: String, desktop_shortcut: bool) -> CommandResult<()> {
     require_onboarding(&state)?;
     let exe = std::env::current_exe()?;
     let source = exe.clone();
@@ -437,9 +428,6 @@ pub async fn relocate(app: AppHandle, state: State<'_, AppState>, target: String
     let mut args = vec![OsString::from(WAIT_FOR), std::process::id().to_string().into(), FINISH_RELOCATION.into(), exe.into()];
     if desktop_shortcut {
         args.push(DESKTOP_SHORTCUT.into());
-    }
-    if start_menu_shortcut {
-        args.push(START_MENU_SHORTCUT.into());
     }
     spawn_detached(&installed, &args)?;
     tokio::task::spawn_blocking(move || crate::window::exit(&app)).await?;
@@ -469,13 +457,13 @@ pub async fn keep_portable_here(app: AppHandle, state: State<'_, AppState>, reme
     Ok(())
 }
 
-/// Creates shortcuts to the running exe, for a launcher that was not installed by onboarding.
+/// Creates a desktop shortcut to the running exe, for a launcher that was not installed by onboarding.
 #[tauri::command]
-pub async fn create_shortcuts(state: State<'_, AppState>, desktop: bool, start_menu: bool) -> CommandResult<Vec<String>> {
+pub async fn create_shortcuts(state: State<'_, AppState>) -> CommandResult<Vec<String>> {
     require_installed(&state)?;
     let exe = std::env::current_exe()?;
     let paths = state.paths.clone();
-    let (created, problems) = tokio::task::spawn_blocking(move || create_shortcuts_for(&exe, desktop, start_menu)).await?;
+    let (created, problems) = tokio::task::spawn_blocking(move || create_shortcuts_for(&exe, true)).await?;
     let names = created.iter().map(|lnk| lnk.display().to_string()).collect();
     blocking(move || record_shortcuts(&paths, &created)).await?;
     if problems.is_empty() { Ok(names) } else { Err(AppError::new(problems.join("; "))) }
@@ -551,7 +539,7 @@ mod tests {
         let args = parse(&["--wait-for", "42", "--finish-relocation", r"C:\Users\Ann\Desktop\k0t1k.exe", "--desktop-shortcut"]).unwrap();
         assert_eq!(args.wait_for, Some(42));
         assert_eq!(args.finish_relocation, Some(PathBuf::from(r"C:\Users\Ann\Desktop\k0t1k.exe")));
-        assert!(args.desktop_shortcut && !args.start_menu_shortcut && !args.portable_here);
+        assert!(args.desktop_shortcut && !args.portable_here);
         assert_eq!(parse(&["--portable-here", "unrelated"]).unwrap(), StartupArgs { portable_here: true, ..StartupArgs::default() });
         assert_eq!(parse(&[]).unwrap(), StartupArgs::default());
         assert!(parse(&["--wait-for", "soon"]).is_err());
