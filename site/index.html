@@ -136,6 +136,7 @@ dialog#lb img { width: 100%; max-height: calc(96vh - 90px); object-fit: contain;
 .dl { text-align: center; }
 .dl .cat-sm { width: 96px; margin: 0 auto 16px; image-rendering: pixelated; }
 .dl .sub { margin-inline: auto; }
+.dl-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 
 footer { border-top: 2px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
 footer p { margin: 0 0 6px; }
@@ -310,12 +311,18 @@ footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-betwee
   <div class="wrap">
     <img class="cat-sm" src="assets/mascot.png" width="96" height="96" alt="">
     <h2 class="px" style="margin-bottom:12px"><span class="en">Download</span><span class="ru">Скачать</span></h2>
-    <p class="sub en">Open beta<span class="dl-meta" hidden> <span class="dl-ver"></span> · <span class="dl-size"></span> MB</span></p>
-    <p class="sub ru">Открытая бета<span class="dl-meta" hidden> <span class="dl-ver"></span> · <span class="dl-size"></span> МБ</span></p>
-    <a class="btn" href="https://github.com/hhhhhffd/_k0t1k/releases/latest/download/_k0t1k.exe" id="dl-btn">
-      <span class="en">Download for Windows</span><span class="ru">Скачать для Windows</span></a>
-    <p class="sub en" style="margin-top:14px;font-size:14px">Windows 10 or newer with WebView2.</p>
-    <p class="sub ru" style="margin-top:14px;font-size:14px">Windows 10 или новее с WebView2.</p>
+    <p class="sub en">Open beta<span class="dl-meta" hidden> <span class="dl-ver"></span></span></p>
+    <p class="sub ru">Открытая бета<span class="dl-meta" hidden> <span class="dl-ver"></span></span></p>
+    <div class="dl-btns">
+      <a class="btn" href="https://github.com/hhhhhffd/_k0t1k/releases/latest/download/_k0t1k.exe">
+        <span class="en">Download for Windows</span><span class="ru">Скачать для Windows</span>
+        <span class="en dl-size" data-asset="_k0t1k.exe" data-unit="MB"></span><span class="ru dl-size" data-asset="_k0t1k.exe" data-unit="МБ"></span></a>
+      <a class="btn" href="https://github.com/hhhhhffd/_k0t1k/releases/latest/download/_k0t1k-x86_64.AppImage">
+        <span class="en">Download for Linux</span><span class="ru">Скачать для Linux</span>
+        <span class="en dl-size" data-asset="_k0t1k-x86_64.AppImage" data-unit="MB"></span><span class="ru dl-size" data-asset="_k0t1k-x86_64.AppImage" data-unit="МБ"></span></a>
+    </div>
+    <p class="sub en" style="margin-top:14px;font-size:14px">Windows 10 or newer with WebView2. Linux: an x86_64 AppImage for Ubuntu 22.04 or newer and similar systems; make it executable and run it.</p>
+    <p class="sub ru" style="margin-top:14px;font-size:14px">Windows 10 или новее с WebView2. Linux: AppImage для x86_64, Ubuntu 22.04 или новее и похожие системы; сделайте файл исполняемым и запустите.</p>
     <p class="report en">This is an open beta, so things may break. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Report a problem on Discord</a>.</p>
     <p class="report ru">Это открытая бета, что-то может сломаться. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Сообщить о проблеме в Discord</a>.</p>
   </div>
@@ -378,16 +385,19 @@ footer .foot-row { display: flex; flex-wrap: wrap; justify-content: space-betwee
   dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
   dlg.addEventListener('close', function () { if (current) current.focus(); });
 
-  // The button is a plain link to the latest exe. The version and size are best effort: the API is limited
-  // to 60 requests an hour per IP, so on any failure the line simply stays without them.
+  // The buttons are plain links to the latest release's files. The version and sizes are best effort: the API
+  // is limited to 60 requests an hour per IP, so on any failure the page simply stays without them.
   fetch('https://api.github.com/repos/hhhhhffd/_k0t1k/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (rel) {
-      var exe = (rel.assets || []).filter(function (a) { return a.name === '_k0t1k.exe'; })[0];
-      if (!exe) throw new Error('release ' + rel.tag_name + ' has no _k0t1k.exe');
+      var sizes = {};
+      (rel.assets || []).forEach(function (a) { sizes[a.name] = a.size; });
       document.querySelectorAll('.dl-ver').forEach(function (el) { el.textContent = rel.tag_name; });
-      document.querySelectorAll('.dl-size').forEach(function (el) { el.textContent = (exe.size / 1048576).toFixed(1); });
       document.querySelectorAll('.dl-meta').forEach(function (el) { el.hidden = false; });
+      document.querySelectorAll('.dl-size').forEach(function (el) {
+        var size = sizes[el.dataset.asset];
+        if (size) el.textContent = '· ' + (size / 1048576).toFixed(1) + ' ' + el.dataset.unit;
+      });
     })
     .catch(function () { /* the plain link above keeps working */ });
 })();
