@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "node scripts/fetch-plugins.mjs && vue-tsc --noEmit && vite build",
+    "fetch-plugins": "node scripts/fetch-plugins.mjs",
     "check": "vue-tsc --noEmit",
     "tauri": "tauri"
   },

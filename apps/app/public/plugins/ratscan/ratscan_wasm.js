@@ -1,5 +1,3 @@
-/* @ts-self-types="./ratscan_wasm.d.ts" */
-
 /**
  * Scans jar bytes and returns the report as a JSON string.
  * @param {Uint8Array} bytes
