@@ -117,12 +117,11 @@
  *   get_downloads_dir()                                      -> string
  *   set_update_lock(instanceId, kind, fileName, locked)      -> void
  * Launcher update (GitHub Releases, Ed25519-signed exe)
- *   check_for_update(force)                                  -> UpdateStatus   (without force, the result of the earlier check of this run; failures are logged by the backend)
+ *   check_for_update(force)                                  -> UpdateStatus   (also installs newer plugins; without force, the result of the earlier check of this run; failures are logged by the backend)
  *   install_update(version)                                  -> void           (installs exactly that release (refused when the latest differs): downloads, verifies, replaces the exe and restarts;
  *                                                                              emits `progress` as task `update`; refused while a game runs or anything is downloading)
  * Plugins (wasm plugins run in a Web Worker of the UI; see ARCHITECTURE.md)
  *   list_plugins()                                           -> PluginInfo[]  (version and source of the copy that runs)
- *   check_plugin_updates(force)                              -> PluginInfo[]  (force = "check now"; otherwise the startup rules: setting on, once a day)
  *   read_plugin_file(id, version, name)                      -> ArrayBuffer   (a file of the installed copy; bundled copies are read from the UI assets)
  *   ratscan_status(instanceId)                               -> JarScan[]     (all mod jars, enabled and disabled, with cached results)
  *   ratscan_store(instanceId, sha1, pluginVersion, result)   -> void
@@ -452,7 +451,6 @@ export const setUpdateLock = (instanceId: string, kind: LocalResourceKind, fileN
 
 // ---- plugins ----
 export const listPlugins = () => call<PluginInfo[]>('list_plugins')
-export const checkPluginUpdates = (force: boolean) => call<PluginInfo[]>('check_plugin_updates', { force })
 export const readPluginFile = (id: PluginId, version: string, name: string) =>
   call<ArrayBuffer>('read_plugin_file', { id, version, name })
 export const ratscanStatus = (instanceId: string) => call<JarScan[]>('ratscan_status', { instanceId })

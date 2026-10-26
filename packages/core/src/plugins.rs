@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -31,8 +31,6 @@ const MAX_SIGNATURE_BYTES: usize = 1024;
 /// A wasm plugin is a few MB; a file far beyond that is not ours.
 pub const MAX_FILE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_FILES: usize = 8;
-/// How often the startup check may ask GitHub.
-pub const CHECK_INTERVAL: Duration = Duration::hours(24);
 
 /// A plugin the launcher knows. Releases are read only from this repository.
 #[derive(Debug, Clone, Copy)]
@@ -294,7 +292,7 @@ fn prune(root: &Path, active: &str, previous: Option<&str>) {
 pub struct PluginRecord {
     pub last_check: Option<DateTime<Utc>>,
     pub error: Option<String>,
-    /// The last attempt hit a rate limit or a network problem: not a failure of the plugin, retried sooner.
+    /// The last attempt hit a rate limit or a network problem: not a failure of the plugin.
     pub delayed: bool,
 }
 
@@ -326,12 +324,6 @@ pub fn save_states(paths: &Paths, states: &PluginStates) -> Result<()> {
     let (file, pending) = (state_file(paths), dir.join("state.json.tmp"));
     std::fs::write(&pending, serde_json::to_vec_pretty(states)?).at(&pending)?;
     std::fs::rename(&pending, &file).at(&file)
-}
-
-/// Whether the startup check may ask GitHub again: once a day, or after an hour when the last attempt was delayed.
-pub fn check_due(record: Option<&PluginRecord>, now: DateTime<Utc>) -> bool {
-    let interval = if record.is_some_and(|record| record.delayed) { update::RETRY_AFTER_TRANSIENT } else { CHECK_INTERVAL };
-    record.and_then(|record| record.last_check).is_none_or(|last| now - last >= interval)
 }
 
 // ---- updating ----
@@ -495,26 +487,6 @@ mod tests {
         let mut left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
         left.sort();
         assert_eq!(left, ["0.2.0", "0.3.0", "active"]);
-    }
-
-    #[test]
-    fn check_is_due_once_a_day_or_an_hour_after_a_delay() {
-        let now = Utc::now();
-        let ago = |minutes, delayed, error: Option<&str>| PluginRecord {
-            last_check: Some(now - Duration::minutes(minutes)),
-            error: error.map(str::to_owned),
-            delayed,
-        };
-        assert!(check_due(None, now));
-        assert!(check_due(Some(&PluginRecord::default()), now));
-        assert!(!check_due(Some(&ago(60, false, None)), now));
-        assert!(!check_due(Some(&ago(23 * 60, false, None)), now));
-        assert!(check_due(Some(&ago(25 * 60, false, None)), now));
-        // A rate limit or a network error is retried after an hour, not a day.
-        assert!(!check_due(Some(&ago(30, true, None)), now));
-        assert!(check_due(Some(&ago(61, true, None)), now));
-        // A real failure keeps the daily pace.
-        assert!(!check_due(Some(&ago(61, false, Some("x"))), now));
     }
 
     #[test]

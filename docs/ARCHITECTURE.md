@@ -332,10 +332,9 @@ the main window is destroyed (not hidden) and the Rust process alone keeps runni
   hash right (checked at every load) and it is not older than the bundled baseline; otherwise the bundled copy (a damaged installed
   copy is logged and shown as the plugin's error). Installed files reach the UI as binary IPC (`read_plugin_file`), bundled ones
   are fetched from the app assets.
-- **Checks**: at startup (backend task) when `updates.autoUpdatePlugins` is on (default, `#[serde(default)]`), per plugin at most
-  once in 24 h (`last_check` in `state.json`, also set after a failed attempt), or once in an hour after a `delayed` one
-  (`plugins::check_due`); Settings, About, Plugins has "Check for updates"
-  (forced), the toggle, versions, source and the last error.
+- **Checks**: part of the launcher's update check (`check_for_update`): on every start when `updates.checkOnStartup` is on, and
+  on "Check now" in Settings, About, Updates. Newer plugins are installed right away; the launcher itself only on confirmation.
+  `last_check`, the last error and `delayed` are kept in `state.json`; Settings, About, Plugins shows them with versions and source.
 - **RatScan in the Mods tab**: "Scan mods" scans enabled and disabled jars; the backend reads each jar and sends it as raw bytes
   (`read_resource_file`), the UI shows progress. Badges map the verdict: `clean`, `suspicious`, `malicious` is shown as
   "dangerous", `unknown` as "not analyzed" (never as clean). A click opens the findings. Results are cached in

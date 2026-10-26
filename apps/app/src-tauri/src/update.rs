@@ -96,17 +96,20 @@ fn failure(error: &k0t1k_core::Error) -> AppError {
     })
 }
 
-/// Looks for a newer release. Without `force` the result of an earlier check in this run is returned.
-/// A failed check is logged here, so a silent startup check may ignore the error. A rate limit or a
-/// network problem is a normal answer (`delayed`) that is not remembered, so the next check asks again.
+/// Looks for a newer launcher release and, at the same time, installs newer plugins (their results are
+/// read with `list_plugins`). Without `force` the result of an earlier check in this run is returned and
+/// nothing is asked. A failed check is logged here, so a silent startup check may ignore the error. A
+/// rate limit or a network problem is a normal answer (`delayed`) that is not remembered, so the next
+/// check asks again.
 #[tauri::command]
-pub async fn check_for_update(app: AppHandle, force: bool) -> CommandResult<UpdateStatus> {
+pub async fn check_for_update(app: AppHandle, state: State<'_, AppState>, force: bool) -> CommandResult<UpdateStatus> {
     if !force && let Some(status) = LAST_CHECK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone() {
         return Ok(status);
     }
     let current_version = app.package_info().version.to_string();
     let install_blocked = install_blocked();
-    let check = match update::check(&current_version).await {
+    let (launcher, ()) = tokio::join!(update::check(&current_version), crate::plugins::check_all(state.inner()));
+    let check = match launcher {
         Ok(check) => check,
         Err(error) if update::is_transient(&error) => {
             tracing::warn!("update check delayed: {error}");

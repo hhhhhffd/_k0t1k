@@ -1,15 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { checkPluginUpdates, listPlugins } from '../api/commands'
+import { listPlugins } from '../api/commands'
 import type { PluginId, PluginInfo } from '../api/types'
-import { errorMessage } from '../utils/format'
 
 export const usePluginsStore = defineStore('plugins', () => {
   const list = ref<PluginInfo[]>([])
-  const checking = ref(false)
-  /** The last failed manual check; per-plugin errors of background checks are in `list`. */
-  const error = ref('')
-  /** The list is re-read now and then: the startup check may install a release while the UI runs. */
+  /** The list is re-read now and then: the update check may install a release while the UI runs. */
   const MAX_AGE_MS = 30_000
   let loadedAt = 0
   let loading: Promise<void> | undefined
@@ -34,21 +30,11 @@ export const usePluginsStore = defineStore('plugins', () => {
     return info
   }
 
-  /** Settings > Plugins "check now". */
-  async function check() {
-    if (checking.value) return
-    checking.value = true
-    error.value = ''
-    try {
-      list.value = await checkPluginUpdates(true)
-      loadedAt = Date.now()
-      loading = Promise.resolve()
-    } catch (e) {
-      error.value = errorMessage(e)
-    } finally {
-      checking.value = false
-    }
+  /** Reads the list again, after the update check has installed plugins. */
+  function reload() {
+    loadedAt = 0
+    return load()
   }
 
-  return { list, checking, error, load, infoOf, check }
+  return { list, load, reload, infoOf }
 })

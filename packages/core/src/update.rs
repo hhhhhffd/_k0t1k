@@ -46,8 +46,6 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Downloads are redirected from github.com to GitHub's asset hosts; a chain longer than this is not.
 const MAX_REDIRECTS: usize = 5;
-/// After a rate limit or a network error the next check may come sooner than after a normal one.
-pub const RETRY_AFTER_TRANSIENT: chrono::Duration = chrono::Duration::hours(1);
 
 fn client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder()

@@ -131,7 +131,7 @@ const defaultSettings: GlobalSettings = {
   ui: { language: 'en', theme: 'k0t1k', liteMode: false, customThemes: [], windowControls: 'left' },
   behavior: { onGameLaunch: 'hide_to_tray', onClose: 'tray' },
   discord: { enabled: true },
-  updates: { checkOnStartup: true, autoUpdatePlugins: true },
+  updates: { checkOnStartup: true },
   onboarding: { keepPortableAt: null, createdShortcuts: [] },
   sharedFoldersDefault: ['resourcepacks', 'shaderpacks'],
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],

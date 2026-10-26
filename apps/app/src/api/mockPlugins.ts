@@ -11,7 +11,6 @@ export interface PluginMockContext {
 
 const PLUGIN_IDS: PluginId[] = ['ratscan', 'packconv']
 const encoder = new TextEncoder()
-const lastChecks = new Map<PluginId, string>()
 const files = new Map<string, Uint8Array>()
 const caches = new Map<string, Map<string, { pluginVersion: string; scannedAt: string; result: ScanResult }>>()
 const fileKey = (instanceId: string, kind: string, fileName: string) => `${instanceId}:${kind}:${fileName}`
@@ -96,7 +95,7 @@ async function sha1Hex(bytes: Uint8Array) {
 
 async function bundledInfo(id: PluginId): Promise<PluginInfo> {
   const manifest = (await (await fetch(`${import.meta.env.BASE_URL}plugins/${id}/plugin.json`)).json()) as { version: string; files: Record<string, string> }
-  return { id, version: manifest.version, source: 'bundled', files: Object.keys(manifest.files), lastCheck: lastChecks.get(id) ?? null, error: null, delayed: false }
+  return { id, version: manifest.version, source: 'bundled', files: Object.keys(manifest.files), lastCheck: null, error: null, delayed: false }
 }
 
 const copyOf = (bytes: Uint8Array) => bytes.slice().buffer
@@ -118,11 +117,6 @@ export async function pluginCommand(cmd: string, a: Args, ctx: PluginMockContext
   switch (cmd) {
     case 'list_plugins':
       return { value: await Promise.all(PLUGIN_IDS.map(bundledInfo)) }
-    case 'check_plugin_updates': {
-      const now = new Date().toISOString()
-      for (const id of PLUGIN_IDS) lastChecks.set(id, now)
-      return { value: await Promise.all(PLUGIN_IDS.map(bundledInfo)) }
-    }
     case 'read_plugin_file':
       throw new Error('mock: only bundled plugins exist')
     case 'ratscan_status': {

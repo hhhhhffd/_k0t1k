@@ -74,13 +74,7 @@ pub fn run() {
                 Ok(settings) => k0t1k_core::i18n::set_language(settings.ui.language),
                 Err(error) => tracing::warn!("cannot read the language from the settings: {error}"),
             }
-            let plugin_check_state = (!onboarding).then(|| state.clone());
             app.manage(state);
-            if let Some(state) = plugin_check_state {
-                tauri::async_runtime::spawn(async move {
-                    plugins::check_all(&state, false).await;
-                });
-            }
             window::create(app.handle())?;
             if !onboarding {
                 tray::create(app.handle())?;
@@ -185,7 +179,6 @@ pub fn run() {
             transfer::get_downloads_dir,
             transfer::set_update_lock,
             plugins::list_plugins,
-            plugins::check_plugin_updates,
             plugins::read_plugin_file,
             plugins::ratscan_status,
             plugins::ratscan_store,

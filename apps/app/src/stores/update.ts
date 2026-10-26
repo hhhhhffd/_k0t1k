@@ -4,9 +4,11 @@ import { checkForUpdate, installUpdate } from '../api/commands'
 import type { UpdateStatus } from '../api/types'
 import { errorMessage } from '../utils/format'
 import { useInstancesStore } from './instances'
+import { usePluginsStore } from './plugins'
 
 export const useUpdateStore = defineStore('update', () => {
   const instances = useInstancesStore()
+  const plugins = usePluginsStore()
   const status = ref<UpdateStatus | null>(null)
   const checking = ref(false)
   const installing = ref(false)
@@ -17,7 +19,8 @@ export const useUpdateStore = defineStore('update', () => {
   /** Installing would replace the exe under a running game, so it waits until every session ends. */
   const gameRunning = computed(() => instances.instances.some((i) => instances.stateOf(i.id) !== 'stopped'))
 
-  /** `force` asks GitHub again; the startup check reuses the result of this run. */
+  /** Checks the launcher and the plugins (newer plugins are installed by the backend). `force` asks GitHub
+   * again; the startup check reuses the result of this run. */
   async function check(force: boolean, silent = false) {
     if (checking.value) return
     checking.value = true
@@ -30,6 +33,8 @@ export const useUpdateStore = defineStore('update', () => {
     } finally {
       checking.value = false
     }
+    // the plugin part of the check ran even when the launcher part failed
+    plugins.reload().catch((e: unknown) => console.warn('cannot reload the plugin list', e))
   }
 
   async function install() {

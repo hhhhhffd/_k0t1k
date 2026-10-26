@@ -188,7 +188,7 @@ export interface GlobalSettings {
   ui: { language: Language; theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null; windowControls: WindowControlsSide }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
   discord: { enabled: boolean }
-  updates: { checkOnStartup: boolean; autoUpdatePlugins: boolean }
+  updates: { checkOnStartup: boolean }
   /** Owned by the onboarding commands: `save_settings` never overwrites it. */
   onboarding: { keepPortableAt: string | null; createdShortcuts: string[] }
   /** Folders that new instances (and imported modpacks) share. */

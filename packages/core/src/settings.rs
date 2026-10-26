@@ -227,15 +227,14 @@ impl Default for DiscordSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UpdateSettings {
-    /// Look for a newer launcher release at startup (silently).
+    /// At startup look for a newer launcher release (installed only on confirmation) and install newer
+    /// wasm plugins (see `plugins`).
     pub check_on_startup: bool,
-    /// Look for newer wasm plugins (see `plugins`) at startup, at most once a day.
-    pub auto_update_plugins: bool,
 }
 
 impl Default for UpdateSettings {
     fn default() -> Self {
-        Self { check_on_startup: true, auto_update_plugins: true }
+        Self { check_on_startup: true }
     }
 }
 

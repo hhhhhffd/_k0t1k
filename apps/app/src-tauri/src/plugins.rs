@@ -16,7 +16,6 @@ use k0t1k_core::content::{self as core_content, ResourceKind};
 use k0t1k_core::packformat;
 use k0t1k_core::plugins::{self, KnownPlugin, Manifest, PluginRecord, Resolved, Source};
 use k0t1k_core::scancache::{self, ScanEntry};
-use k0t1k_core::settings::GlobalSettings;
 use k0t1k_core::update;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -120,26 +119,15 @@ pub async fn list_plugins(state: State<'_, AppState>) -> CommandResult<Vec<Plugi
     Ok(tokio::task::spawn_blocking(move || describe(&state)).await?)
 }
 
-/// Checks the plugins for newer signed releases. Without `force` this is the startup check: it needs
-/// the setting on and skips a plugin checked within the last 24 hours (an hour after a rate limit or
-/// a network problem). Failures are logged and kept per plugin for Settings, a short localized text for
-/// a rejected release and a `delayed` flag for a transient problem; the active version never changes
-/// on a failure.
-pub async fn check_all(state: &AppState, force: bool) -> Vec<PluginInfo> {
+/// Checks the plugins for newer signed releases and installs them; part of the launcher's update check
+/// (`update::check_for_update`). Failures are logged and kept per plugin for Settings, a short localized
+/// text for a rejected release and a `delayed` flag for a transient problem; the active version never
+/// changes on a failure.
+pub async fn check_all(state: &AppState) {
     let _guard = CHECK_LOCK.lock().await;
-    let auto = GlobalSettings::load(&state.paths).map(|settings| settings.updates.auto_update_plugins).unwrap_or_else(|error| {
-        tracing::warn!("cannot read the settings for the plugin check: {error}");
-        false
-    });
-    if !force && !auto {
-        return describe(state);
-    }
     let client = update::http_client();
     let mut records = plugins::load_states(&state.paths);
     for entry in &ENTRIES {
-        if !force && !plugins::check_due(records.get(entry.plugin.id), Utc::now()) {
-            continue;
-        }
         let current = resolve(state, entry).0.version;
         let result = plugins::update(&client, &state.paths, &entry.plugin, LAUNCHER_VERSION, &current).await;
         let record: &mut PluginRecord = records.entry(entry.plugin.id.to_owned()).or_default();
@@ -166,14 +154,6 @@ pub async fn check_all(state: &AppState, force: bool) -> Vec<PluginInfo> {
     if let Err(error) = plugins::save_states(&state.paths, &records) {
         tracing::warn!("cannot save the plugin state: {error}");
     }
-    let state = state.clone();
-    tokio::task::spawn_blocking(move || describe(&state)).await.unwrap_or_default()
-}
-
-/// Settings > Plugins "check now" (`force`) and the startup check (not `force`).
-#[tauri::command]
-pub async fn check_plugin_updates(state: State<'_, AppState>, force: bool) -> CommandResult<Vec<PluginInfo>> {
-    Ok(check_all(state.inner(), force).await)
 }
 
 /// A file of the installed copy of a plugin (checked against the signed manifest again). The bundled
