@@ -17,6 +17,26 @@ pub fn remove_link(path: &Path) -> Result<()> {
     removed.at(path)
 }
 
+/// Make `link` a directory link to `target`: a symlink on unix, a junction on Windows (no admin rights needed).
+#[cfg(unix)]
+pub fn create_dir_link(target: &Path, link: &Path) -> Result<()> {
+    std::os::unix::fs::symlink(target, link).at(link)
+}
+
+#[cfg(windows)]
+pub fn create_dir_link(target: &Path, link: &Path) -> Result<()> {
+    junction::create(target, link).at(link)
+}
+
+/// True when `path` is a link to somewhere inside `root`, i.e. another view of files `root` already holds.
+pub fn is_link_inside(path: &Path, root: &Path) -> bool {
+    is_link(path)
+        && match (std::fs::canonicalize(path), std::fs::canonicalize(root)) {
+            (Ok(target), Ok(root)) => target.starts_with(root),
+            _ => false,
+        }
+}
+
 /// Recursively copy `src` into `dst`, following links. `skip` gets each entry's path relative to `src`.
 pub fn copy_dir(src: &Path, dst: &Path, skip: &dyn Fn(&Path) -> bool) -> Result<()> {
     copy_dir_inner(src, dst, Path::new(""), skip)

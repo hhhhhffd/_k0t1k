@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use crate::component::{ComponentSpec, MINECRAFT_UID};
 use crate::download::{DownloadItem, download_all, sha1_file};
 use crate::error::{Error, IoContext, Result};
+use crate::instance::fsutil::{create_dir_link, is_link, remove_link, unique_path};
 use crate::meta::{Loader, MetaClient};
 use crate::profile::{LaunchProfile, ResolvedComponent};
 use crate::progress::ProgressFn;
@@ -90,6 +91,8 @@ pub struct InstalledMark {
 pub struct ClientFiles {
     pub files: Vec<GameFile>,
     pub mark: Option<InstalledMark>,
+    /// Where the client loads mods from, relative to the game dir with `/` separators, when that is not `mods`.
+    pub mods_dir: Option<String>,
 }
 
 /// Resolves a client component for `minecraft_version`. Errors when the client does not support it.
@@ -135,8 +138,47 @@ pub fn apply(components: &mut [ResolvedComponent]) {
     }
 }
 
+fn game_path(game_dir: &Path, relative: &str) -> PathBuf {
+    relative.split('/').fold(game_dir.to_owned(), |path, part| path.join(part))
+}
+
 fn game_file_path(game_dir: &Path, file: &GameFile) -> PathBuf {
-    file.path.split('/').fold(game_dir.to_owned(), |path, part| path.join(part))
+    game_path(game_dir, &file.path)
+}
+
+/// Makes the client's own mods folder a link to the instance's `mods`, so the mods the launcher manages are
+/// the ones the client loads. Files already in the client's folder are moved into `mods` first: a copy of a
+/// file `mods` already has is dropped, a different file with the same name is renamed. Call it before launch.
+pub fn link_mods(game_dir: &Path, files: &ClientFiles) -> Result<()> {
+    let Some(relative) = &files.mods_dir else { return Ok(()) };
+    let link = game_path(game_dir, relative);
+    let mods = game_dir.join("mods");
+    std::fs::create_dir_all(&mods).at(&mods)?;
+
+    if is_link(&link) {
+        remove_link(&link)?;
+    } else if link.is_dir() {
+        for entry in std::fs::read_dir(&link).at(&link)? {
+            let entry = entry.at(&link)?;
+            let from = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let existing = mods.join(&name);
+            if existing.is_file() && from.is_file() && std::fs::read(&existing).at(&existing)? == std::fs::read(&from).at(&from)? {
+                std::fs::remove_file(&from).at(&from)?;
+            } else {
+                let target = unique_path(&mods, &name);
+                std::fs::rename(&from, &target).at(&target)?;
+            }
+        }
+        std::fs::remove_dir(&link).at(&link)?;
+    } else if link.exists() {
+        return Err(Error::Other(format!("{} exists and is not a directory", link.display())));
+    }
+
+    if let Some(parent) = link.parent() {
+        std::fs::create_dir_all(parent).at(parent)?;
+    }
+    create_dir_link(&mods, &link)
 }
 
 /// Downloads the client's game-directory files that are missing or changed, then records the release as
@@ -190,6 +232,33 @@ mod tests {
 
     fn spec(uid: &str) -> ComponentSpec {
         ComponentSpec { uid: uid.to_owned(), version: "1".to_owned(), dependency_only: false }
+    }
+
+    #[test]
+    fn the_clients_mods_folder_becomes_a_link_to_mods() {
+        let dir = tempfile::tempdir().unwrap();
+        let game = dir.path();
+        let client_mods = game.join("labymod-neo/fabric/1.21.11/mods");
+        std::fs::create_dir_all(&client_mods).unwrap();
+        std::fs::create_dir_all(game.join("mods")).unwrap();
+        std::fs::write(game.join("mods/same.jar"), "same").unwrap();
+        std::fs::write(game.join("mods/clash.jar"), "mine").unwrap();
+        std::fs::write(client_mods.join("same.jar"), "same").unwrap();
+        std::fs::write(client_mods.join("clash.jar"), "theirs").unwrap();
+        std::fs::write(client_mods.join("new.jar"), "new").unwrap();
+        let files = ClientFiles { mods_dir: Some("labymod-neo/fabric/1.21.11/mods".to_owned()), ..Default::default() };
+
+        link_mods(game, &files).unwrap();
+        link_mods(game, &files).unwrap();
+
+        assert!(is_link(&client_mods));
+        let mut names: Vec<String> = std::fs::read_dir(game.join("mods"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["clash (1).jar", "clash.jar", "new.jar", "same.jar"]);
+        assert_eq!(std::fs::read(client_mods.join("clash (1).jar")).unwrap(), b"theirs");
     }
 
     #[test]

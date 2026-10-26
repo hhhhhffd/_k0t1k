@@ -13,7 +13,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::fsutil::{copy_dir, is_link, remove_link, unique_path};
+use super::fsutil::{copy_dir, create_dir_link, is_link, remove_link, unique_path};
 use super::servers;
 use crate::error::{Error, IoContext, Result};
 use crate::paths::Paths;
@@ -120,16 +120,6 @@ pub fn detach_all(game_dir: &Path) -> Result<()> {
         }
     }
     Ok(())
-}
-
-#[cfg(unix)]
-fn create_dir_link(target: &Path, link: &Path) -> Result<()> {
-    std::os::unix::fs::symlink(target, link).at(link)
-}
-
-#[cfg(windows)]
-fn create_dir_link(target: &Path, link: &Path) -> Result<()> {
-    junction::create(target, link).at(link)
 }
 
 #[cfg(test)]

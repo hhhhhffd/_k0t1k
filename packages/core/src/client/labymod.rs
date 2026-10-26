@@ -4,7 +4,9 @@
 //! it supports; each version has a full Mojang-format version JSON whose main class, arguments and Java
 //! are used as they are. LabyMod's own libraries, its jar and per-OS natives are added to the classpath
 //! the way LabyMod's launcher does it (nothing is filtered out except natives of other systems), and its
-//! asset jars go to `<game dir>/labymod-neo/assets`. Everything LabyMod-specific stays in this file.
+//! asset jars go to `<game dir>/labymod-neo/assets`. LabyMod loads mods from
+//! `labymod-neo/fabric/<version>/mods`, which the launcher links to the instance's `mods`.
+//! Everything LabyMod-specific stays in this file.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -321,6 +323,7 @@ fn build(
         client_files: ClientFiles {
             files,
             mark: Some(InstalledMark { path: mark_path, contents: commit.clone() }),
+            mods_dir: Some(format!("labymod-neo/fabric/{minecraft_version}/mods")),
         },
     })
 }

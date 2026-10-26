@@ -250,7 +250,7 @@ export const en = {
     termsIntro: 'To use this client you have to accept its terms of use. They are published by its authors.',
     accept: 'Accept',
     decline: 'Decline',
-    modsNote: (name: string) => `${name} loads mods from its own folder, labymod-neo/fabric/<version>/mods in the instance folder, not from mods. Mods listed here are not used.`,
+    modsNote: (name: string) => `${name} loads mods from its own folder, labymod-neo/fabric/<version>/mods. On launch the launcher links it to mods, so the mods listed here are used. They must be Fabric mods for this Minecraft version.`,
   },
   version: {
     component: 'Component',

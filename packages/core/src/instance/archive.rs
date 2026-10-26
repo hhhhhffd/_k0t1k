@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::fsutil::is_link;
+use super::fsutil::{is_link, is_link_inside};
 use super::icon::{MAX_ICON_BYTES, custom_file_name};
 use super::{INSTANCE_FILE, Instance, InstanceSettings, ManagedPack};
 use crate::component::{ComponentSpec, MINECRAFT_UID};
@@ -116,15 +116,15 @@ pub struct ExportFile {
 }
 
 /// Every file of the game dir the filter allows. Links are followed, so a shared folder's files
-/// are listed as the instance's own; they never become links in an archive.
+/// are listed as the instance's own; they never become links in an archive. Links into the game dir itself are skipped.
 pub fn collect_files(game_dir: &Path, filter: &ExportFilter) -> Result<Vec<ExportFile>> {
     let mut files = Vec::new();
-    collect_dir(game_dir, "", filter, &mut files)?;
+    collect_dir(game_dir, game_dir, "", filter, &mut files)?;
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
 }
 
-fn collect_dir(dir: &Path, relative: &str, filter: &ExportFilter, out: &mut Vec<ExportFile>) -> Result<()> {
+fn collect_dir(game_dir: &Path, dir: &Path, relative: &str, filter: &ExportFilter, out: &mut Vec<ExportFile>) -> Result<()> {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound && relative.is_empty() => return Ok(()),
@@ -138,11 +138,12 @@ fn collect_dir(dir: &Path, relative: &str, filter: &ExportFilter, out: &mut Vec<
         } else {
             format!("{relative}/{}", entry.file_name().to_string_lossy())
         };
-        if !filter.allows(&child) {
+        // A link to another folder of the game dir (a client's mods folder) would export those files twice.
+        if !filter.allows(&child) || is_link_inside(&path, game_dir) {
             continue;
         }
         if std::fs::metadata(&path).at(&path)?.is_dir() {
-            collect_dir(&path, &child, filter, out)?;
+            collect_dir(game_dir, &path, &child, filter, out)?;
         } else {
             out.push(ExportFile { path: child, absolute: path });
         }

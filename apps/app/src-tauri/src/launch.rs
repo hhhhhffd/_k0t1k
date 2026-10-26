@@ -453,6 +453,7 @@ async fn prepare(
         check_installed(paths, &profile).await?
     };
     drop(installing);
+    client::link_mods(&game_dir, &profile.client_files)?;
 
     remove_stale_sessions(state, instance, log).await;
     // The argfile is written next to this directory, so it belongs to the session as well.

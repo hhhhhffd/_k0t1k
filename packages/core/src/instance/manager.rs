@@ -5,7 +5,7 @@ use std::sync::{Mutex, MutexGuard};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use super::fsutil::{copy_dir, is_link};
+use super::fsutil::{copy_dir, is_link, is_link_inside};
 use super::icon::custom_file_name as custom_icon_file;
 use super::links::{SharedFolder, detach_all, disable_shared, enable_shared};
 use super::{INSTANCE_FILE, Instance, InstanceSettings, ManagedPack, Playtime};
@@ -228,6 +228,10 @@ impl InstanceManager {
         self.stage(|staging| {
             let game_dir = staging.join("minecraft");
             copy_dir(&source_game_dir, &game_dir, &|relative| {
+                // A client's mods folder links to `mods`; the copy gets its own link at launch.
+                if is_link_inside(&source_game_dir.join(relative), &source_game_dir) {
+                    return true;
+                }
                 let mut parts = relative.components();
                 let top_level = parts.next().map(|part| part.as_os_str().to_string_lossy().to_lowercase());
                 let is_top_level = parts.next().is_none();
