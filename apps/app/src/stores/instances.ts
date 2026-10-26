@@ -124,7 +124,7 @@ export const useInstancesStore = defineStore('instances', () => {
     return upsert(result.instance)
   }
 
-  /** Resolves to undefined when the user cancels because an enabled mod is dangerous. */
+  /** Resolves to undefined when the user cancels at the mod scan questions (unscanned or dangerous mods). */
   async function launch(id: string, accountId?: string, server?: string) {
     if (!(await ratscan.confirmLaunch(id))) return undefined
     const alreadyRunning = liveSessionsOf(id).length > 0

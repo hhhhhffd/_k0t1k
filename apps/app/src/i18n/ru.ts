@@ -105,6 +105,12 @@ export const ru: Dictionary = {
     launchText: 'Сканер счёл эти включённые моды опасными. Они могут красть аккаунты или файлы.',
     launchAnyway: 'Всё равно запустить',
     disableAndLaunch: 'Отключить мод и запустить',
+    unscannedTitle: 'Моды не проверены',
+    unscannedText: 'RatScan ещё не проверял эти включённые моды. Проверить их перед запуском?',
+    skipHint: 'Если не проверять, про эти моды больше не спросим. Проверить их можно во вкладке «Моды».',
+    scanningBeforeLaunch: (done: number, total: number) => `Проверка: ${done} из ${total}…`,
+    skipScan: 'Не проверять',
+    scanAndLaunch: 'Проверить и запустить',
   },
   packs: {
     convertTo: (version: string) => `Конвертировать в ${version}`,

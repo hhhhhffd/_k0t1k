@@ -24,6 +24,37 @@ export interface LaunchPrompt {
   answer: (choice: 'launch' | 'disable' | 'cancel') => void
 }
 
+/** The question before launching an instance whose enabled mods were never scanned. */
+export interface UnscannedPrompt {
+  instanceId: string
+  mods: JarScan[]
+  scanning: boolean
+  answer: (choice: 'scan' | 'skip' | 'cancel') => void
+}
+
+/** SHA-1s of the mods the user chose not to scan before a launch; they are not asked about again. */
+const DECLINED_KEY = 'k0t1k.ratscanDeclined'
+const MAX_DECLINED = 2000
+
+function loadDeclined(): string[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(DECLINED_KEY) ?? '[]')
+    return Array.isArray(stored) ? stored.filter((sha1): sha1 is string => typeof sha1 === 'string') : []
+  } catch (e) {
+    console.warn('cannot read the declined mod scans', e)
+    return []
+  }
+}
+
+function saveDeclined(sha1s: string[]) {
+  const all = [...new Set([...loadDeclined(), ...sha1s])].slice(-MAX_DECLINED)
+  try {
+    localStorage.setItem(DECLINED_KEY, JSON.stringify(all))
+  } catch (e) {
+    console.warn('cannot save the declined mod scans', e)
+  }
+}
+
 export const useRatscanStore = defineStore('ratscan', () => {
   const tasks = useTasksStore()
   const plugins = usePluginsStore()
@@ -31,6 +62,7 @@ export const useRatscanStore = defineStore('ratscan', () => {
   const jars = ref<Record<string, JarScan[]>>({})
   const progress = ref<ScanProgress | null>(null)
   const launchPrompt = ref<LaunchPrompt | null>(null)
+  const unscannedPrompt = ref<UnscannedPrompt | null>(null)
   // Scans run one after another: each jar is a synchronous call in the single worker anyway.
   let queue: Promise<unknown> = Promise.resolve()
 
@@ -100,18 +132,39 @@ export const useRatscanStore = defineStore('ratscan', () => {
   const report = (instanceId: string, sha1: string) => api.ratscanReport(instanceId, sha1)
 
   /**
-   * Asks what to do when an enabled mod is dangerous. Resolves to false when the launch is cancelled.
-   * Unscanned mods are not a reason to stop: the answer is based on the results that exist.
+   * Offers to scan enabled mods that were never scanned (once per mod: a declined mod is not offered again),
+   * then asks what to do when an enabled mod is dangerous. Resolves to false when the launch is cancelled.
    */
   async function confirmLaunch(instanceId: string): Promise<boolean> {
-    let dangerous: JarScan[]
+    let status: JarScan[]
     try {
-      dangerous = (await api.ratscanStatus(instanceId)).filter((jar) => jar.enabled && jar.scan && badgeOf(jar.scan.verdict) === 'dangerous')
+      status = await api.ratscanStatus(instanceId)
     } catch (e) {
       // A broken scan cache must not stop the game.
       console.warn('cannot read the mod scan results', e)
       return true
     }
+    const declined = new Set(loadDeclined())
+    const unscanned = status.filter((jar) => jar.enabled && !jar.scan && !declined.has(jar.sha1))
+    if (unscanned.length) {
+      const choice = await new Promise<'scan' | 'skip' | 'cancel'>((resolve) => {
+        unscannedPrompt.value = { instanceId, mods: unscanned, scanning: false, answer: resolve }
+      })
+      if (choice === 'skip') saveDeclined(unscanned.map((jar) => jar.sha1))
+      if (choice === 'scan' && unscannedPrompt.value) {
+        unscannedPrompt.value.scanning = true
+        try {
+          await scan(instanceId, unscanned.map((jar) => jar.fileName), true)
+          status = jars.value[instanceId] ?? status
+        } catch (e) {
+          // a failed scan is shown as a toast per jar; the launch goes on with the results that exist
+          console.warn('scan before launch failed', e)
+        }
+      }
+      unscannedPrompt.value = null
+      if (choice === 'cancel') return false
+    }
+    const dangerous = status.filter((jar) => jar.enabled && jar.scan && badgeOf(jar.scan.verdict) === 'dangerous')
     if (!dangerous.length) return true
     const choice = await new Promise<'launch' | 'disable' | 'cancel'>((resolve) => {
       launchPrompt.value = { instanceId, mods: dangerous, answer: resolve }
@@ -125,5 +178,5 @@ export const useRatscanStore = defineStore('ratscan', () => {
     return true
   }
 
-  return { jars, progress, launchPrompt, refresh, scan, scanAdded, report, confirmLaunch }
+  return { jars, progress, launchPrompt, unscannedPrompt, refresh, scan, scanAdded, report, confirmLaunch }
 })

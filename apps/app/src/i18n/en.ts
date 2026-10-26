@@ -105,6 +105,12 @@ export const en = {
     launchText: 'The scanner marked these enabled mods as dangerous. They may steal accounts or files.',
     launchAnyway: 'Launch anyway',
     disableAndLaunch: 'Disable the mod and launch',
+    unscannedTitle: 'Mods not scanned',
+    unscannedText: 'RatScan has not scanned these enabled mods yet. Scan them before launching?',
+    skipHint: "If you skip, we won't ask about these mods again. You can scan them in the Mods tab.",
+    scanningBeforeLaunch: (done: number, total: number) => `Scanning: ${done} of ${total}…`,
+    skipScan: "Don't scan",
+    scanAndLaunch: 'Scan and launch',
   },
   packs: {
     convertTo: (version: string) => `Convert to ${version}`,
