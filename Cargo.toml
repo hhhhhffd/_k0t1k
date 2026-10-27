@@ -5,7 +5,7 @@ members = ["packages/core", "apps/app/src-tauri"]
 [workspace.package]
 version = "0.1.4"
 edition = "2024"
-license-file = "LICENSE"
+license = "AGPL-3.0-only"
 
 [workspace.dependencies]
 k0t1k-core = { path = "packages/core" }
