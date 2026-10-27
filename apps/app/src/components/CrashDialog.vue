@@ -44,7 +44,7 @@ function showLogs() {
 </script>
 
 <template>
-  <ModalDialog v-if="crash" :title="t.crash.title" :width="580" @close="close">
+  <ModalDialog v-if="crash" :title="t.crash.title" size="md" @close="close">
     <div class="flex flex-col gap-2">
       <p class="font-semibold">{{ instanceName }}</p>
       <p class="text-muted">{{ t.crash.exitCode(crash.exitCode) }} <template v-if="crash.crashReport">{{ t.crash.hasReport }}</template></p>

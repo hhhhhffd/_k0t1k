@@ -121,7 +121,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <ModalDialog :title="kind === 'microsoft' ? t.account.msTitle : t.account.elybyTitle" :width="420" @close="emit('close')">
+  <ModalDialog :title="kind === 'microsoft' ? t.account.msTitle : t.account.elybyTitle" size="sm" @close="emit('close')">
     <div v-if="kind === 'microsoft'" class="flex flex-col gap-3">
       <p v-if="error && !device" class="text-center text-danger">{{ error }}</p>
       <p v-else-if="!device" class="text-center text-muted">{{ t.account.msStarting }}</p>

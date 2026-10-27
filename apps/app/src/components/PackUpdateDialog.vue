@@ -37,7 +37,7 @@ async function apply(v: ProjectVersion) {
 </script>
 
 <template>
-  <ModalDialog :title="t.pack.title" :width="620" @close="emit('close')">
+  <ModalDialog :title="t.pack.title" size="md" @close="emit('close')">
     <p class="mb-1 text-muted">
       {{ pack.name }} · {{ t.pack.current }} <span class="font-semibold text-fg">{{ pack.versionName }}</span>
     </p>

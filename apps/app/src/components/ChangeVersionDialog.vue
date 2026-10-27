@@ -58,7 +58,7 @@ const releaseLabel = { release: t.browse.release, beta: t.browse.beta, alpha: t.
 </script>
 
 <template>
-  <ModalDialog :title="t.instance.changeVersionTitle(resource.metadata?.name ?? resource.fileName)" :width="620" @close="emit('close')">
+  <ModalDialog :title="t.instance.changeVersionTitle(resource.metadata?.name ?? resource.fileName)" size="md" @close="emit('close')">
     <div class="flex flex-col gap-3">
       <label class="flex items-center gap-2 text-muted">
         <ToggleSwitch v-model="showAll" :label="t.instance.showAllVersions" />

@@ -7,7 +7,7 @@ const emit = defineEmits<{ confirm: []; close: [] }>()
 </script>
 
 <template>
-  <ModalDialog :title="title" :width="420" @close="emit('close')">
+  <ModalDialog :title="title" size="sm" @close="emit('close')">
     <p class="text-muted">{{ text }}</p>
     <template #footer>
       <button class="btn" @click="emit('close')">{{ t.common.cancel }}</button>

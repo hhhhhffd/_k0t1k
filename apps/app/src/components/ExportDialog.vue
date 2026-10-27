@@ -66,7 +66,7 @@ async function run() {
 </script>
 
 <template>
-  <ModalDialog :title="t.transfer.exportTitle(formatLabel[format])" :width="620" @close="emit('close')">
+  <ModalDialog :title="t.transfer.exportTitle(formatLabel[format])" size="md" @close="emit('close')">
     <div class="flex flex-col gap-3">
       <label class="flex flex-col gap-1">
         <span class="label">{{ t.transfer.packName }}</span>

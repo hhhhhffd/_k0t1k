@@ -111,7 +111,7 @@ const releaseClass = { release: 'badge-accent', beta: '', alpha: '' }
 <template>
   <Teleport to="body">
     <div class="anim-fade fixed inset-0 z-[55] bg-black/50" @mousedown="emit('close')" />
-    <aside class="anim-slide fixed top-0 right-0 bottom-0 z-[55] flex w-[480px] max-w-full flex-col border-l border-line bg-surface shadow-[var(--shadow-pop)]" role="dialog" :aria-label="hit.title">
+    <aside class="anim-slide fixed top-0 right-0 bottom-0 z-[55] flex w-[clamp(480px,34vw,820px)] max-w-full flex-col border-l border-line bg-surface shadow-[var(--shadow-pop)]" role="dialog" :aria-label="hit.title">
       <header class="flex items-start gap-3 border-b border-line p-4">
         <ProjectIcon :hit="hit" :size="56" />
         <div class="min-w-0 flex-1">

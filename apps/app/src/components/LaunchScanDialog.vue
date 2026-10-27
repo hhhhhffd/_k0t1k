@@ -12,7 +12,7 @@ function closeUnscanned() {
 </script>
 
 <template>
-  <ModalDialog v-if="ratscan.unscannedPrompt" :title="t.scan.unscannedTitle" :width="480" @close="closeUnscanned">
+  <ModalDialog v-if="ratscan.unscannedPrompt" :title="t.scan.unscannedTitle" size="sm" @close="closeUnscanned">
     <div class="flex flex-col gap-2">
       <p class="text-muted">{{ t.scan.unscannedText }}</p>
       <ul class="selectable max-h-40 list-disc overflow-y-auto pl-5 font-mono text-[12px]">
@@ -29,7 +29,7 @@ function closeUnscanned() {
       <button class="btn btn-primary" :disabled="ratscan.unscannedPrompt.scanning" @click="ratscan.unscannedPrompt.answer('scan')">{{ t.scan.scanAndLaunch }}</button>
     </template>
   </ModalDialog>
-  <ModalDialog v-if="ratscan.launchPrompt" :title="t.scan.launchTitle" :width="480" @close="ratscan.launchPrompt.answer('cancel')">
+  <ModalDialog v-if="ratscan.launchPrompt" :title="t.scan.launchTitle" size="sm" @close="ratscan.launchPrompt.answer('cancel')">
     <div class="flex flex-col gap-2">
       <p class="text-muted">{{ t.scan.launchText }}</p>
       <ul class="selectable list-disc pl-5 font-mono text-[12px] text-danger">

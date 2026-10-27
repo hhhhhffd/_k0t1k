@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as api from '../api/commands'
+import { isTauri } from '../api/commands'
 import type { CustomTheme, GlobalSettings, ThemeId } from '../api/types'
 import { setLanguage } from '../i18n'
 import { isBuiltinTheme, themeVars } from '../utils/theme'
@@ -41,6 +42,23 @@ function applyUi(theme: string, lite: boolean, custom: CustomTheme[]) {
   }
 }
 
+/** Zoom that suits the screen: a 1440p or larger screen at 100 % Windows scaling gets a bigger interface. */
+export function autoScale(): number {
+  const width = window.screen.width
+  return width >= 3400 ? 150 : width >= 2500 ? 125 : 100
+}
+
+/** Zooms the whole web view (text, controls and dialogs alike); `null` is the automatic choice. */
+async function applyScale(percent: number | null | undefined) {
+  if (!isTauri) return
+  try {
+    const { getCurrentWebview } = await import('@tauri-apps/api/webview')
+    await getCurrentWebview().setZoom((percent ?? autoScale()) / 100)
+  } catch (e) {
+    console.warn('cannot set the interface scale', e)
+  }
+}
+
 /** Apply the last known theme (custom ones included) before the first paint, before settings finish loading. */
 export function applyCachedUi() {
   try {
@@ -65,6 +83,7 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value = loaded
     setLanguage(loaded.ui.language)
     applyUi(loaded.ui.theme, loaded.ui.liteMode, allThemes())
+    void applyScale(loaded.ui.scale)
   }
 
   /** Persist the current (already mutated) settings. */
@@ -76,6 +95,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (!settings.value) return
     settings.value.ui = { ...settings.value.ui, ...patch }
     if (patch.language) setLanguage(patch.language)
+    if ('scale' in patch) void applyScale(patch.scale)
     reapply()
     await save()
   }

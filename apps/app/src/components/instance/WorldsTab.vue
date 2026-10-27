@@ -225,7 +225,7 @@ async function confirmDelete() {
       <ActionPanel :actions="panelActions" :footer="footerActions" />
     </div>
 
-    <ModalDialog v-if="renaming" :title="t.worlds.renameTitle" :width="420" @close="renaming = null">
+    <ModalDialog v-if="renaming" :title="t.worlds.renameTitle" size="sm" @close="renaming = null">
       <div class="flex flex-col gap-3">
         <label class="flex flex-col gap-1">
           <span class="label">{{ t.worlds.name }}</span>
@@ -251,7 +251,7 @@ async function confirmDelete() {
       @close="copying = null"
     />
 
-    <ModalDialog v-if="backingUp" :title="t.worlds.backupTitle" :width="460" @close="backingUp = null">
+    <ModalDialog v-if="backingUp" :title="t.worlds.backupTitle" size="sm" @close="backingUp = null">
       <p class="text-muted">{{ t.worlds.backupHint }}</p>
       <template #footer>
         <button class="btn" @click="backup(true)">{{ t.worlds.backupChoose }}</button>

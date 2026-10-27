@@ -404,6 +404,8 @@ export const ru: Dictionary = {
     datapacksHint: 'Выключенный датапак игра не загружает. Изменения применятся при следующем входе в мир.',
   },
   shots: {
+    previous: 'Предыдущий',
+    next: 'Следующий',
     empty: 'Скриншотов пока нет — нажмите F2 в игре',
     openFolder: 'Открыть папку',
     open: 'Открыть в программе просмотра',
@@ -543,6 +545,9 @@ export const ru: Dictionary = {
     theme: 'Тема',
     language: 'Язык',
     languageHint: 'Язык лаунчера.',
+    scale: 'Масштаб интерфейса',
+    scaleAuto: 'Авто',
+    scaleHint: (auto: number) => `Увеличивает весь лаунчер: текст, кнопки и окна. «Авто» подбирает по размеру экрана (сейчас ${auto}%).`,
     windowControls: 'Кнопки окна',
     windowControlsHint: 'С какой стороны заголовка кнопки закрыть, свернуть и развернуть.',
     windowControlsLeft: 'Слева',

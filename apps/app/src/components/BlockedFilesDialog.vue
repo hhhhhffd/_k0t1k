@@ -76,7 +76,7 @@ onBeforeUnmount(stop)
 </script>
 
 <template>
-  <ModalDialog :title="t.browse.blockedTitle" :width="620" @close="emit('close')">
+  <ModalDialog :title="t.browse.blockedTitle" size="md" @close="emit('close')">
     <p class="mb-3 flex items-start gap-2 text-warn">
       <ShieldAlert :size="16" class="mt-px shrink-0" />
       <span>{{ t.browse.blocked }}. {{ t.browse.blockedHint }}</span>

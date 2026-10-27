@@ -147,7 +147,7 @@ async function saveToFile() {
 </script>
 
 <template>
-  <ModalDialog :title="title" :width="1040" @close="emit('close')">
+  <ModalDialog :title="title" size="lg" @close="emit('close')">
     <div class="flex flex-col gap-4">
       <section class="flex gap-4">
         <label class="flex min-w-0 flex-1 flex-col gap-1">
@@ -167,7 +167,7 @@ async function saveToFile() {
 
       <section class="flex flex-col gap-1">
         <span class="label">{{ t.modList.result }} · {{ rows.length }}</span>
-        <div class="grid h-80 grid-cols-2 gap-3">
+        <div class="grid h-[45vh] min-h-64 grid-cols-2 gap-3">
           <textarea class="input selectable h-full resize-none font-mono text-[12px]" readonly :value="output" :aria-label="t.modList.result" />
           <div class="selectable h-full overflow-y-auto rounded-lg border border-line bg-base px-3 py-2" :aria-label="t.modList.preview">
             <ul class="list-disc pl-4 text-[13px]">

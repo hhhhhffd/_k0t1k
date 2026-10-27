@@ -522,7 +522,7 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
       @close="toDelete = null"
     />
     <ScanDetailsDialog v-if="scanDetails" :instance-id="instanceId" :jar="scanDetails" @close="scanDetails = null" />
-    <ModalDialog v-if="packResult" :title="packResult.title" :width="480" @close="packResult = null">
+    <ModalDialog v-if="packResult" :title="packResult.title" size="sm" @close="packResult = null">
       <div class="flex flex-col gap-2">
         <p>{{ t.packs.saved(packResult.savedAs) }}</p>
         <p class="text-muted">{{ packResult.summary }}</p>

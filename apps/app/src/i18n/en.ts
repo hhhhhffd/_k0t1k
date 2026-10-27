@@ -403,6 +403,8 @@ export const en = {
     datapacksHint: 'The game does not load a disabled data pack. Changes apply the next time you enter the world.',
   },
   shots: {
+    previous: 'Previous',
+    next: 'Next',
     empty: 'No screenshots yet: press F2 in the game',
     openFolder: 'Open folder',
     open: 'Open in the image viewer',
@@ -542,6 +544,9 @@ export const en = {
     theme: 'Theme',
     language: 'Language',
     languageHint: 'The language of the launcher.',
+    scale: 'Interface scale',
+    scaleAuto: 'Auto',
+    scaleHint: (auto: number) => `Enlarges the whole launcher: text, buttons and dialogs. Auto picks by screen size (now ${auto}%).`,
     windowControls: 'Window buttons',
     windowControlsHint: 'Which side of the title bar holds close, minimize and maximize.',
     windowControlsLeft: 'Left',

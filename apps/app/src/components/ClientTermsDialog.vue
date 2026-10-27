@@ -7,7 +7,7 @@ const emit = defineEmits<{ accept: []; close: [] }>()
 </script>
 
 <template>
-  <ModalDialog :title="title" :width="680" @close="emit('close')">
+  <ModalDialog :title="title" size="md" @close="emit('close')">
     <div class="flex flex-col gap-2 p-4">
       <p class="text-muted">{{ t.client.termsIntro }}</p>
       <pre class="max-h-[45vh] overflow-y-auto rounded-lg border border-line bg-base p-3 text-[12px] leading-relaxed break-words whitespace-pre-wrap">{{ text }}</pre>

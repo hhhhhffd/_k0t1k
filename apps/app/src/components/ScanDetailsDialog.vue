@@ -26,7 +26,7 @@ const where = (e: { archive_path?: string; class_name?: string; method_name?: st
 </script>
 
 <template>
-  <ModalDialog :title="jar.fileName" :width="720" @close="emit('close')">
+  <ModalDialog :title="jar.fileName" size="md" @close="emit('close')">
     <div class="flex flex-col gap-3">
       <div class="flex items-center gap-2">
         <span class="badge" :class="badgeClass[badge]">{{ t.scan[badge] }}</span>

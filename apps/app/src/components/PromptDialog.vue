@@ -14,7 +14,7 @@ function submit() {
 </script>
 
 <template>
-  <ModalDialog :title="title" :width="420" @close="emit('close')">
+  <ModalDialog :title="title" size="sm" @close="emit('close')">
     <label class="flex flex-col gap-1">
       <span class="label">{{ label }}</span>
       <input v-model="value" class="input" autofocus list="prompt-suggestions" @keydown.enter="submit" />

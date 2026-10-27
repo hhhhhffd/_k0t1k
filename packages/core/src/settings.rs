@@ -119,6 +119,8 @@ pub struct UiSettings {
     pub icon_set: Option<String>,
     /// Side of the title bar that holds the close/minimize/maximize buttons.
     pub window_controls: WindowControlsSide,
+    /// Interface zoom in percent; `None` lets the UI pick one from the screen size.
+    pub scale: Option<u16>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,6 +179,7 @@ impl Default for UiSettings {
             cat_pack: None,
             icon_set: None,
             window_controls: WindowControlsSide::Left,
+            scale: None,
         }
     }
 }

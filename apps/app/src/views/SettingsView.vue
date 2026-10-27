@@ -19,7 +19,7 @@ import { LANGUAGES, t } from '../i18n'
 import { useCustomizationStore } from '../stores/customization'
 import { useInstancesStore } from '../stores/instances'
 import { usePluginsStore } from '../stores/plugins'
-import { useSettingsStore } from '../stores/settings'
+import { autoScale, useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
 import { useUpdateStore } from '../stores/update'
 import { openExternal } from '../utils/external'
@@ -308,6 +308,20 @@ async function addAccount() {
             >{{ side === 'left' ? t.settings.windowControlsLeft : t.settings.windowControlsRight }}</button>
           </div>
         </section>
+        <section class="card flex flex-col gap-2 p-4">
+          <span><span class="block font-medium">{{ t.settings.scale }}</span><span class="text-[12px] text-faint">{{ t.settings.scaleHint(autoScale()) }}</span></span>
+          <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.scale">
+            <button
+              v-for="option in ([null, 100, 125, 150, 175, 200] as const)"
+              :key="String(option)"
+              role="radio"
+              :aria-checked="(s.ui.scale ?? null) === option"
+              class="h-8 flex-1 rounded-md px-2 font-medium transition-colors"
+              :class="(s.ui.scale ?? null) === option ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
+              @click="store.setUi({ scale: option })"
+            >{{ option === null ? t.settings.scaleAuto : `${option}%` }}</button>
+          </div>
+        </section>
         <section class="card p-4">
           <h3 class="section-title mb-3">{{ t.settings.theme }}</h3>
           <div class="grid grid-cols-2 gap-3">
@@ -537,7 +551,7 @@ async function addAccount() {
       </section>
       </template>
     </div>
-    <ModalDialog v-if="uninstallPlan" :title="t.settings.uninstallTitle" :width="520" @close="uninstallPlan = null">
+    <ModalDialog v-if="uninstallPlan" :title="t.settings.uninstallTitle" size="md" @close="uninstallPlan = null">
       <div class="flex flex-col gap-3">
         <p class="text-muted">{{ t.settings.uninstallIntro }}</p>
         <div class="flex flex-col gap-1">

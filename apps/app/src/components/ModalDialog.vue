@@ -3,8 +3,11 @@ import { X } from '@lucide/vue'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { t } from '../i18n'
 
-/** `large` makes the dialog follow the window size instead of a fixed width. */
-const props = withDefaults(defineProps<{ title: string; width?: number; large?: boolean }>(), { width: 560 })
+/**
+ * `size` sets a width that grows with the window (see the styles below), so dialogs do not look tiny on
+ * a big screen; `large` fills most of the window, for browsers and long lists.
+ */
+withDefaults(defineProps<{ title: string; size?: 'sm' | 'md' | 'lg'; large?: boolean }>(), { size: 'md' })
 const emit = defineEmits<{ close: [] }>()
 
 function onKey(e: KeyboardEvent) {
@@ -18,8 +21,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <Teleport to="body">
     <div class="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm" @mousedown.self="emit('close')">
       <div
-        class="card anim-pop flex max-h-full w-full flex-col overflow-hidden shadow-[var(--shadow-pop)]"
-        :style="large ? { width: 'min(1500px, 94vw)', height: '90vh' } : { maxWidth: `${props.width}px` }"
+        class="card anim-pop flex max-h-full max-w-full flex-col overflow-hidden shadow-[var(--shadow-pop)]"
+        :class="large ? 'dialog-large' : `dialog-${size}`"
         role="dialog"
         aria-modal="true"
         :aria-label="title"
@@ -34,3 +37,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.dialog-sm {
+  width: clamp(400px, 32vw, 680px);
+}
+.dialog-md {
+  width: clamp(540px, 46vw, 1040px);
+}
+.dialog-lg {
+  width: clamp(760px, 70vw, 1500px);
+}
+.dialog-large {
+  width: min(1700px, 94vw);
+  height: 90vh;
+}
+</style>

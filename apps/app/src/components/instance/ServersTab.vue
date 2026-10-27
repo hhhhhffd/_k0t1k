@@ -183,7 +183,7 @@ function openMenu(e: MouseEvent, index: number) {
 
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
 
-    <ModalDialog v-if="editing" :title="t.servers.editTitle" :width="440" @close="editing = null">
+    <ModalDialog v-if="editing" :title="t.servers.editTitle" size="sm" @close="editing = null">
       <div class="flex flex-col gap-3">
         <label class="flex flex-col gap-1">
           <span class="label">{{ t.servers.name }}</span>

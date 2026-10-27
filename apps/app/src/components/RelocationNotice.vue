@@ -8,7 +8,7 @@ const emit = defineEmits<{ close: [] }>()
 </script>
 
 <template>
-  <ModalDialog :title="t.onboarding.reportTitle" :width="560" @close="emit('close')">
+  <ModalDialog :title="t.onboarding.reportTitle" size="md" @close="emit('close')">
     <div class="flex flex-col gap-3">
       <p class="text-muted">{{ t.onboarding.reportIntro }}</p>
       <ul class="flex list-disc flex-col gap-1.5 pl-5">

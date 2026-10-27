@@ -1,20 +1,20 @@
 <script setup lang="ts">
-import { ExternalLink, FolderOpen, Trash2 } from '@lucide/vue'
+import { FolderOpen } from '@lucide/vue'
 import { onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
 import type { Screenshot } from '../../api/types'
 import { t } from '../../i18n'
 import { useTasksStore } from '../../stores/tasks'
-import { formatBytes, formatRelative } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
-import ModalDialog from '../ModalDialog.vue'
+import ScreenshotViewer from './ScreenshotViewer.vue'
 
 const props = defineProps<{ instanceId: string; shared: boolean }>()
 const tasks = useTasksStore()
 
 const shots = ref<Screenshot[]>([])
 const loading = ref(true)
-const previewed = ref<Screenshot | null>(null)
+/** Index of the screenshot open in the viewer. */
+const viewing = ref<number | null>(null)
 const deleting = ref<Screenshot | null>(null)
 
 async function load() {
@@ -37,8 +37,9 @@ async function confirmDelete() {
     return true
   })
   if (!done) return
-  if (previewed.value?.fileName === shot.fileName) previewed.value = null
   await load()
+  // the viewer stays open on the next screenshot, or closes with the last one gone
+  if (viewing.value !== null) viewing.value = shots.value.length ? Math.min(viewing.value, shots.value.length - 1) : null
 }
 </script>
 
@@ -54,23 +55,24 @@ async function confirmDelete() {
 
     <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
     <p v-else-if="!shots.length" class="py-10 text-center text-faint">{{ t.shots.empty }}</p>
-    <ul v-else class="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2.5">
-      <li v-for="s in shots" :key="s.fileName">
-        <button class="card group block w-full overflow-hidden text-left transition-colors hover:border-accent/60" @click="previewed = s">
+    <ul v-else class="grid grid-cols-[repeat(auto-fill,minmax(clamp(190px,15vw,340px),1fr))] gap-2.5">
+      <li v-for="(s, i) in shots" :key="s.fileName">
+        <button class="card group block w-full overflow-hidden text-left transition-colors hover:border-accent/60" @click="viewing = i">
           <img :src="api.fileUrl(s.path)" :alt="s.fileName" loading="lazy" decoding="async" class="aspect-video w-full bg-raised object-cover" />
           <span class="block truncate px-2 py-1.5 text-[12px] text-muted">{{ s.fileName }}</span>
         </button>
       </li>
     </ul>
 
-    <ModalDialog v-if="previewed" :title="previewed.fileName" :width="960" @close="previewed = null">
-      <img :src="api.fileUrl(previewed.path)" :alt="previewed.fileName" class="mx-auto max-h-[65vh] w-auto max-w-full rounded-md" />
-      <p class="mt-2 text-center text-[12px] text-faint">{{ formatBytes(previewed.size) }} · {{ formatRelative(new Date(previewed.modified).toISOString()) }}</p>
-      <template #footer>
-        <button class="btn btn-danger" @click="deleting = previewed"><Trash2 :size="15" />{{ t.common.delete }}</button>
-        <button class="btn btn-primary" @click="openShot(previewed)"><ExternalLink :size="15" />{{ t.shots.open }}</button>
-      </template>
-    </ModalDialog>
+    <ScreenshotViewer
+      v-if="viewing !== null"
+      :index="viewing"
+      @update:index="viewing = $event"
+      :shots="shots"
+      @open="openShot"
+      @delete="deleting = $event"
+      @close="viewing = null"
+    />
 
     <ConfirmDialog v-if="deleting" :title="t.shots.delete" :text="deleting.fileName" @confirm="confirmDelete" @close="deleting = null" />
   </div>
