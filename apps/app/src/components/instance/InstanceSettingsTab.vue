@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { FolderOpen } from '@lucide/vue'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { Check, FolderOpen } from '@lucide/vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { detectJava, fileUrl, isTauri, listManagedJava, openLauncherFolder } from '../../api/commands'
 import { type Instance, type InstanceSettings, type JavaInstall, SHARED_FOLDERS, type SharedFolder } from '../../api/types'
 import { t } from '../../i18n'
@@ -43,6 +43,15 @@ const markDirty = () => (dirty.value = true)
 
 // Java the launcher downloaded plus installations found on the system, offered as quick choices for the override.
 const javaInstalls = ref<JavaInstall[]>([])
+function onSaveShortcut(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    if (dirty.value) void save()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onSaveShortcut))
+onBeforeUnmount(() => window.removeEventListener('keydown', onSaveShortcut))
+
 onMounted(async () => {
   const [managed, detected] = await Promise.all([tasks.guard(listManagedJava), tasks.guard(detectJava)])
   const seen = new Set<string>()
@@ -144,7 +153,25 @@ async function save() {
 </script>
 
 <template>
-  <div v-if="global" class="flex max-w-3xl flex-col gap-3 pb-16" @input.capture="markDirty" @change.capture="markDirty">
+  <Teleport to="#tab-actions" defer>
+    <button
+      class="flex size-9 items-center justify-center rounded-full border transition-all"
+      :class="
+        dirty
+          ? 'border-accent bg-accent text-accent-fg shadow-[var(--glow)] hover:brightness-110'
+          : 'border-line bg-raised text-faint opacity-60'
+      "
+      :disabled="!dirty"
+      :title="`${t.common.save} (Ctrl+S)`"
+      :aria-label="t.common.save"
+      @click="save"
+    >
+      <Check :size="18" :stroke-width="3" />
+    </button>
+  </Teleport>
+  <!-- Section cards flow into two columns when the tab is wide enough, one column otherwise. -->
+  <div v-if="global" class="@container" @input.capture="markDirty" @change.capture="markDirty">
+    <div class="columns-1 gap-3 pb-4 @4xl:columns-2 [&>section]:mb-3 [&>section]:break-inside-avoid">
     <section class="card flex flex-col gap-3 p-4">
       <h3 class="text-[14px] font-semibold">{{ t.iset.general }}</h3>
       <div class="flex items-center gap-2">
@@ -275,8 +302,6 @@ async function save() {
       </OverrideBlock>
     </section>
 
-    <div class="sticky bottom-4 flex justify-end">
-      <button class="btn btn-primary btn-lg shadow-[var(--shadow-pop)]" :disabled="!dirty" @click="save">{{ t.common.save }}</button>
     </div>
   </div>
 </template>

@@ -125,7 +125,11 @@ const { dragging } = useFileDrop(async (paths) => {
       </nav>
 
       <section class="min-w-0 flex-1 overflow-y-auto p-4">
-        <h2 class="mb-3 text-[15px] font-semibold">{{ t.instance.tabs[tab] }}</h2>
+        <!-- Sticky so tab actions (e.g. save in Settings, teleported into #tab-actions) stay in reach and never cover the content. -->
+        <div class="sticky top-0 z-10 -mx-4 -mt-4 mb-1 flex h-14 items-end bg-base px-4 pb-2">
+          <h2 class="text-[15px] font-semibold">{{ t.instance.tabs[tab] }}</h2>
+          <div id="tab-actions" class="ml-auto flex items-center gap-2"></div>
+        </div>
         <p v-if="tab === 'mods' && instance && clientOf(instance)" class="mb-3 rounded-lg border border-line bg-raised px-3 py-2 text-[12.5px] text-muted">
           {{ t.client.modsNote(clientOf(instance)!.label) }}
         </p>
