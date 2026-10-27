@@ -4,7 +4,8 @@
 //! cargo run -p k0t1k-core --example launch -- <data dir> <java> <java major> <mc version> [<loader uid> <loader version>]
 //! ```
 //! Environment: `K0T1K_SECONDS` (default 30) is how long the game runs, `K0T1K_JAVA_ARCH` (default
-//! `amd64`) the `os.arch` of the Java binary.
+//! `amd64`) the `os.arch` of the Java binary, `K0T1K_JVM_ARGS` extra JVM arguments separated by
+//! spaces (for example `-javaagent:/path/k0t1k-overlay.jar=lang=en`).
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -80,7 +81,7 @@ async fn main() -> Result<()> {
         min_memory_mb: 512,
         max_memory_mb: 2048,
         java_agent_args: Vec::new(),
-        extra_jvm_args: Vec::new(),
+        extra_jvm_args: std::env::var("K0T1K_JVM_ARGS").map(|args| args.split_whitespace().map(str::to_owned).collect()).unwrap_or_default(),
         window: Some(WindowSize { width: 854, height: 480 }),
         account: Account::offline("Player"),
         env: BTreeMap::new(),
