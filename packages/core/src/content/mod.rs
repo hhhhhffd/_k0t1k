@@ -10,6 +10,7 @@ mod install;
 mod local;
 mod modpack;
 pub mod modrinth;
+pub mod modcompat;
 pub mod murmur2;
 pub mod pack_state;
 pub mod pack_url;
