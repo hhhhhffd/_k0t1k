@@ -28,6 +28,7 @@ import {
   Search,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
   Wrench,
 } from '@lucide/vue'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -36,14 +37,16 @@ import * as api from '../../api/commands'
 import { isTauri } from '../../api/commands'
 import type { BlockedFile, JarScan, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n'
+import { useInstancesStore } from '../../stores/instances'
 import { usePacksStore, type PackResult } from '../../stores/packs'
 import { useModCompatStore } from '../../stores/modCompat'
 import { badgeOf, useRatscanStore } from '../../stores/ratscan'
 import { useTasksStore } from '../../stores/tasks'
 import { openExternal } from '../../utils/external'
-import { errorMessage, formatBytes, formatRelative, originProject, plainText, PLATFORM_LABELS } from '../../utils/format'
+import { errorMessage, formatBytes, minecraftVersionOf, formatRelative, originProject, plainText, PLATFORM_LABELS } from '../../utils/format'
 import { addFilesToInstance } from '../../utils/addFiles'
 import { useMarquee } from '../../utils/useMarquee'
+import { useViewMode } from '../../utils/useViewMode'
 import ActionPanel from '../ActionPanel.vue'
 import type { PanelAction } from '../ActionPanel.vue'
 import ChangeVersionDialog from '../ChangeVersionDialog.vue'
@@ -55,6 +58,7 @@ import ModalDialog from '../ModalDialog.vue'
 import ModListDialog from '../ModListDialog.vue'
 import ScanDetailsDialog from '../ScanDetailsDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
+import ViewToggle from '../ViewToggle.vue'
 
 const props = defineProps<{ instanceId: string; kind: LocalResourceKind; sharedNote?: string }>()
 const showContent = ref(false)
@@ -157,6 +161,17 @@ watch(() => packs.changed, load)
 
 // ---- RatScan (mods) ----
 const modCompat = useModCompatStore()
+const instances = useInstancesStore()
+const view = useViewMode('resources')
+/** The mod check result for the status line; `null` until the check has finished. */
+const compatSummary = computed(() => {
+  if (props.kind !== 'mod') return null
+  const found = modCompat.byFile[props.instanceId]
+  const instance = instances.instances.find((i) => i.id === props.instanceId)
+  if (!found || !instance) return null
+  const mismatched = Object.keys(found).length
+  return mismatched ? { ok: false, text: t.modCompat.someMismatch(mismatched) } : { ok: true, text: t.modCompat.allFit(minecraftVersionOf(instance)) }
+})
 const jarsByName = computed(() => new Map((ratscan.jars[props.instanceId] ?? []).map((jar) => [jar.fileName, jar])))
 const scanning = computed(() => ratscan.progress?.instanceId === props.instanceId)
 const scanDetails = ref<JarScan | null>(null)
@@ -426,12 +441,23 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
           <span class="text-faint">
             {{ t.instance.counted(resources.length) }}<template v-if="selected.size"> · {{ t.instance.selectedCount(selected.size) }}</template>
           </span>
+          <ViewToggle v-model="view" class="ml-auto" />
         </div>
 
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.instance.noResources }}</p>
-        <div v-else class="overflow-hidden rounded-xl border border-line !outline-none" tabindex="0" role="listbox" aria-multiselectable="true" @pointerdown="onPointerDown" @dragstart.prevent @keydown="onKey">
-          <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
+        <div
+          v-else
+          class="!outline-none"
+          :class="view === 'list' ? 'overflow-hidden rounded-xl border border-line' : ''"
+          tabindex="0"
+          role="listbox"
+          aria-multiselectable="true"
+          @pointerdown="onPointerDown"
+          @dragstart.prevent
+          @keydown="onKey"
+        >
+          <div v-if="view === 'list'" class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-9 shrink-0" />
             <span class="w-9 shrink-0" />
             <button
@@ -445,19 +471,22 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
               <component :is="sortAsc ? ArrowUp : ArrowDown" v-if="sortKey === c.key" :size="12" />
             </button>
           </div>
-          <ul>
+          <ul :class="view === 'tiles' ? 'grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-2.5' : ''">
             <li
               v-for="r in visible"
               :key="r.fileName"
               :data-select-key="r.fileName"
               role="option"
               :aria-selected="selected.has(r.fileName)"
-              class="flex cursor-default items-center gap-3 border-b border-line/60 px-3 py-1.5 last:border-b-0"
-              :class="selected.has(r.fileName) ? 'bg-accent/12' : 'hover:bg-hover'"
+              class="relative flex cursor-default"
+              :class="[
+                view === 'list' ? 'items-center gap-3 border-b border-line/60 px-3 py-1.5 last:border-b-0' : 'flex-col gap-2 rounded-xl border border-line p-3',
+                selected.has(r.fileName) ? (view === 'list' ? 'bg-accent/12' : 'border-accent bg-accent/12') : 'hover:bg-hover',
+              ]"
               @click="select(r, $event)"
               @contextmenu.prevent="openMenu(r, $event)"
             >
-              <span class="flex w-9 shrink-0" @click.stop>
+              <span class="flex shrink-0" :class="view === 'list' ? 'w-9' : 'absolute top-3 right-3'" @click.stop>
                 <ToggleSwitch :model-value="r.enabled" :label="t.common.enabled" @update:model-value="setEnabled([r], $event)" />
               </span>
               <img v-if="r.metadata?.icon" :src="r.metadata.icon" alt="" class="pixelated size-9 shrink-0 rounded-md" :class="r.enabled ? '' : 'opacity-50'" />
@@ -465,8 +494,8 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
                 {{ displayName(r).charAt(0).toUpperCase() }}
               </span>
               <div class="min-w-0 flex-1" :class="r.enabled ? '' : 'opacity-60'">
-                <div class="flex items-center gap-1.5">
-                  <span class="truncate font-semibold">{{ displayName(r) }}</span>
+                <div class="flex items-center gap-1.5" :class="view === 'tiles' ? 'flex-wrap' : ''">
+                  <span class="truncate font-semibold" :class="view === 'tiles' ? 'max-w-full' : ''">{{ displayName(r) }}</span>
                   <span v-if="r.metadata?.version" class="badge shrink-0">{{ r.metadata.version }}</span>
                   <span v-if="projectOf(r)" class="badge badge-accent shrink-0">{{ PLATFORM_LABELS[projectOf(r)!.platform] }}</span>
                   <span v-else class="badge shrink-0" :title="t.instance.localSourceHint">{{ t.instance.localSource }}</span>
@@ -492,11 +521,14 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
                   {{ plainText(r.fileName) }} · {{ r.isDir ? t.instance.folderItem : formatBytes(r.size) }}<template v-if="r.metadata?.authors.length"> · {{ r.metadata.authors.join(', ') }}</template>
                 </div>
               </div>
-              <span class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(r.modified) }}</span>
+              <span v-if="view === 'list'" class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(r.modified) }}</span>
             </li>
           </ul>
         </div>
         <p class="text-[12px] text-faint">{{ t.instance.selectionHint }}</p>
+        <p v-if="compatSummary" class="flex items-center gap-1.5 text-[12px]" :class="compatSummary.ok ? 'text-ok' : 'text-warn'">
+          <component :is="compatSummary.ok ? CircleCheck : TriangleAlert" :size="13" />{{ compatSummary.text }}
+        </p>
       </div>
 
       <MarqueeBox :box="box" />
