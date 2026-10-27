@@ -108,8 +108,7 @@ async function confirmDelete() {
             tabindex="0"
             :data-select-key="s.fileName"
             class="card group w-full cursor-pointer overflow-hidden text-left transition-colors hover:border-accent/60"
-            :class="view === 'tiles' ? 'block' : 'flex items-center gap-3 p-1.5'"
-            :class="selected.has(s.fileName) ? '!border-accent !bg-accent/15' : ''"
+            :class="[view === 'tiles' ? 'block' : 'flex items-center gap-3 p-1.5', selected.has(s.fileName) ? '!border-accent !bg-accent/15' : '']"
             @click="onShotClick(i, $event)"
             @keydown.enter.self="viewing = i"
           >
