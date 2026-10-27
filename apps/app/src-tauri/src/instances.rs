@@ -191,7 +191,13 @@ pub async fn change_instance_versions(
     specs.extend(current.components.into_iter().filter(|c| {
         !c.dependency_only && c.uid != MINECRAFT_UID && !loader_uids.contains(&c.uid.as_str()) && !is_client_uid(&c.uid)
     }));
-    // Resolving also checks that every chosen version exists and fits together.
+    // Resolving also checks that every chosen version exists and fits together. Resolving skips
+    // switched-off components, so they are checked with the switch cleared: enabling a loader that
+    // does not fit the new Minecraft version later would fail.
+    if specs.iter().any(|c| c.disabled) {
+        let enabled = specs.iter().cloned().map(|c| ComponentSpec { disabled: false, ..c }).collect();
+        game::resolve(&state.paths, enabled).await?;
+    }
     let (components, _) = game::resolve(&state.paths, specs.clone()).await?;
 
     let instance = blocking(move || manager.update(&instance_id, |instance| instance.components = specs)).await?;
