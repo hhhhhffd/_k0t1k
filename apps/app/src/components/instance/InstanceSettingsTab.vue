@@ -44,7 +44,8 @@ const markDirty = () => (dirty.value = true)
 // Java the launcher downloaded plus installations found on the system, offered as quick choices for the override.
 const javaInstalls = ref<JavaInstall[]>([])
 function onSaveShortcut(e: KeyboardEvent) {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+  // `code`, not `key`: on the Russian layout the S key reports 'ы'.
+  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') {
     e.preventDefault()
     if (dirty.value) void save()
   }

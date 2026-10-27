@@ -102,6 +102,8 @@ const { dragging } = useFileDrop(async (paths) => {
           <span class="flex items-center gap-1 text-muted"><History :size="12" />{{ formatRelative(instance.lastPlayed) }}</span>
         </div>
       </div>
+      <!-- Tab actions (e.g. save in Settings) are teleported here, so they never cover the tab content. -->
+      <div id="tab-actions" class="flex shrink-0 items-center gap-2"></div>
       <button v-if="instance.managedPack" class="tool shrink-0" @click="showPackUpdate = true"><RefreshCw :size="15" class="text-ok" />{{ t.pack.check }}</button>
       <button class="tool shrink-0" @click="openExportMenu"><Upload :size="15" class="text-ok" />{{ t.transfer.export }}</button>
       <button class="tool shrink-0" :title="t.instance.instanceFolderHint" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="15" class="text-warn" />{{ t.instance.instanceFolder }}</button>
@@ -125,11 +127,7 @@ const { dragging } = useFileDrop(async (paths) => {
       </nav>
 
       <section class="min-w-0 flex-1 overflow-y-auto p-4">
-        <!-- Sticky so tab actions (e.g. save in Settings, teleported into #tab-actions) stay in reach and never cover the content. -->
-        <div class="sticky top-0 z-10 -mx-4 -mt-4 mb-1 flex h-14 items-end bg-base px-4 pb-2">
-          <h2 class="text-[15px] font-semibold">{{ t.instance.tabs[tab] }}</h2>
-          <div id="tab-actions" class="ml-auto flex items-center gap-2"></div>
-        </div>
+        <h2 class="mb-3 text-[15px] font-semibold">{{ t.instance.tabs[tab] }}</h2>
         <p v-if="tab === 'mods' && instance && clientOf(instance)" class="mb-3 rounded-lg border border-line bg-raised px-3 py-2 text-[12.5px] text-muted">
           {{ t.client.modsNote(clientOf(instance)!.label) }}
         </p>
