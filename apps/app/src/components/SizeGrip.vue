@@ -4,7 +4,7 @@ import { isTauri } from '../api/commands'
 import { t } from '../i18n'
 import { useTasksStore } from '../stores/tasks'
 
-/** Qt-style dotted triangle in the bottom-right corner that resizes the undecorated window. Hidden while maximized. */
+/** Resize grip for the undecorated window. */
 const tasks = useTasksStore()
 const maximized = ref(false)
 let unlisten: (() => void) | undefined

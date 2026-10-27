@@ -90,9 +90,8 @@ pub fn enable_shared(paths: &Paths, game_dir: &Path, folder: SharedFolder) -> Re
     create_dir_link(&shared, &link)
 }
 
-/// Unlink the folder and leave the instance an empty one of its own: the shared content stays only in
-/// `shared/`, so it does not linger in an instance that no longer shares it. For the server list the
-/// synchronised copy in the game dir is removed. Does nothing when the folder is not shared.
+/// Unlink the folder and leave the instance an empty one; the shared content stays only in `shared/`.
+/// For the server list the synchronised copy is deleted. Does nothing when the folder is not shared.
 pub fn disable_shared(_paths: &Paths, game_dir: &Path, folder: SharedFolder) -> Result<()> {
     let link = game_dir.join(folder.dir_name());
     if !folder.is_linked() {

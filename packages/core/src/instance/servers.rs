@@ -415,8 +415,7 @@ fn parse_status(json: &str, latency: Duration) -> Result<ServerStatus> {
     })
 }
 
-/// The `_minecraft._tcp` SRV target of `host` (lowest priority, highest weight), as the game resolves a
-/// server address without a port. `None` when there is no record or DNS fails.
+/// The `_minecraft._tcp` SRV target of `host`, as the game resolves an address without a port.
 async fn srv_target(host: &str) -> Option<(String, u16)> {
     static RESOLVER: OnceLock<Option<TokioResolver>> = OnceLock::new();
     let resolver = RESOLVER
@@ -442,8 +441,8 @@ async fn srv_target(host: &str) -> Option<(String, u16)> {
         .filter(|(target, _)| !target.is_empty())
 }
 
-/// Connects to every address of `host` at once, IPv4 first with a short head start for each, and keeps
-/// the first that answers: a host whose first address is unreachable (often IPv6) does not stall the ping.
+/// Dials every address at once (IPv4 first) and keeps the first that answers, so an unreachable
+/// address (often IPv6) does not stall the ping.
 async fn connect_fastest(host: &str, port: u16) -> Result<TcpStream> {
     let mut addresses: Vec<SocketAddr> = tokio::net::lookup_host((host, port)).await.map_err(ping_io)?.collect();
     addresses.sort_by_key(|address| address.is_ipv6());

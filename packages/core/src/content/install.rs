@@ -316,9 +316,8 @@ async fn install_one(
     Ok(())
 }
 
-/// Gives files that were added by hand (no packwiz index) an index when Modrinth (by SHA-1) or
-/// CurseForge (by murmur2 fingerprint) knows them, like Prism's metadata update before an update check.
-/// Afterwards they show their catalog and can be updated. Returns how many files were identified.
+/// Writes a packwiz index for hand-added files that Modrinth (SHA-1) or CurseForge (fingerprint) knows,
+/// like Prism does before an update check. Returns how many were identified.
 pub async fn identify_local_files(clients: &Clients, game_dir: &std::path::Path, kind: ResourceKind) -> Result<usize> {
     let index_dir = packwiz::index_dir(game_dir, kind);
     let indexed: HashSet<String> = packwiz::list(&index_dir)?.into_iter().map(|entry| entry.data.filename).collect();
@@ -339,7 +338,6 @@ pub async fn identify_local_files(clients: &Clients, game_dir: &std::path::Path,
         return Ok(0);
     }
 
-    // Modrinth first, in one batch.
     let mut by_sha1: HashMap<String, usize> = HashMap::new();
     for (index, (_, path)) in unknown.iter().enumerate() {
         by_sha1.insert(sha1_file(path).await?, index);
@@ -352,7 +350,6 @@ pub async fn identify_local_files(clients: &Clients, game_dir: &std::path::Path,
         .collect();
     let mut projects = fetch_projects(clients, Platform::Modrinth, &found).await?;
 
-    // The rest on CurseForge, when a key is configured.
     if let Some(curseforge) = &clients.curseforge {
         let matched: HashSet<usize> = found.iter().map(|(index, ..)| *index).collect();
         let mut by_fingerprint: HashMap<u32, usize> = HashMap::new();
@@ -393,7 +390,6 @@ pub async fn identify_local_files(clients: &Clients, game_dir: &std::path::Path,
     Ok(identified)
 }
 
-/// The projects of `found`, keyed by platform and id.
 async fn fetch_projects(
     clients: &Clients,
     platform: Platform,
@@ -413,10 +409,9 @@ async fn fetch_projects(
     Ok(projects.into_iter().map(|project| ((platform, project.id.clone()), project)).collect())
 }
 
-/// Identifies hand-added files first ([`identify_local_files`]), then checks every installed resource of
-/// `kind` that has a packwiz index (and no update lock) for a newer version. Modrinth entries are checked
-/// in one batch per hash type, CurseForge ones per project. CurseForge entries are skipped when `clients`
-/// has no CurseForge client.
+/// Runs [`identify_local_files`], then checks every installed resource of `kind` that has a packwiz index
+/// (and no update lock) for a newer version. Modrinth entries are checked in one batch per hash type,
+/// CurseForge ones per project. CurseForge entries are skipped when `clients` has no CurseForge client.
 pub async fn check_updates(
     clients: &Clients,
     ctx: &InstallContext,

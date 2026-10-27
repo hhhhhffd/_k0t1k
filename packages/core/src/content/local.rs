@@ -31,10 +31,9 @@ pub struct LocalResource {
     /// Name on disk, including a trailing `.disabled` when the resource is disabled.
     pub file_name: String,
     pub enabled: bool,
-    /// Bytes of a file; 0 for a folder (an unpacked resource or shader pack).
+    /// 0 for a folder.
     pub size: u64,
     pub is_dir: bool,
-    /// Last modification time on disk.
     pub modified: Option<chrono::DateTime<chrono::Utc>>,
     pub metadata: Option<ResourceMetadata>,
     /// Where the file came from, when a packwiz index describes it.

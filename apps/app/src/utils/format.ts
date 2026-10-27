@@ -38,7 +38,6 @@ export function originPlatform(origin: PwMod): Platform | undefined {
   return undefined
 }
 
-/** Catalog project of a local file and its web page, according to its packwiz entry. */
 export function originProject(origin: PwMod): { platform: Platform; projectId: string; versionId: string; url: string } | undefined {
   const { modrinth, curseforge } = origin.update
   if (modrinth) {
@@ -53,7 +52,7 @@ export function originProject(origin: PwMod): { platform: Platform; projectId: s
   return undefined
 }
 
-/** Removes Minecraft `§x` formatting codes, which pack authors put into names and descriptions. */
+/** Strips Minecraft `§x` formatting codes. */
 export const plainText = (text: string) => text.replace(/§./gs, '').trim()
 
 export const PLATFORM_LABELS: Record<Platform, string> = { modrinth: 'Modrinth', curseForge: 'CurseForge' }

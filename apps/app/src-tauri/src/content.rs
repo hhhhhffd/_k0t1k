@@ -211,8 +211,7 @@ pub async fn list_local_resources(state: State<'_, AppState>, instance_id: Strin
     Ok(resources.into_iter().map(Into::into).collect())
 }
 
-/// Opens the folder of a content kind (`mods`, `resourcepacks`, `shaderpacks`, `saves`) in the file
-/// manager, creating it first: the game creates most of them only when it needs them.
+/// Creates the folder first: the game makes most of them only when it needs them.
 #[tauri::command]
 pub async fn open_content_folder(app: AppHandle, state: State<'_, AppState>, instance_id: String, kind: ResourceKind) -> CommandResult<()> {
     let instance = instance_of(&state, &instance_id).await?;
@@ -223,7 +222,6 @@ pub async fn open_content_folder(app: AppHandle, state: State<'_, AppState>, ins
     Ok(())
 }
 
-/// Opens the instance's `config` folder, where mods keep their settings.
 #[tauri::command]
 pub async fn open_config_folder(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> CommandResult<()> {
     let instance = instance_of(&state, &instance_id).await?;

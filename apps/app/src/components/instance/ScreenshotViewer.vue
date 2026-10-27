@@ -6,7 +6,6 @@ import type { Screenshot } from '../../api/types'
 import { t } from '../../i18n'
 import { formatBytes, formatRelative } from '../../utils/format'
 
-/** Full-window viewer: the picture fills the window, ←/→ step through the screenshots, Esc closes. */
 const props = defineProps<{ shots: Screenshot[]; index: number }>()
 const emit = defineEmits<{ close: []; 'update:index': [index: number]; open: [shot: Screenshot]; delete: [shot: Screenshot] }>()
 

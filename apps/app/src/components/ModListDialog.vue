@@ -33,7 +33,7 @@ const props = defineProps<{ resources: LocalResource[]; title: string; fileName:
 const emit = defineEmits<{ close: [] }>()
 const tasks = useTasksStore()
 
-// The choices are remembered for the next export (per viewer; a failure to read them just means defaults).
+// Remembered for the next export.
 const STORAGE_KEY = 'k0t1k.modListExport'
 function restore(): Saved | null {
   try {
@@ -73,7 +73,6 @@ const rows = computed<Row[]>(() =>
     .sort((a, b) => a.name.localeCompare(b.name)),
 )
 
-/** One line per file in the built-in text formats; a part whose field is off or empty is left out. */
 function line(row: Row, f: Format): string {
   const link = fields.url && row.url
   const version = fields.version && row.version ? ` [${row.version}]` : ''
@@ -87,7 +86,7 @@ function line(row: Row, f: Format): string {
   return `${row.name}${version}${authors}${file}${link ? ` ${row.url}` : ''}`
 }
 
-/** The pattern behind the current format, shown in the template box; editing it switches to the custom format. */
+/** Editing the template switches to the custom format. */
 const template = computed({
   get: () => {
     if (format.value === 'custom') return customTemplate.value

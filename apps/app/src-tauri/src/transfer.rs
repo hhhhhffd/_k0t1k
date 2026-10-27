@@ -153,7 +153,6 @@ pub fn get_downloads_dir(app: AppHandle) -> CommandResult<String> {
     Ok(dir.display().to_string())
 }
 
-/// Writes a text export (the mod list) to the file the user picked in the save dialog.
 #[tauri::command]
 pub async fn save_text_file(path: String, contents: String) -> CommandResult<()> {
     let path = PathBuf::from(path);

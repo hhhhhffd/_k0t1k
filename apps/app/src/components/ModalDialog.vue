@@ -3,10 +3,7 @@ import { X } from '@lucide/vue'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { t } from '../i18n'
 
-/**
- * `size` sets a width that grows with the window (see the styles below), so dialogs do not look tiny on
- * a big screen; `large` fills most of the window, for browsers and long lists.
- */
+/** Widths grow with the window; `large` fills most of it. */
 withDefaults(defineProps<{ title: string; size?: 'sm' | 'md' | 'lg'; large?: boolean }>(), { size: 'md' })
 const emit = defineEmits<{ close: [] }>()
 

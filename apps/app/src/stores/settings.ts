@@ -48,7 +48,6 @@ export function autoScale(): number {
   return width >= 3400 ? 150 : width >= 2500 ? 125 : 100
 }
 
-/** Zooms the whole web view (text, controls and dialogs alike); `null` is the automatic choice. */
 async function applyScale(percent: number | null | undefined) {
   if (!isTauri) return
   try {

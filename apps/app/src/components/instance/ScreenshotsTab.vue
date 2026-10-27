@@ -13,7 +13,6 @@ const tasks = useTasksStore()
 
 const shots = ref<Screenshot[]>([])
 const loading = ref(true)
-/** Index of the screenshot open in the viewer. */
 const viewing = ref<number | null>(null)
 const deleting = ref<Screenshot | null>(null)
 
@@ -38,7 +37,6 @@ async function confirmDelete() {
   })
   if (!done) return
   await load()
-  // the viewer stays open on the next screenshot, or closes with the last one gone
   if (viewing.value !== null) viewing.value = shots.value.length ? Math.min(viewing.value, shots.value.length - 1) : null
 }
 </script>
