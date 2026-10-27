@@ -114,6 +114,12 @@ const jvmOn = overrideModel('jvmArgs', () => global.value?.jvmArgs ?? '')
 const windowOn = overrideModel('window', () => clone(global.value!.window))
 const commandsOn = overrideModel('commands', () => clone(global.value!.commands))
 
+const overlayOptions = computed(() => [
+  { value: null, label: t.iset.overlayGlobal(global.value?.overlay.enabled ? t.iset.overlayOn : t.iset.overlayOff) },
+  { value: true, label: t.iset.overlayOn },
+  { value: false, label: t.iset.overlayOff },
+])
+
 // Views of each group: the override when set, otherwise the (read-only) global value.
 const javaView = computed(() => draft.settings.java ?? global.value?.java ?? { path: null, autoSelect: true, autoDownload: true })
 const memoryView = computed(() => draft.settings.memory ?? global.value?.memory ?? { minMib: 512, maxMib: 4096, auto: false })
@@ -195,6 +201,21 @@ async function save() {
         />
         <span class="font-medium">{{ t.sharedFolder.names[folder] }}</span>
       </label>
+    </section>
+
+    <section class="card flex flex-col gap-2 p-4">
+      <span><span class="block text-[14px] font-semibold">{{ t.settings.overlay }}</span><span class="text-[12px] text-faint">{{ t.settings.overlayHint }}</span></span>
+      <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.overlay">
+        <button
+          v-for="o in overlayOptions"
+          :key="String(o.value)"
+          role="radio"
+          :aria-checked="(draft.settings.overlay ?? null) === o.value"
+          class="h-8 flex-1 rounded-md px-2 font-medium transition-colors"
+          :class="(draft.settings.overlay ?? null) === o.value ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
+          @click="((draft.settings.overlay = o.value), markDirty())"
+        >{{ o.label }}</button>
+      </div>
     </section>
 
     <section class="card divide-y divide-line p-4">

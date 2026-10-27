@@ -14,6 +14,7 @@ mod java;
 mod launch;
 mod logging;
 mod onboarding;
+mod overlay;
 mod platform;
 mod plugins;
 mod screenshots;
@@ -181,6 +182,7 @@ pub fn run() {
             transfer::scan_blocked_files,
             transfer::get_downloads_dir,
             transfer::save_text_file,
+            overlay::clear_overlay_history,
             transfer::set_update_lock,
             plugins::list_plugins,
             plugins::read_plugin_file,

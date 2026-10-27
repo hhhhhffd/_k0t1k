@@ -12,6 +12,7 @@ pub mod instance;
 pub mod java;
 pub mod launch;
 pub mod mclogs;
+pub mod overlay;
 pub mod meta;
 pub mod paths;
 pub mod packformat;

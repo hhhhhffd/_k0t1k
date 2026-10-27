@@ -3,7 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { AppWindow, Bug, Check, Download, Coffee, ExternalLink, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openLauncherFolder, openSharedFolder, setDataDir, uninstall } from '../api/commands'
+import { clearOverlayHistory, createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openLauncherFolder, openSharedFolder, setDataDir, uninstall } from '../api/commands'
 import { type JavaInstall, type ManagedJavaUsage, SHARED_FOLDERS, type SharedFolder, type SystemInfo, type UninstallPlan } from '../api/types'
 import mascot from '../assets/mascot.png'
 import CommandFields from '../components/fields/CommandFields.vue'
@@ -115,6 +115,14 @@ const autoJava = computed({
 })
 const usageOf = (j: JavaInstall) => javaUsage.value.find((u) => u.path === j.path)
 const instanceNames = (ids: string[]) => ids.map((id) => instances.byId(id)?.name ?? id).join(', ')
+
+async function clearHistory() {
+  const done = await tasks.guard(async () => {
+    await clearOverlayHistory()
+    return true
+  })
+  if (done) tasks.toast(t.settings.overlayCleared, 'ok')
+}
 
 async function loadManagedJava() {
   managed.value = (await tasks.guard(listManagedJava)) ?? []
@@ -419,6 +427,12 @@ async function addAccount() {
           <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.discord }}</span><span class="text-[12px] text-faint">{{ t.settings.discordHint }}</span></span>
           <ToggleSwitch v-model="s.discord.enabled" :label="t.settings.discord" />
         </div>
+        <div class="flex items-center gap-4">
+          <span class="min-w-0 flex-1"><span class="block font-medium">{{ t.settings.overlay }}</span><span class="text-[12px] text-faint">{{ t.settings.overlayHint }}</span></span>
+          <ToggleSwitch v-model="s.overlay.enabled" :label="t.settings.overlay" />
+        </div>
+        <p class="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] text-warn">{{ t.settings.overlayPrivacy }}</p>
+        <button class="btn w-fit" @click="clearHistory"><Trash2 :size="15" class="text-danger" />{{ t.settings.overlayClear }}</button>
       </section>
 
       <section v-else-if="section === 'sharedFolders'" class="card flex flex-col gap-3 p-4">

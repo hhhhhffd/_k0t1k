@@ -52,6 +52,11 @@ impl Paths {
         self.root.join("instances")
     }
 
+    /// The overlay agent's jar and its data (chat history, notes), shared by every instance.
+    pub fn overlay_dir(&self) -> PathBuf {
+        self.root.join("overlay")
+    }
+
     /// Content shared by every instance (resource packs, etc.).
     pub fn shared_dir(&self) -> PathBuf {
         self.root.join("shared")

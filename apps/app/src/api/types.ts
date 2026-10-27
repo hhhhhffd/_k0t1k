@@ -75,6 +75,8 @@ export interface InstanceSettings {
   window?: WindowSettings | null
   commands?: CommandSettings | null
   env?: Record<string, string> | null
+  /** `null`/absent follows the global setting. */
+  overlay?: boolean | null
 }
 
 /** Folders that can be shared between instances; mods, config and saves never are. */
@@ -188,6 +190,7 @@ export interface GlobalSettings {
   ui: { language: Language; theme: string; liteMode: boolean; customThemes: CustomTheme[]; catPack?: string | null; iconSet?: string | null; windowControls: WindowControlsSide; scale?: number | null }
   behavior: { onGameLaunch: OnGameLaunch; onClose: OnClose }
   discord: { enabled: boolean }
+  overlay: { enabled: boolean }
   updates: { checkOnStartup: boolean }
   /** Owned by the onboarding commands: `save_settings` never overwrites it. */
   onboarding: { keepPortableAt: string | null; createdShortcuts: string[] }

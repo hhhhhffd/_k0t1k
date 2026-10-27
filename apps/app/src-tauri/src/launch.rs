@@ -31,7 +31,7 @@ use tokio::sync::watch;
 use crate::error::{AppError, CommandResult, blocking};
 use crate::events::{self, GameLog, LogLine, RunState, progress_fn, tracked};
 use crate::state::{AppState, CrashInfo, MSA_CLIENT_ID, SessionId, SessionInfo};
-use crate::{cmdline, discord, game, window};
+use crate::{cmdline, discord, game, overlay, window};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -485,6 +485,8 @@ async fn prepare(
     log.add_secret(&identity.account.access_token);
     log.line("launcher", &tr_fmt!("Account: {} ({})", "Аккаунт: {} ({})", account.name, identity.account.user_type));
 
+    let mut java_agent_args = identity.java_agent_args;
+    java_agent_args.extend(overlay::agent_args(state, instance, settings, log).await);
     let window = (!settings.window.maximized).then_some(WindowSize { width: settings.window.width, height: settings.window.height });
     let options = LaunchOptions {
         java_path: java.path,
@@ -494,7 +496,7 @@ async fn prepare(
         profile_name: instance.name.clone(),
         min_memory_mb,
         max_memory_mb,
-        java_agent_args: identity.java_agent_args,
+        java_agent_args,
         extra_jvm_args,
         window,
         account: identity.account,

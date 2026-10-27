@@ -120,6 +120,8 @@
  *   scan_blocked_files(instanceId, files: BlockedFile[], folder: string | null) -> BlockedScan (copies matches by SHA-1; null folder = Downloads)
  *   get_downloads_dir()                                      -> string
  *   save_text_file(path, contents)                           -> void     (a path from the save dialog, e.g. the exported mod list)
+ * Overlay
+ *   clear_overlay_history()                                  -> void     (deletes the chat history; refused while a game runs)
  *   set_update_lock(instanceId, kind, fileName, locked)      -> void
  * Launcher update (GitHub Releases, Ed25519-signed exe)
  *   check_for_update(force)                                  -> UpdateStatus   (also installs newer plugins; without force, the result of the earlier check of this run; failures are logged by the backend)
@@ -459,6 +461,7 @@ export const scanBlockedFiles = (instanceId: string, files: BlockedFile[], folde
   call<BlockedScan>('scan_blocked_files', { instanceId, files, folder })
 export const getDownloadsDir = () => call<string>('get_downloads_dir')
 export const saveTextFile = (path: string, contents: string) => call<void>('save_text_file', { path, contents })
+export const clearOverlayHistory = () => call<void>('clear_overlay_history')
 export const setUpdateLock = (instanceId: string, kind: LocalResourceKind, fileName: string, locked: boolean) =>
   call<void>('set_update_lock', { instanceId, kind, fileName, locked })
 

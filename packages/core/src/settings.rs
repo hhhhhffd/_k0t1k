@@ -226,6 +226,13 @@ impl Default for DiscordSettings {
     }
 }
 
+/// The in-game overlay agent (`packages/overlay-agent`), shipped inside the launcher.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct OverlaySettings {
+    pub enabled: bool,
+}
+
 /// Launcher self-update (see `update`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -265,6 +272,7 @@ pub struct GlobalSettings {
     pub ui: UiSettings,
     pub behavior: BehaviorSettings,
     pub discord: DiscordSettings,
+    pub overlay: OverlaySettings,
     pub updates: UpdateSettings,
     pub onboarding: OnboardingSettings,
     /// Folders that new instances (including imported modpacks) share with other instances.
@@ -288,6 +296,7 @@ impl Default for GlobalSettings {
             ui: UiSettings::default(),
             behavior: BehaviorSettings::default(),
             discord: DiscordSettings::default(),
+            overlay: OverlaySettings::default(),
             updates: UpdateSettings::default(),
             onboarding: OnboardingSettings::default(),
             shared_folders_default: BTreeSet::from([SharedFolder::Resourcepacks, SharedFolder::Shaderpacks]),

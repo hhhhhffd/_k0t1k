@@ -304,6 +304,9 @@ export const en = {
   iset: {
     general: 'General',
     notes: 'Notes',
+    overlayGlobal: (state: string) => `As in settings (${state})`,
+    overlayOn: 'On',
+    overlayOff: 'Off',
     sharedFolders: 'Shared folders',
     sharedFoldersHint:
       'An enabled folder is shared by all instances that have it enabled. The instance\'s files are moved into it, nothing is lost. If you turn it off, the instance gets an empty folder; the shared files stay in the shared folder.',
@@ -567,6 +570,11 @@ export const en = {
     onCloseHint: 'If a game is running, the launcher asks whether to close it before exiting.',
     onCloseOptions: { tray: 'Minimize to tray', exit: 'Quit the launcher' },
     discord: 'Show the game in Discord',
+    overlay: 'In-game overlay',
+    overlayHint: 'Shift+Tab in game: chat history, notes and an FPS counter. Minecraft 1.13 and newer; applies on the next game launch.',
+    overlayPrivacy: 'The overlay keeps the whole chat history, private messages included, as plain text with no size limit. It is shared by all instances.',
+    overlayClear: 'Clear chat history',
+    overlayCleared: 'Chat history deleted',
     discordHint: 'While the game runs, your Discord profile shows the instance, version and play time. Applies on the next game launch.',
     nickname: 'Nickname',
     addAccount: 'Add',

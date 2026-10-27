@@ -66,6 +66,9 @@ pub struct InstanceSettings {
     pub commands: Option<CommandSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub env: Option<BTreeMap<String, String>>,
+    /// Whether the in-game overlay is loaded; `None` follows the global setting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overlay: Option<bool>,
 }
 
 /// Instance overrides merged over the global settings; what a launch actually uses.
@@ -77,6 +80,7 @@ pub struct EffectiveSettings {
     pub window: WindowSettings,
     pub commands: CommandSettings,
     pub env: BTreeMap<String, String>,
+    pub overlay: bool,
 }
 
 impl InstanceSettings {
@@ -88,6 +92,7 @@ impl InstanceSettings {
             window: self.window.clone().unwrap_or_else(|| global.window.clone()),
             commands: self.commands.clone().unwrap_or_else(|| global.commands.clone()),
             env: self.env.clone().unwrap_or_else(|| global.env.clone()),
+            overlay: self.overlay.unwrap_or(global.overlay.enabled),
         }
     }
 }
