@@ -12,6 +12,9 @@ use super::{Loader, ResourceKind};
 use crate::error::{Error, IoContext, Result};
 
 const DISABLED_SUFFIX: &str = ".disabled";
+/// Minecraft only treats a folder as a pack when it holds this file, so a folder pack is disabled
+/// by renaming it.
+const PACK_MCMETA: &str = "pack.mcmeta";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,7 +31,8 @@ pub struct ResourceMetadata {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalResource {
-    /// Name on disk, including a trailing `.disabled` when the resource is disabled.
+    /// Name on disk, including a trailing `.disabled` when the resource is disabled. A disabled folder
+    /// pack keeps its name: its `pack.mcmeta` is renamed instead.
     pub file_name: String,
     pub enabled: bool,
     /// 0 for a folder.
@@ -38,6 +42,15 @@ pub struct LocalResource {
     pub metadata: Option<ResourceMetadata>,
     /// Where the file came from, when a packwiz index describes it.
     pub origin: Option<PwMod>,
+}
+
+fn is_pack_kind(kind: ResourceKind) -> bool {
+    matches!(kind, ResourceKind::ResourcePack | ResourceKind::DataPack)
+}
+
+/// `pack.mcmeta.disabled` of a folder pack.
+fn disabled_pack_marker(folder: &Path) -> PathBuf {
+    folder.join(format!("{PACK_MCMETA}{DISABLED_SUFFIX}"))
 }
 
 fn base_name(file_name: &str) -> &str {
@@ -90,7 +103,11 @@ pub fn scan_resources(game_dir: &Path, kind: ResourceKind) -> Result<Vec<LocalRe
             }
         };
         resources.push(LocalResource {
-            enabled: !file_name.ends_with(DISABLED_SUFFIX),
+            enabled: if file_type.is_dir() && is_pack_kind(kind) {
+                !disabled_pack_marker(&path).exists() || path.join(PACK_MCMETA).exists()
+            } else {
+                !file_name.ends_with(DISABLED_SUFFIX)
+            },
             size,
             is_dir: file_type.is_dir(),
             modified,
@@ -121,10 +138,17 @@ fn read_metadata(
         }
         ResourceKind::ResourcePack | ResourceKind::DataPack => {
             let icon_png = std::fs::read(path.join("pack.png")).ok();
-            let mcmeta = match std::fs::read(path.join("pack.mcmeta")) {
+            let mcmeta = match std::fs::read(path.join(PACK_MCMETA)) {
                 Ok(bytes) => bytes,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-                Err(error) => return Err(error).at(path.join("pack.mcmeta")),
+                // A disabled folder pack still shows its description.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    match std::fs::read(disabled_pack_marker(path)) {
+                        Ok(bytes) => bytes,
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                        Err(error) => return Err(error).at(disabled_pack_marker(path)),
+                    }
+                }
+                Err(error) => return Err(error).at(path.join(PACK_MCMETA)),
             };
             Ok(pack_metadata(&mcmeta, stem, icon_png)?)
         }
@@ -171,8 +195,9 @@ pub fn write_resource_new(game_dir: &Path, kind: ResourceKind, file_name: &str, 
     Err(Error::Other(format!("too many files named like {file_name}")))
 }
 
-/// Renames to or from the `.disabled` suffix and returns the new file name.
-/// Directories cannot be toggled; an existing target is an error rather than being overwritten.
+/// Renames to or from the `.disabled` suffix and returns the new file name. A resource or data pack
+/// folder is toggled by renaming its `pack.mcmeta` instead and keeps its name; other folders cannot be
+/// toggled. An existing target is an error rather than being overwritten.
 pub fn set_enabled(
     game_dir: &Path,
     kind: ResourceKind,
@@ -181,9 +206,24 @@ pub fn set_enabled(
 ) -> Result<String> {
     let path = resource_path(game_dir, kind, file_name)?;
     if path.is_dir() {
-        return Err(Error::Other(format!(
-            "{file_name} is a folder and cannot be enabled or disabled"
-        )));
+        if !is_pack_kind(kind) {
+            return Err(Error::Other(format!(
+                "{file_name} is a folder and cannot be enabled or disabled"
+            )));
+        }
+        let (active, inactive) = (path.join(PACK_MCMETA), disabled_pack_marker(&path));
+        let (from, to) = if enabled { (inactive, active) } else { (active, inactive) };
+        if to.exists() {
+            if from.exists() {
+                return Err(Error::Other(format!("{file_name} has both {PACK_MCMETA} and {PACK_MCMETA}{DISABLED_SUFFIX}")));
+            }
+            return Ok(file_name.to_owned());
+        }
+        if !from.exists() {
+            return Err(Error::Other(format!("{file_name} has no {PACK_MCMETA}")));
+        }
+        std::fs::rename(&from, &to).at(&to)?;
+        return Ok(file_name.to_owned());
     }
     let is_disabled = file_name.ends_with(DISABLED_SUFFIX);
     if is_disabled != enabled {
@@ -649,6 +689,34 @@ authors = "mezz, others"
         assert!(!mods.join("a.jar").exists());
         assert!(packwiz::list(&mods.join(".index")).unwrap().is_empty());
         std::fs::remove_dir_all(&game_dir).unwrap();
+    }
+
+    #[test]
+    fn folder_pack_is_toggled_through_its_pack_mcmeta() {
+        let dir = tempfile::tempdir().unwrap();
+        let kind = ResourceKind::ResourcePack;
+        let pack = dir.path().join("resourcepacks/§9s§3s §bPACK");
+        std::fs::create_dir_all(&pack).unwrap();
+        std::fs::write(pack.join("pack.mcmeta"), br#"{"pack":{"description":"hi"}}"#).unwrap();
+        let name = "§9s§3s §bPACK";
+
+        assert!(scan_resources(dir.path(), kind).unwrap()[0].enabled);
+        assert_eq!(set_enabled(dir.path(), kind, name, false).unwrap(), name);
+        assert!(!pack.join("pack.mcmeta").exists() && pack.join("pack.mcmeta.disabled").exists());
+        let found = scan_resources(dir.path(), kind).unwrap();
+        assert!(!found[0].enabled);
+        assert_eq!(found[0].metadata.as_ref().unwrap().description.as_deref(), Some("hi"));
+
+        // Repeating is a no-op; enabling restores the file.
+        assert_eq!(set_enabled(dir.path(), kind, name, false).unwrap(), name);
+        assert_eq!(set_enabled(dir.path(), kind, name, true).unwrap(), name);
+        assert!(pack.join("pack.mcmeta").exists() && scan_resources(dir.path(), kind).unwrap()[0].enabled);
+
+        // Folders without a pack.mcmeta, and other kinds of folders, cannot be toggled.
+        std::fs::remove_file(pack.join("pack.mcmeta")).unwrap();
+        assert!(set_enabled(dir.path(), kind, name, false).is_err());
+        std::fs::create_dir_all(dir.path().join("mods/folder")).unwrap();
+        assert!(set_enabled(dir.path(), ResourceKind::Mod, "folder", false).is_err());
     }
 
     #[test]
