@@ -2,7 +2,7 @@
 import { ArrowLeft, Camera, Clock, FileArchive, Flame, FolderOpen, Globe, History, Image, Layers, Package, Puzzle, RefreshCw, ScrollText, Server, Settings2, Sparkles, Upload } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { addLocalFiles, openInstanceFolder } from '../api/commands'
+import { openInstanceFolder } from '../api/commands'
 import type { ExportFormat } from '../api/types'
 import ContextMenu from '../components/ContextMenu.vue'
 import type { MenuItem } from '../components/ContextMenu.vue'
@@ -22,17 +22,14 @@ import UiIcon from '../components/UiIcon.vue'
 import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
-import { usePacksStore } from '../stores/packs'
-import { useRatscanStore } from '../stores/ratscan'
 import { useTasksStore } from '../stores/tasks'
 import { clientOf, formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'
-import { baseName, useFileDrop } from '../utils/useFileDrop'
+import { addFilesToInstance } from '../utils/addFiles'
+import { useFileDrop } from '../utils/useFileDrop'
 
 const props = defineProps<{ id: string }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
-const ratscan = useRatscanStore()
-const packs = usePacksStore()
 const layout = useLayoutStore()
 const router = useRouter()
 const route = useRoute()
@@ -86,15 +83,7 @@ const listKey = ref(0)
 const { dragging } = useFileDrop(async (paths) => {
   if (!instance.value) return
   const kind = tab.value === 'mods' || tab.value === 'resourcepacks' || tab.value === 'shaders' ? kindOfTab[tab.value] : null
-  const report = await tasks.guard(() => addLocalFiles(instance.value!.id, kind, paths))
-  if (!report) return
-  if (report.added.length) tasks.toast(t.transfer.addedFiles(report.added.length), 'ok')
-  ratscan.scanAdded(instance.value.id, report.added.filter((a) => a.kind === 'mod').map((a) => a.fileName))
-  void packs.offerConversion(instance.value.id, report.added.filter((a) => a.kind === 'resourcePack').map((a) => a.fileName))
-  for (const skipped of report.skipped) {
-    tasks.toast(t.transfer.skippedFile(baseName(skipped.path), t.transfer.skipped[skipped.reason]), 'error')
-  }
-  listKey.value++
+  if (await addFilesToInstance(instance.value.id, kind, paths)) listKey.value++
 })
 </script>
 
@@ -148,7 +137,7 @@ const { dragging } = useFileDrop(async (paths) => {
           :shared-note="sharedNote(tab)"
         />
         <VersionTab v-else-if="tab === 'version'" :instance="instance" />
-        <WorldsTab v-else-if="tab === 'worlds'" :key="instance.id" :instance-id="instance.id" />
+        <WorldsTab v-else-if="tab === 'worlds'" :key="`${instance.id}-${listKey}`" :instance-id="instance.id" />
         <ScreenshotsTab v-else-if="tab === 'screenshots'" :key="instance.id" :instance-id="instance.id" :shared="instance.sharedFolders.includes('screenshots')" />
         <ServersTab v-else-if="tab === 'servers'" :key="instance.id" :instance-id="instance.id" />
         <LogsTab v-else-if="tab === 'logs'" :instance-id="instance.id" />

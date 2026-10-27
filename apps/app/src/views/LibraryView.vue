@@ -20,6 +20,7 @@ import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
+import { addFilesToInstance } from '../utils/addFiles'
 import { loaderOf, minecraftVersionOf } from '../utils/format'
 import { baseName, useFileDrop } from '../utils/useFileDrop'
 
@@ -153,8 +154,21 @@ function stopDrag() {
 }
 onBeforeUnmount(stopDrag)
 
-// Dropped modpacks and instance zips are imported one after another.
-const { dragging } = useFileDrop(async (paths) => {
+const dropTarget = computed(() => (dragPosition.value ? instanceAt(dragPosition.value.x, dragPosition.value.y) : undefined))
+
+/** The instance tile under a point, if any. */
+const instanceAt = (x: number, y: number) =>
+  store.byId(document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-instance-id]')?.dataset.instanceId ?? '')
+
+// Files dropped on a tile go into that instance (mods, packs, shaders, worlds); elsewhere modpacks and
+// instance zips are imported one after another.
+const { dragging, position: dragPosition } = useFileDrop(async (paths, at) => {
+  const target = instanceAt(at.x, at.y)
+  if (target) {
+    layout.selectedId = target.id
+    await addFilesToInstance(target.id, null, paths)
+    return
+  }
   for (const path of paths) {
     if (!/\.(mrpack|zip)$/i.test(path)) {
       tasks.toast(t.transfer.dropImportSkipped(baseName(path)), 'error')
@@ -199,7 +213,12 @@ const { dragging } = useFileDrop(async (paths) => {
               v-for="inst in items"
               :key="inst.id"
               class="tile group flex w-[104px] cursor-pointer flex-col items-center gap-1.5 rounded-lg p-2 outline-none"
-              :class="[layout.selectedId === inst.id ? 'tile-selected' : 'hover:bg-hover', drag?.moved && drag.instance.id === inst.id ? 'opacity-40' : '']"
+              :data-instance-id="inst.id"
+              :class="[
+                layout.selectedId === inst.id ? 'tile-selected' : 'hover:bg-hover',
+                drag?.moved && drag.instance.id === inst.id ? 'opacity-40' : '',
+                dropTarget?.id === inst.id ? 'bg-accent/15 ring-2 ring-accent' : '',
+              ]"
               :title="`${minecraftVersionOf(inst)}${loaderOf(inst) ? ` · ${loaderOf(inst)!.label}` : ''}`"
               tabindex="0"
               role="button"
@@ -252,7 +271,7 @@ const { dragging } = useFileDrop(async (paths) => {
         <InstanceIcon :icon="drag.instance.icon" :instance-id="drag.instance.id" :size="52" />
       </div>
     </Teleport>
-    <DropOverlay v-if="dragging" :text="t.transfer.dropImport" />
+    <DropOverlay v-if="dragging" subtle :text="dropTarget ? t.transfer.dropOnInstance(dropTarget.name) : t.transfer.dropImport" />
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menuItems" @close="menu = null" />
     <ContextMenu v-if="exportMenu" :x="exportMenu.x" :y="exportMenu.y" :items="exportItems" @close="exportMenu = null" />
     <ExportDialog v-if="exporting" :instance="exporting.instance" :format="exporting.format" @close="exporting = null" />

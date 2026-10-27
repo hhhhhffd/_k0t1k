@@ -9,6 +9,7 @@ use serde::Serialize;
 use super::ResourceKind;
 use crate::error::{IoContext, Result};
 use crate::instance::fsutil::unique_path;
+use crate::instance::worlds;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,8 +26,8 @@ pub enum SkipReason {
     UnsupportedType,
     /// Nothing in the file says what it is.
     UnknownType,
-    /// Identified as a world or a data pack, which are not added by dropping.
-    WorldOrDataPack,
+    /// A data pack belongs to one world, so it is not added by dropping on an instance.
+    DataPack,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -91,8 +92,8 @@ fn accepts(kind: ResourceKind, path: &Path) -> bool {
 }
 
 /// Copies dropped files into the game dir. With `kind`, every file goes into that kind's folder
-/// (when its extension fits); with `None` the type is identified per file, and only mods, resource
-/// packs and shader packs are taken. Files that cannot be placed are returned in `skipped` with the
+/// (when its extension fits); with `None` the type is identified per file: mods, resource packs and
+/// shader packs are copied, worlds are extracted into `saves/`. Files that cannot be placed are returned in `skipped` with the
 /// reason; a name that is already taken gets ` (n)` appended, nothing is overwritten.
 pub fn add_local_files(game_dir: &Path, kind: Option<ResourceKind>, paths: &[PathBuf]) -> Result<AddFilesReport> {
     let mut report = AddFilesReport::default();
@@ -114,8 +115,13 @@ pub fn add_local_files(game_dir: &Path, kind: Option<ResourceKind>, paths: &[Pat
             }
             None => match identify_file(path)? {
                 Some(found @ (ResourceKind::Mod | ResourceKind::ResourcePack | ResourceKind::ShaderPack)) => found,
+                Some(ResourceKind::World) => {
+                    let dir_name = worlds::import_zip(game_dir, path)?;
+                    report.added.push(AddedFile { file_name: dir_name, kind: ResourceKind::World });
+                    continue;
+                }
                 Some(_) => {
-                    report.skipped.push(skip(SkipReason::WorldOrDataPack));
+                    report.skipped.push(skip(SkipReason::DataPack));
                     continue;
                 }
                 None => {
@@ -182,21 +188,24 @@ mod tests {
         let pack = zip_with(&source, "pack.zip", &["pack.mcmeta", "assets/a"]);
         let shader = zip_with(&source, "shader.zip", &["shaders/a.fsh"]);
         let world = zip_with(&source, "world.zip", &["level.dat"]);
+        let datapack = zip_with(&source, "datapack.zip", &["pack.mcmeta", "data/a.json"]);
         let notes = source.join("notes.txt");
         std::fs::write(&notes, "x").unwrap();
 
-        let report = add_local_files(&game_dir, None, &[source.join("a.jar"), pack, shader, world, notes.clone()]).unwrap();
+        let report = add_local_files(&game_dir, None, &[source.join("a.jar"), pack, shader, world, datapack, notes.clone()]).unwrap();
         let added: Vec<_> = report.added.iter().map(|file| (file.file_name.as_str(), file.kind)).collect();
         assert_eq!(
             added,
             [
                 ("a (1).jar", ResourceKind::Mod),
                 ("pack.zip", ResourceKind::ResourcePack),
-                ("shader.zip", ResourceKind::ShaderPack)
+                ("shader.zip", ResourceKind::ShaderPack),
+                ("world", ResourceKind::World)
             ]
         );
         let reasons: Vec<_> = report.skipped.iter().map(|file| file.reason).collect();
-        assert_eq!(reasons, [SkipReason::WorldOrDataPack, SkipReason::UnknownType]);
+        assert_eq!(reasons, [SkipReason::DataPack, SkipReason::UnknownType]);
+        assert!(game_dir.join("saves/world/level.dat").is_file());
         assert_eq!(std::fs::read_to_string(game_dir.join("mods/a.jar")).unwrap(), "mine");
         assert_eq!(std::fs::read_to_string(game_dir.join("mods/a (1).jar")).unwrap(), "dropped");
         assert!(game_dir.join("resourcepacks/pack.zip").is_file() && game_dir.join("shaderpacks/shader.zip").is_file());

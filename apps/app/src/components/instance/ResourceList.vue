@@ -41,7 +41,7 @@ import { badgeOf, useRatscanStore } from '../../stores/ratscan'
 import { useTasksStore } from '../../stores/tasks'
 import { openExternal } from '../../utils/external'
 import { errorMessage, formatBytes, formatRelative, originProject, plainText, PLATFORM_LABELS } from '../../utils/format'
-import { baseName } from '../../utils/useFileDrop'
+import { addFilesToInstance } from '../../utils/addFiles'
 import ActionPanel from '../ActionPanel.vue'
 import type { PanelAction } from '../ActionPanel.vue'
 import ChangeVersionDialog from '../ChangeVersionDialog.vue'
@@ -288,13 +288,8 @@ async function addFiles() {
     : ['C:\\Downloads\\sodium-fabric-0.6.0.jar']
   const paths = Array.isArray(picked) ? picked : picked ? [picked] : []
   if (!paths.length) return
-  const report = await tasks.guard(() => api.addLocalFiles(props.instanceId, props.kind, paths))
-  if (!report) return
-  if (report.added.length) tasks.toast(t.transfer.addedFiles(report.added.length), 'ok')
-  for (const skipped of report.skipped) {
-    tasks.toast(t.transfer.skippedFile(baseName(skipped.path), t.transfer.skipped[skipped.reason]), 'error')
-  }
-  noteAdded(report.added.map((a) => a.fileName))
+  if (!(await addFilesToInstance(props.instanceId, props.kind, paths))) return
+  forgetCheck()
   await load()
 }
 

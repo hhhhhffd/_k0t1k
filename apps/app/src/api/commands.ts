@@ -234,7 +234,11 @@ function loadBackend(): Promise<Backend> {
         dragDrop: (cb) =>
           webviewWindow.getCurrentWebviewWindow().onDragDropEvent((e) => {
             const p = e.payload
-            cb(p.type === 'enter' || p.type === 'drop' ? { type: p.type, paths: p.paths } : { type: p.type })
+            if (p.type === 'leave') return cb({ type: 'leave' })
+            // the position is in physical pixels; the device pixel ratio includes the interface zoom
+            const x = p.position.x / window.devicePixelRatio
+            const y = p.position.y / window.devicePixelRatio
+            cb(p.type === 'over' ? { type: 'over', x, y } : { type: p.type, paths: p.paths, x, y })
           }),
       }))
     : import('./mock').then((m) => m.mockBackend)

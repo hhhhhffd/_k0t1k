@@ -538,7 +538,7 @@ export interface PackExportReport {
   overrides: number
 }
 
-export type SkipReason = 'notAFile' | 'unsupportedType' | 'unknownType' | 'worldOrDataPack'
+export type SkipReason = 'notAFile' | 'unsupportedType' | 'unknownType' | 'dataPack'
 
 export interface AddFilesReport {
   added: { fileName: string; kind: ResourceKind }[]
@@ -630,7 +630,8 @@ export interface UploadedLog {
   raw: string
 }
 /** Files dragged over the window (real paths, from Tauri's drag-drop events). */
-export type DragDropEvent = { type: 'enter' | 'drop'; paths: string[] } | { type: 'over' } | { type: 'leave' }
+/** `x`/`y`: cursor position in CSS pixels of the window. */
+export type DragDropEvent = { type: 'enter' | 'drop'; paths: string[]; x: number; y: number } | { type: 'over'; x: number; y: number } | { type: 'leave' }
 
 // ---- plugins (wasm, see docs/ARCHITECTURE.md) ----
 
