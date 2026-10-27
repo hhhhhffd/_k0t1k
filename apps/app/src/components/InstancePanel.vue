@@ -28,7 +28,7 @@ const layout = useLayoutStore()
         </button>
         <div class="flex flex-wrap justify-center gap-1">
           <span class="badge">{{ minecraftVersionOf(instance) }}</span>
-          <span v-if="loaderOf(instance)" class="badge badge-accent">{{ loaderOf(instance)!.label }}</span>
+          <span v-if="loaderOf(instance)" class="badge" :class="loaderOf(instance)!.disabled ? 'text-faint line-through' : 'badge-accent'">{{ loaderOf(instance)!.label }}</span>
           <span v-if="clientOf(instance)" class="badge badge-accent">{{ clientOf(instance)!.label }}</span>
         </div>
       </div>

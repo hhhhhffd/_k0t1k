@@ -29,6 +29,8 @@ export interface InstanceComponent {
   uid: string
   version: string
   dependencyOnly: boolean
+  /** Kept in the list but not launched; absent means enabled. */
+  disabled?: boolean
 }
 
 export interface Playtime {

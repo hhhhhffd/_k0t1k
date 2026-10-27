@@ -65,7 +65,7 @@ pub struct InstanceSettingsUpdate {
 }
 
 fn spec(uid: &str, version: String) -> ComponentSpec {
-    ComponentSpec { uid: uid.to_owned(), version, dependency_only: false }
+    ComponentSpec { uid: uid.to_owned(), version, dependency_only: false, disabled: false }
 }
 
 #[tauri::command]
@@ -179,7 +179,10 @@ pub async fn change_instance_versions(
     let loader_uids = [Loader::Fabric, Loader::Quilt, Loader::Forge, Loader::NeoForge].map(|l| meta_loader(l).uid());
     let mut specs = vec![spec(MINECRAFT_UID, minecraft_version)];
     if let Some(loader) = loader {
-        specs.push(spec(meta_loader(loader.id).uid(), loader.version));
+        let uid = meta_loader(loader.id).uid();
+        // Updating the version of a switched-off loader keeps it switched off.
+        let disabled = current.components.iter().any(|c| c.uid == uid && c.disabled);
+        specs.push(ComponentSpec { disabled, ..spec(uid, loader.version) });
     }
     if let Some(client) = client {
         clients::ensure_terms_accepted(&state, client).await?;
@@ -189,6 +192,39 @@ pub async fn change_instance_versions(
         !c.dependency_only && c.uid != MINECRAFT_UID && !loader_uids.contains(&c.uid.as_str()) && !is_client_uid(&c.uid)
     }));
     // Resolving also checks that every chosen version exists and fits together.
+    let (components, _) = game::resolve(&state.paths, specs.clone()).await?;
+
+    let instance = blocking(move || manager.update(&instance_id, |instance| instance.components = specs)).await?;
+    game::cancel_game_install(&app, &state, &instance.id);
+    game::spawn_game_install(app, state.inner().clone(), instance.clone(), components);
+    Ok(instance.into())
+}
+
+/// Switches a component (the mod loader) off or on without forgetting its version. Enabling downloads
+/// the files the loader needs in the background; resolving first checks that its version still exists.
+#[tauri::command]
+pub async fn set_component_disabled(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    uid: String,
+    disabled: bool,
+) -> CommandResult<InstanceView> {
+    if state.is_running(&instance_id) {
+        return Err(AppError::new("the instance is running; stop it before changing its versions"));
+    }
+    if uid == MINECRAFT_UID {
+        return Err(AppError::new("Minecraft itself cannot be disabled"));
+    }
+    let manager = state.instances.clone();
+    let mut specs = blocking({
+        let (manager, id) = (manager.clone(), instance_id.clone());
+        move || manager.get(&id)
+    })
+    .await?
+    .components;
+    let component = specs.iter_mut().find(|c| c.uid == uid).ok_or_else(|| AppError::new("the instance has no such component"))?;
+    component.disabled = disabled;
     let (components, _) = game::resolve(&state.paths, specs.clone()).await?;
 
     let instance = blocking(move || manager.update(&instance_id, |instance| instance.components = specs)).await?;

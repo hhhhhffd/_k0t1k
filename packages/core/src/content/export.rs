@@ -369,7 +369,7 @@ mod tests {
     use crate::progress::no_progress;
 
     fn component(uid: &str, version: &str) -> ComponentSpec {
-        ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false }
+        ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false, disabled: false }
     }
 
     fn write(game_dir: &Path, relative: &str, content: &str) {

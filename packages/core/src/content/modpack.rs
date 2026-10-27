@@ -314,6 +314,7 @@ fn component(uid: &str, version: &str) -> ComponentSpec {
         uid: uid.to_owned(),
         version: version.to_owned(),
         dependency_only: false,
+        disabled: false,
     }
 }
 

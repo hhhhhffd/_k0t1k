@@ -442,6 +442,7 @@ mod tests {
                 uid: "net.minecraft".to_owned(),
                 version: "1.21.1".to_owned(),
                 dependency_only: false,
+                disabled: false,
             }],
             managed_pack: None,
         }

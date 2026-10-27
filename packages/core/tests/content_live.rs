@@ -417,8 +417,8 @@ async fn modrinth_export_of_a_small_instance_resolves_installed_mods() {
     std::fs::write(game_dir.join("logs/latest.log"), b"log").unwrap();
 
     let components = vec![
-        ComponentSpec { uid: "net.minecraft".into(), version: "1.21.4".into(), dependency_only: false },
-        ComponentSpec { uid: "net.fabricmc.fabric-loader".into(), version: "0.16.9".into(), dependency_only: false },
+        ComponentSpec { uid: "net.minecraft".into(), version: "1.21.4".into(), dependency_only: false, disabled: false },
+        ComponentSpec { uid: "net.fabricmc.fabric-loader".into(), version: "0.16.9".into(), dependency_only: false, disabled: false },
     ];
     let destination = dir.join("export.mrpack");
     let filter = ExportFilter::new(default_excluded());

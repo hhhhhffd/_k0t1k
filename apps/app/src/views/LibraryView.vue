@@ -219,7 +219,7 @@ const { dragging, position: dragPosition } = useFileDrop(async (paths, at) => {
                 drag?.moved && drag.instance.id === inst.id ? 'opacity-40' : '',
                 dropTarget?.id === inst.id ? 'bg-accent/15 ring-2 ring-accent' : '',
               ]"
-              :title="`${minecraftVersionOf(inst)}${loaderOf(inst) ? ` · ${loaderOf(inst)!.label}` : ''}`"
+              :title="`${minecraftVersionOf(inst)}${loaderOf(inst) ? ` · ${loaderOf(inst)!.label}${loaderOf(inst)!.disabled ? ` (${t.version.disabled})` : ''}` : ''}`"
               tabindex="0"
               role="button"
               :aria-pressed="layout.selectedId === inst.id"

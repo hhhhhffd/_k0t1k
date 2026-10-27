@@ -14,7 +14,7 @@ use k0t1k_core::profile::{LaunchProfile, resolve_components};
 use k0t1k_core::progress::no_progress;
 
 fn spec(uid: &str, version: &str) -> ComponentSpec {
-    ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false }
+    ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false, disabled: false }
 }
 
 #[tokio::test]

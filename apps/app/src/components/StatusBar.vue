@@ -19,7 +19,7 @@ const summary = computed(() => {
   const inst = selected.value
   if (!inst) return ''
   const loader = loaderOf(inst)
-  const parts = [`Minecraft ${minecraftVersionOf(inst)}${loader ? ` · ${loader.label} ${loader.version}` : ''}`]
+  const parts = [`Minecraft ${minecraftVersionOf(inst)}${loader ? ` · ${loader.label} ${loader.version}${loader.disabled ? ` (${t.version.disabled})` : ''}` : ''}`]
   parts.push(inst.lastPlayed ? t.status.lastPlayed(formatRelative(inst.lastPlayed), formatPlaytime(inst.playtime.lastSecs)) : t.status.neverPlayed)
   parts.push(t.status.instanceTotal(formatPlaytime(inst.playtime.totalSecs)))
   return parts.join(', ')

@@ -607,6 +607,13 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       i.components = components(a.minecraftVersion as string, (a.loader as CreateInstanceRequest['loader']) ?? undefined, (a.client as ClientId | undefined) ?? undefined)
       return clone(i)
     }
+    case 'set_component_disabled': {
+      const i = findInstance(a.instanceId)
+      const c = i.components.find((c) => c.uid === a.uid)
+      if (!c) throw new Error('the instance has no such component')
+      c.disabled = a.disabled as boolean
+      return clone(i)
+    }
     case 'get_instances_dir': return 'C:\\mock\\instances'
     case 'set_instance_icon': { const i = findInstance(a.instanceId); i.icon = `custom:icon-${Date.now()}.png`; return clone(i) }
     case 'reset_instance_icon': { const i = findInstance(a.instanceId); i.icon = 'default'; return clone(i) }

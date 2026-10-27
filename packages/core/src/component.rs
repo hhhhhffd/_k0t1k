@@ -10,6 +10,10 @@ pub struct ComponentSpec {
     /// Added automatically to satisfy another component's `requires` (LWJGL, intermediary).
     #[serde(default)]
     pub dependency_only: bool,
+    /// Kept in the list (version and mods stay) but skipped when resolving, so the game runs without it.
+    /// Same key as Prism's `mmc-pack.json`; absent means enabled.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub disabled: bool,
 }
 
 pub const MINECRAFT_UID: &str = "net.minecraft";

@@ -187,7 +187,7 @@ mod tests {
         let file: VersionFile =
             serde_json::from_str(&format!(r#"{{"uid":"{uid}","version":"{version}",{json_body}}}"#)).unwrap();
         ResolvedComponent {
-            spec: ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false },
+            spec: ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false, disabled: false },
             file,
         }
     }

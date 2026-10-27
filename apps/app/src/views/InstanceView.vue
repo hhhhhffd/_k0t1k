@@ -96,7 +96,7 @@ const { dragging } = useFileDrop(async (paths) => {
         <h1 class="truncate text-[17px] leading-tight font-bold">{{ instance.name }}</h1>
         <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[12px]">
           <span class="badge">Minecraft {{ minecraftVersionOf(instance) }}</span>
-          <span v-if="loader" class="badge badge-accent">{{ loader.label }} {{ loader.version }}</span>
+          <span v-if="loader" class="badge" :class="loader.disabled ? 'text-faint line-through' : 'badge-accent'" :title="loader.disabled ? t.version.disabled : ''">{{ loader.label }} {{ loader.version }}</span>
           <span v-if="instance.group" class="badge">{{ instance.group }}</span>
           <span class="ml-1 flex items-center gap-1 text-muted"><Clock :size="12" />{{ formatPlaytime(instance.playtime.totalSecs) }}</span>
           <span class="flex items-center gap-1 text-muted"><History :size="12" />{{ formatRelative(instance.lastPlayed) }}</span>

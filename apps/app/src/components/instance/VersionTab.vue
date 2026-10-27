@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowUpCircle, Box, Pencil, Puzzle, Trash2, Wrench } from '@lucide/vue'
+import { ArrowUpCircle, Box, Pencil, Power, Puzzle, Trash2, Wrench } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { listLoaderVersions } from '../../api/commands'
 import { CLIENT_UIDS, COMPONENT_MINECRAFT, LOADER_UIDS, type ClientId, type Instance, type LoaderId, type LoaderVersion } from '../../api/types'
@@ -29,7 +29,7 @@ const rows = computed(() =>
     const clientId = (Object.keys(CLIENT_UIDS) as ClientId[]).find((id) => CLIENT_UIDS[id] === c.uid)
     const name = c.uid === COMPONENT_MINECRAFT ? 'Minecraft' : loaderId ? LOADER_LABELS[loaderId] : clientId ? CLIENT_LABELS[clientId] : c.uid
     const kind = c.uid === COMPONENT_MINECRAFT ? 'minecraft' : loaderId || clientId ? 'loader' : 'other'
-    return { ...c, name, kind }
+    return { ...c, name, kind, off: c.disabled ?? false }
   }),
 )
 
@@ -82,6 +82,13 @@ async function applyEditor() {
 function updateLoader() {
   if (loader.value && newestLoader.value) void apply(minecraftVersionOf(props.instance), { id: loader.value.id, version: newestLoader.value.version })
 }
+async function toggleLoader() {
+  if (!loader.value) return
+  busy.value = true
+  const saved = await tasks.guard(() => store.setComponentDisabled(props.instance.id, LOADER_UIDS[loader.value!.id], !loader.value!.disabled))
+  busy.value = false
+  if (saved) tasks.toast(t.version.changed, 'ok')
+}
 const confirmRemove = ref(false)
 function removeLoader() {
   confirmRemove.value = false
@@ -96,6 +103,10 @@ const actions = computed<PanelAction[]>(() => {
   ]
   if (loader.value && newestLoader.value) {
     list.push({ label: t.version.updateLoader(newestLoader.value.version), icon: ArrowUpCircle, iconClass: 'text-ok', disabled: locked, action: updateLoader })
+  }
+  if (loader.value) {
+    const off = loader.value.disabled
+    list.push({ label: off ? t.version.enableLoader : t.version.disableLoader, icon: Power, iconClass: off ? 'text-ok' : 'text-warn', disabled: locked, action: toggleLoader })
   }
   if (loader.value || client.value) {
     list.push({ label: client.value ? t.version.removeClient : t.version.removeLoader, icon: Trash2, danger: true, disabled: locked, action: () => (confirmRemove.value = true) })
@@ -119,7 +130,7 @@ const actions = computed<PanelAction[]>(() => {
           v-for="row in rows"
           :key="row.uid"
           class="grid w-full grid-cols-[1fr_200px] items-center px-3 py-2 text-left hover:bg-hover disabled:cursor-default"
-          :class="row.dependencyOnly ? 'text-faint' : ''"
+          :class="row.dependencyOnly || row.off ? 'text-faint' : ''"
           :disabled="running || busy || row.kind === 'other'"
           :title="row.kind === 'other' ? '' : t.version.change"
           @dblclick="openEditor"
@@ -130,6 +141,7 @@ const actions = computed<PanelAction[]>(() => {
             <Wrench v-else :size="16" class="shrink-0 text-faint" />
             <span class="truncate font-medium">{{ row.name }}</span>
             <span v-if="row.dependencyOnly" class="badge">{{ t.version.dependency }}</span>
+            <span v-if="row.off" class="badge">{{ t.version.disabled }}</span>
           </span>
           <span class="truncate font-mono text-[12.5px]">{{ row.version }}</span>
         </button>

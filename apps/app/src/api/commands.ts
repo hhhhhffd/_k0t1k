@@ -11,6 +11,7 @@
  *   copy_instance(instanceId, name)                          -> Instance
  *   set_instance_group(instanceId, group: string | null)     -> Instance
  *   update_instance_settings(instanceId, settings: InstanceSettingsUpdate) -> Instance
+ *   set_component_disabled(instanceId, uid, disabled)         -> Instance (switches the loader off/on keeping its version; refused while running; downloads files in the background)
  *   change_instance_versions(instanceId, minecraftVersion, loader: {id, version} | null, client?: ClientId) -> Instance (refused while running; downloads the new game files in the background; a client excludes the loader)
  *   get_instances_dir()                                      -> string  (allows the asset protocol for it; custom icons are files in it)
  *   set_instance_icon(instanceId, path)                      -> Instance  (image file, png/jpeg/gif/webp up to 5 MB; icon becomes `custom:<file>`)
@@ -281,6 +282,8 @@ export const changeInstanceVersions = (
   loader: CreateInstanceRequest['loader'] | null,
   client?: ClientId,
 ) => call<Instance>('change_instance_versions', { instanceId, minecraftVersion, loader, client })
+export const setComponentDisabled = (instanceId: string, uid: string, disabled: boolean) =>
+  call<Instance>('set_component_disabled', { instanceId, uid, disabled })
 export const getInstancesDir = () => call<string>('get_instances_dir')
 export const setInstanceIcon = (instanceId: string, path: string) => call<Instance>('set_instance_icon', { instanceId, path })
 export const resetInstanceIcon = (instanceId: string) => call<Instance>('reset_instance_icon', { instanceId })

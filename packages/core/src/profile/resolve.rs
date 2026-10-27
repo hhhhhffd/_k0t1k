@@ -95,7 +95,9 @@ fn default_version(components: &[ResolvedComponent], needed: &Needed) -> Result<
 /// Completes a component list with the dependencies the components require (LWJGL, Fabric's
 /// intermediary), repeating until nothing changes. The result keeps the apply order; added
 /// components are marked `dependency_only` and placed right before their first dependee.
+/// Disabled components are skipped.
 pub async fn resolve_components(meta: &MetaClient, specs: Vec<ComponentSpec>) -> Result<Vec<ResolvedComponent>> {
+    let specs: Vec<ComponentSpec> = specs.into_iter().filter(|spec| !spec.disabled).collect();
     crate::client::check_exclusive(&specs)?;
     let minecraft_version =
         specs.iter().find(|spec| spec.uid == MINECRAFT_UID).map(|spec| spec.version.clone()).unwrap_or_default();
@@ -129,7 +131,7 @@ pub async fn resolve_components(meta: &MetaClient, specs: Vec<ComponentSpec>) ->
                 (None, _) => {
                     let version = default_version(&components, entry)?;
                     let component =
-                        load(meta, ComponentSpec { uid: entry.uid.clone(), version, dependency_only: true }).await?;
+                        load(meta, ComponentSpec { uid: entry.uid.clone(), version, dependency_only: true, disabled: false }).await?;
                     let at = components
                         .iter()
                         .position(|component| component.spec.uid == entry.dependee)
@@ -170,7 +172,7 @@ mod tests {
     }
 
     async fn minecraft(paths: &Paths, version: &str) -> VersionFile {
-        let spec = ComponentSpec { uid: MINECRAFT_UID.to_owned(), version: version.to_owned(), dependency_only: false };
+        let spec = ComponentSpec { uid: MINECRAFT_UID.to_owned(), version: version.to_owned(), dependency_only: false, disabled: false };
         load(&MetaClient::new(paths, true), spec).await.unwrap().file
     }
 

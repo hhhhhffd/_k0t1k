@@ -15,10 +15,11 @@ export function minecraftVersionOf(inst: Instance): string {
   return inst.components.find((c) => c.uid === COMPONENT_MINECRAFT)?.version ?? '?'
 }
 
-export function loaderOf(inst: Instance): { id: LoaderId; label: string; version: string } | undefined {
+/** The instance's mod loader. A turned-off loader is still returned (its version and mods are kept) with `disabled` set. */
+export function loaderOf(inst: Instance): { id: LoaderId; label: string; version: string; disabled: boolean } | undefined {
   for (const id of Object.keys(LOADER_UIDS) as LoaderId[]) {
     const comp = inst.components.find((c) => c.uid === LOADER_UIDS[id])
-    if (comp) return { id, label: LOADER_LABELS[id], version: comp.version }
+    if (comp) return { id, label: LOADER_LABELS[id], version: comp.version, disabled: comp.disabled ?? false }
   }
   return undefined
 }

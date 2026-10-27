@@ -385,7 +385,10 @@ fn map_prism_components(pack: &[u8]) -> Result<Vec<ComponentSpec>> {
             continue;
         };
         if KNOWN_COMPONENTS.contains(&uid) {
-            components.push(ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false });
+            components.push(ComponentSpec { uid: uid.to_owned(), version: version.to_owned(),
+                dependency_only: false,
+                disabled: entry.get("disabled").and_then(|flag| flag.as_bool()).unwrap_or(false),
+            });
         } else if !entry.get("dependencyOnly").and_then(|flag| flag.as_bool()).unwrap_or(false) {
             tracing::warn!("ignoring unsupported Prism component {uid}");
         }

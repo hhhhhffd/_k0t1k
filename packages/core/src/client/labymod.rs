@@ -366,14 +366,14 @@ mod tests {
         ))
         .unwrap();
         ResolvedComponent {
-            spec: ComponentSpec { uid: MINECRAFT_UID.to_owned(), version: version.to_owned(), dependency_only: false },
+            spec: ComponentSpec { uid: MINECRAFT_UID.to_owned(), version: version.to_owned(), dependency_only: false, disabled: false },
             file,
         }
     }
 
     fn profile(patch: &str, minecraft_version: &str, runtime: RuntimeContext) -> LaunchProfile {
         let laby = ResolvedComponent {
-            spec: ComponentSpec { uid: UID.to_owned(), version: "production".to_owned(), dependency_only: false },
+            spec: ComponentSpec { uid: UID.to_owned(), version: "production".to_owned(), dependency_only: false, disabled: false },
             file: version_file(patch, minecraft_version),
         };
         let mut components = vec![prism_minecraft(minecraft_version), laby];

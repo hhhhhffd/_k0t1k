@@ -43,9 +43,9 @@ pub async fn install_ftb_pack(
     let work = async {
         progress_step(&app, &task, &title, tr("Loading the pack description", "Загрузка описания пакета"), 0, 1);
         let manifest = state.clients.ftb.manifest(pack_id, version_id).await?;
-        let mut specs = vec![ComponentSpec { uid: MINECRAFT_UID.to_owned(), version: manifest.minecraft_version.clone(), dependency_only: false }];
+        let mut specs = vec![ComponentSpec { uid: MINECRAFT_UID.to_owned(), version: manifest.minecraft_version.clone(), dependency_only: false, disabled: false }];
         if let Some(loader) = &manifest.loader {
-            specs.push(ComponentSpec { uid: meta_loader(loader.id).uid().to_owned(), version: loader.version.clone(), dependency_only: false });
+            specs.push(ComponentSpec { uid: meta_loader(loader.id).uid().to_owned(), version: loader.version.clone(), dependency_only: false, disabled: false });
         }
         // Resolving also checks that the pack's Minecraft and loader versions exist.
         let (components, _) = game::resolve(&state.paths, specs.clone()).await?;

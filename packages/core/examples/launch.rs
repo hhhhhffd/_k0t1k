@@ -22,7 +22,7 @@ use k0t1k_core::progress::{ProgressEvent, ProgressFn};
 use k0t1k_core::{Error, Result};
 
 fn spec(uid: &str, version: &str) -> ComponentSpec {
-    ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false }
+    ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false, disabled: false }
 }
 
 #[tokio::main]

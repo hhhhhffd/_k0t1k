@@ -91,6 +91,7 @@ pub fn run() {
             instances::set_instance_group,
             instances::update_instance_settings,
             instances::change_instance_versions,
+            instances::set_component_disabled,
             instances::get_instances_dir,
             instances::set_instance_icon,
             instances::reset_instance_icon,

@@ -231,7 +231,7 @@ mod tests {
     use super::*;
 
     fn spec(uid: &str) -> ComponentSpec {
-        ComponentSpec { uid: uid.to_owned(), version: "1".to_owned(), dependency_only: false }
+        ComponentSpec { uid: uid.to_owned(), version: "1".to_owned(), dependency_only: false, disabled: false }
     }
 
     #[test]

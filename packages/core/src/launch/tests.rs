@@ -21,7 +21,7 @@ fn profile(system: &str, extra: &str) -> LaunchProfile {
     );
     let file: VersionFile = serde_json::from_str(&json).unwrap();
     let component = ResolvedComponent {
-        spec: ComponentSpec { uid: "net.minecraft".to_owned(), version: "1.21.4".to_owned(), dependency_only: false },
+        spec: ComponentSpec { uid: "net.minecraft".to_owned(), version: "1.21.4".to_owned(), dependency_only: false, disabled: false },
         file,
     };
     LaunchProfile::build(&[component], RuntimeContext::new(system, "amd64")).unwrap()

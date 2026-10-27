@@ -30,7 +30,7 @@ fn fixture_client() -> (tempfile::TempDir, MetaClient) {
 }
 
 fn spec(uid: &str, version: &str) -> ComponentSpec {
-    ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false }
+    ComponentSpec { uid: uid.to_owned(), version: version.to_owned(), dependency_only: false, disabled: false }
 }
 
 fn summary(components: &[ResolvedComponent]) -> Vec<(&str, &str, bool)> {
@@ -94,6 +94,19 @@ async fn unused_volatile_dependency_is_dropped() {
     let stale = ComponentSpec { dependency_only: true, ..spec("net.fabricmc.intermediary", "1.21.4") };
     let resolved = resolve_components(&meta, vec![spec("net.minecraft", "1.21.4"), stale]).await.unwrap();
     assert_eq!(summary(&resolved), [("org.lwjgl3", "3.3.3", true), ("net.minecraft", "1.21.4", false)]);
+}
+
+#[tokio::test]
+async fn disabled_loader_is_skipped_but_stays_in_the_spec() {
+    let (_root, meta) = fixture_client();
+    let loader = ComponentSpec { disabled: true, ..spec("net.fabricmc.fabric-loader", "0.16.9") };
+    let resolved = resolve_components(&meta, vec![spec("net.minecraft", "1.21.4"), loader]).await.unwrap();
+    assert_eq!(summary(&resolved), [("org.lwjgl3", "3.3.3", true), ("net.minecraft", "1.21.4", false)]);
+
+    let json = serde_json::to_string(&ComponentSpec { disabled: true, ..spec("a", "1") }).unwrap();
+    assert!(json.contains("\"disabled\":true"));
+    let legacy: ComponentSpec = serde_json::from_str(r#"{"uid":"a","version":"1","dependencyOnly":false}"#).unwrap();
+    assert!(!legacy.disabled);
 }
 
 #[tokio::test]
