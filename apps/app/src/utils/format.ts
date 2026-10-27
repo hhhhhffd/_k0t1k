@@ -103,6 +103,7 @@ export function formatCount(n: number): string {
 /** Deep copy through JSON; structuredClone throws on Vue reactive proxies. */
 export const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
+/** Error text for the user; file names in it may carry Minecraft `§x` formatting codes, which are removed. */
 export function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
+  return plainText(e instanceof Error ? e.message : String(e))
 }

@@ -72,7 +72,7 @@ const toDelete = ref<LocalResource[] | null>(null)
 /** Progress of "update all"; `null` when it is not running. */
 const bulk = ref<{ done: number; total: number } | null>(null)
 
-const displayName = (r: LocalResource) => plainText(r.metadata?.name ?? '') || r.fileName
+const displayName = (r: LocalResource) => plainText(r.metadata?.name ?? '') || plainText(r.fileName)
 const projectOf = (r: LocalResource) => (r.origin ? originProject(r.origin) : undefined)
 
 type SortKey = 'name' | 'modified'
@@ -484,7 +484,7 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
                   </button>
                 </div>
                 <div class="truncate text-[12px] text-faint">
-                  {{ r.fileName }} · {{ r.isDir ? t.instance.folderItem : formatBytes(r.size) }}<template v-if="r.metadata?.authors.length"> · {{ r.metadata.authors.join(', ') }}</template>
+                  {{ plainText(r.fileName) }} · {{ r.isDir ? t.instance.folderItem : formatBytes(r.size) }}<template v-if="r.metadata?.authors.length"> · {{ r.metadata.authors.join(', ') }}</template>
                 </div>
               </div>
               <span class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(r.modified) }}</span>
