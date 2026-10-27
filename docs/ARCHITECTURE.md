@@ -31,7 +31,7 @@ apps/app/src           Vue 3 UI
   symlink. An instance stores the set as `sharedFolders` in `instance.json`; `sharedFoldersDefault` in the
   global settings (default: resourcepacks + shaderpacks) is applied to new and imported instances. Enabling
   moves the instance's existing files into the shared folder (clashes become `name (1).ext`, nothing is
-  overwritten); disabling leaves a real folder with a copy. Deleting or copying an instance never touches or
+  overwritten); disabling leaves an empty real folder (shared content stays only in `shared/`). Deleting or copying an instance never touches or
   duplicates shared content, and modpack installs never overwrite existing files in a linked folder. Old files
   with `shareResourcepacks` are converted on read (true = only resourcepacks). Named pools (different shared
   sets for groups of instances) would go in as a pool id in the shared path (`shared/<pool>/<folder>`), with
@@ -40,7 +40,7 @@ apps/app/src           Vue 3 UI
   save (temp file + rename), which breaks hardlinks and replaces file symlinks, so it is synchronised, not linked.
   `shared/servers.dat` is the master. Enabling merges the instance's entries into it (entries whose address, case-
   insensitive, is missing are appended in order; unknown NBT tags survive), then copies it into the game dir;
-  disabling leaves the instance's copy. Before each launch `launch.rs` copies shared to the game dir and remembers
+  disabling deletes the instance's synchronised copy. Before each launch `launch.rs` copies shared to the game dir and remembers
   the bytes; after the game exits `push_shared` stores the game dir's file in shared if it differs from that
   snapshot. If the shared file changed meanwhile (another session exited first), the exiting session's list wins
   and shared-only entries are appended: nothing is lost, but a deletion made by the earlier session can come back.

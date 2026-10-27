@@ -279,7 +279,7 @@ export const en = {
     notes: 'Notes',
     sharedFolders: 'Shared folders',
     sharedFoldersHint:
-      'An enabled folder is shared by all instances that have it enabled. The instance\'s files are moved into it, nothing is lost. If you turn it off, the instance keeps a copy.',
+      'An enabled folder is shared by all instances that have it enabled. The instance\'s files are moved into it, nothing is lost. If you turn it off, the instance gets an empty folder; the shared files stay in the shared folder.',
     icon: 'Icon',
     pickIcon: 'Choose an image…',
     pickIconTitle: 'Image for the icon',

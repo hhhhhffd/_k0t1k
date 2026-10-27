@@ -13,7 +13,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::fsutil::{copy_dir, create_dir_link, is_link, remove_link, unique_path};
+use super::fsutil::{create_dir_link, is_link, remove_link, unique_path};
 use super::servers;
 use crate::error::{Error, IoContext, Result};
 use crate::paths::Paths;
@@ -90,24 +90,22 @@ pub fn enable_shared(paths: &Paths, game_dir: &Path, folder: SharedFolder) -> Re
     create_dir_link(&shared, &link)
 }
 
-/// Replace the link with a real folder holding a copy of the shared content, so the instance
-/// keeps working with the same files. Does nothing when the folder is not a link.
-pub fn disable_shared(paths: &Paths, game_dir: &Path, folder: SharedFolder) -> Result<()> {
-    // The instance keeps its copy of the server list.
-    if !folder.is_linked() {
-        return Ok(());
-    }
+/// Unlink the folder and leave the instance an empty one of its own: the shared content stays only in
+/// `shared/`, so it does not linger in an instance that no longer shares it. For the server list the
+/// synchronised copy in the game dir is removed. Does nothing when the folder is not shared.
+pub fn disable_shared(_paths: &Paths, game_dir: &Path, folder: SharedFolder) -> Result<()> {
     let link = game_dir.join(folder.dir_name());
+    if !folder.is_linked() {
+        return match std::fs::remove_file(&link) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error).at(&link),
+            _ => Ok(()),
+        };
+    }
     if !is_link(&link) {
         return Ok(());
     }
     remove_link(&link)?;
-    let shared = paths.shared_dir().join(folder.dir_name());
-    if shared.is_dir() {
-        copy_dir(&shared, &link, &|_| false)
-    } else {
-        std::fs::create_dir_all(&link).at(&link)
-    }
+    std::fs::create_dir_all(&link).at(&link)
 }
 
 /// Remove every shared-folder link of a game dir, leaving the shared content untouched. Used before
@@ -168,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn disable_keeps_a_private_copy_and_leaves_shared_intact() {
+    fn disable_leaves_an_empty_folder_and_shared_intact() {
         let (_dir, paths, game) = setup();
         enable_shared(&paths, &game, PACKS).unwrap();
         std::fs::write(game.join("resourcepacks/p.zip"), "pack").unwrap();
@@ -176,11 +174,22 @@ mod tests {
         disable_shared(&paths, &game, PACKS).unwrap();
         let folder = game.join("resourcepacks");
         assert!(!is_link(&folder) && folder.is_dir());
-        assert_eq!(std::fs::read(folder.join("p.zip")).unwrap(), b"pack");
+        assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 0);
         assert!(paths.shared_dir().join("resourcepacks/p.zip").is_file());
 
         // Not a link any more: a second disable is a no-op.
+        std::fs::write(folder.join("own.zip"), "mine").unwrap();
         disable_shared(&paths, &game, PACKS).unwrap();
+        assert!(folder.join("own.zip").is_file());
+    }
+
+    #[test]
+    fn disable_removes_the_synchronised_server_list() {
+        let (_dir, paths, game) = setup();
+        std::fs::write(game.join("servers.dat"), "copy").unwrap();
+        disable_shared(&paths, &game, SharedFolder::Servers).unwrap();
+        assert!(!game.join("servers.dat").exists());
+        disable_shared(&paths, &game, SharedFolder::Servers).unwrap();
     }
 
     #[test]
@@ -209,7 +218,7 @@ mod tests {
 
         disable_shared(&paths, &game, SharedFolder::Screenshots).unwrap();
         assert!(!is_link(&game.join("screenshots")));
-        assert!(game.join("screenshots/a (1).png").is_file());
+        assert!(!game.join("screenshots/a (1).png").exists());
         assert!(is_link(&game.join("shaderpacks")));
     }
 

@@ -281,7 +281,7 @@ impl InstanceManager {
     }
 
     /// Set which folders the instance shares: newly chosen ones are linked (existing local content
-    /// moves into the shared folder), dropped ones become real folders holding a copy.
+    /// moves into the shared folder), dropped ones become empty folders of the instance.
     pub fn set_shared_folders(&self, id: &str, folders: BTreeSet<SharedFolder>) -> Result<Instance> {
         let _guard = self.guard();
         let mut instance = self.get(id)?;
@@ -676,9 +676,9 @@ mod tests {
             // Local content moved into the shared folder; the clash was renamed, nothing overwritten.
             assert_eq!(std::fs::read(paths.shared_dir().join("screenshots/a.png")).unwrap(), b"other");
             assert_eq!(std::fs::read(paths.shared_dir().join("screenshots/a (1).png")).unwrap(), b"mine");
-            // Dropped folder is a real folder with a copy; the shared one stays intact.
+            // Dropped folder is an empty folder of the instance; the shared one stays intact.
             assert!(!is_link(&game.join("shaderpacks")));
-            assert!(game.join("shaderpacks/s.zip").is_file());
+            assert!(!game.join("shaderpacks/s.zip").exists());
             assert!(paths.shared_dir().join("shaderpacks/s.zip").is_file());
 
             let none = manager.set_shared_folders("A", BTreeSet::new()).unwrap();
