@@ -2,40 +2,43 @@
 
 <img src="apps/app/src-tauri/icons/128x128.png" width="128" alt="_k0t1k">
 
-<h1>_k0t1k</h1>
+<h1>_k0t1k — Minecraft Launcher</h1>
 <hr>
 
-**A Minecraft launcher in one place: Prism-level instances, portable with zero system traces, signed self-updates**
+**A Minecraft launcher in one place: Prism-style instances, portable data, Ed25519-signed self-updates**
 
 ![RUST](https://img.shields.io/badge/RUST-2024_edition-DEA584?style=flat-square&logo=rust&logoColor=white)
 ![TAURI](https://img.shields.io/badge/TAURI-2.12-24C8DB?style=flat-square&logo=tauri&logoColor=white)
 ![VUE](https://img.shields.io/badge/VUE-3.5-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)
-![TYPESCRIPT](https://img.shields.io/badge/TYPESCRIPT-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![TAILWIND](https://img.shields.io/badge/TAILWIND-4.3-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
-![WEBASSEMBLY](https://img.shields.io/badge/WEBASSEMBLY-plugins-654FF0?style=flat-square&logo=webassembly&logoColor=white)
 
 [![PAGES](https://img.shields.io/github/actions/workflow/status/hhhhhffd/_k0t1k/pages.yml?style=flat-square&label=PAGES&logo=github&logoColor=white)](https://github.com/hhhhhffd/_k0t1k/actions/workflows/pages.yml)
 [![RELEASE](https://img.shields.io/github/v/release/hhhhhffd/_k0t1k?style=flat-square&label=RELEASE)](https://github.com/hhhhhffd/_k0t1k/releases/latest)
-[![DOWNLOADS](https://img.shields.io/github/downloads/hhhhhffd/_k0t1k/total?style=flat-square&label=DOWNLOADS)](https://github.com/hhhhhffd/_k0t1k/releases)
-![LICENSE](https://img.shields.io/badge/LICENSE-proprietary-lightgrey?style=flat-square)
+[![LICENSE](https://img.shields.io/github/license/hhhhhffd/_k0t1k?style=flat-square&label=LICENSE)](LICENSE)
 
 [Download](https://github.com/hhhhhffd/_k0t1k/releases/latest) · [Website](https://hhhhhffd.github.io/_k0t1k/) · [Architecture](#architecture-deep-dive) · [Build](#setup--deployment) · [Discord](https://discord.gg/zxnMAfUvJ)
 
+English · [Русский](README.ru.md)
+
 </div>
 
-> [!NOTE]
-> _k0t1k is in **open beta**. Report problems on [Discord](https://discord.gg/zxnMAfUvJ).
+## What it is
 
-## Executive Summary
+_k0t1k is a Minecraft Java launcher that aims for Prism Launcher's feature set with a custom UI. A Rust core owns
+every launcher concern (metadata, installs, Java, accounts, content, launching); a thin Tauri 2 shell exposes it to
+a Vue 3 UI. It targets Windows first and also ships a Linux AppImage. It is in open beta.
 
-_k0t1k is a Windows-first Minecraft Java launcher that aims for Prism Launcher's feature set in a lighter, fully
-custom UI. A Rust core owns every launcher concern: metadata, installs, Java, accounts, content and launching.
-A thin Tauri shell exposes that core to a Vue UI.
+![Library view](site/assets/screens/library.webp)
 
-The launcher is portable. Data, the WebView2 profile and managed Java runtimes live next to the exe, so nothing
-is written to the system. It updates itself from signed GitHub Releases. Optional features run as signed,
-sandboxed wasm plugins: RatScan scans mod jars for stealers and RATs, and packconv converts resource packs
-between versions.
+## Highlights
+
+- Rust core of about 21.7K lines and a Tauri 2 shell with 106 typed IPC commands covering instances,
+  Microsoft and ely.by accounts, and Modrinth, CurseForge and FTB content.
+- 318 tests; 5 public releases.
+- Ed25519-signed self-updates with rollback, hash-verified atomic downloads, DPAPI-encrypted account tokens.
+- Optional features run as signed WebAssembly plugins in a sandboxed Web Worker. One of them embeds the RatScan
+  mod-malware scanner, built from [hhhhhffd/ratka_checker](https://github.com/hhhhhffd/ratka_checker).
+
+**Role:** sole developer; AI-assisted development.
 
 | Area | What it does |
 |---|---|
@@ -133,12 +136,13 @@ Full notes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### Use the launcher
 
-1. Download `_k0t1k.exe` from [Releases](https://github.com/hhhhhffd/_k0t1k/releases/latest).
-2. Put it in any folder. Its data is stored next to it.
+1. Download `_k0t1k.exe` (Windows) or `_k0t1k-x86_64.AppImage` (Linux) from [Releases](https://github.com/hhhhhffd/_k0t1k/releases/latest).
+2. Put it in any folder. On Windows its data is stored next to it.
 3. Start it, sign in, create an instance and press Play.
 
 > [!NOTE]
-> Requires Windows 10 or newer with WebView2. The exe is not code-signed yet, so SmartScreen may warn on first start.
+> Windows: 10 or newer with WebView2; the exe is not code-signed yet, so SmartScreen may warn on first start.
+> Linux: x86_64 AppImage for Ubuntu 22.04 or newer and similar systems; make it executable and run it. There is no tray icon on Linux.
 
 ### Build from source
 
@@ -181,15 +185,14 @@ It signs `"_k0t1k-update\n" + version + "\n" + sha256(exe)` with the key in `K0T
 
 </details>
 
-## Deliverables & Links
+## Links
 
 | Item | Link |
 |---|---|
 | Website | https://hhhhhffd.github.io/_k0t1k/ |
 | Releases | https://github.com/hhhhhffd/_k0t1k/releases |
 | Support / bug reports | https://discord.gg/zxnMAfUvJ |
-| Demo video | _TBD_ <!-- TODO: demo video URL --> |
 
 ## License
 
-Proprietary, all rights reserved; the source is published for viewing only. See [LICENSE](LICENSE).
+AGPL-3.0-only. See [LICENSE](LICENSE). Copyright (c) 2026 hhhhhffd.
