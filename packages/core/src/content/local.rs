@@ -266,10 +266,13 @@ pub fn set_enabled(
         let (active, inactive) = (path.join(PACK_MCMETA), disabled_pack_marker(&path));
         let (from, to) = if enabled { (inactive, active) } else { (active, inactive) };
         if to.exists() {
-            if from.exists() {
-                return Err(Error::Other(format!("{file_name} has both {PACK_MCMETA} and {PACK_MCMETA}{DISABLED_SUFFIX}")));
+            if enabled || !from.exists() {
+                return Ok(file_name.to_owned());
             }
-            return Ok(file_name.to_owned());
+            // Both files exist: the live pack.mcmeta is current, the disabled copy is stale. Keep the
+            // stale one under another name instead of failing forever or deleting it.
+            let backup = to.with_file_name(format!("{PACK_MCMETA}{DISABLED_SUFFIX}.old"));
+            std::fs::rename(&to, &backup).at(&backup)?;
         }
         if !from.exists() {
             return Err(Error::Other(format!("{file_name} has no {PACK_MCMETA}")));
@@ -783,6 +786,14 @@ authors = "mezz, others"
         assert_eq!(set_enabled(dir.path(), kind, name, false).unwrap(), name);
         assert_eq!(set_enabled(dir.path(), kind, name, true).unwrap(), name);
         assert!(pack.join("pack.mcmeta").exists() && scan_resources(dir.path(), kind).unwrap()[0].enabled);
+
+        // A stale pack.mcmeta.disabled next to a live pack.mcmeta is set aside, the live file wins.
+        std::fs::write(pack.join("pack.mcmeta.disabled"), b"stale").unwrap();
+        assert_eq!(set_enabled(dir.path(), kind, name, false).unwrap(), name);
+        assert!(!pack.join("pack.mcmeta").exists());
+        assert_eq!(std::fs::read(pack.join("pack.mcmeta.disabled.old")).unwrap(), b"stale");
+        assert_eq!(scan_resources(dir.path(), kind).unwrap()[0].metadata.as_ref().unwrap().description.as_deref(), Some("hi"));
+        assert_eq!(set_enabled(dir.path(), kind, name, true).unwrap(), name);
 
         // Folders without a pack.mcmeta, and other kinds of folders, cannot be toggled.
         std::fs::remove_file(pack.join("pack.mcmeta")).unwrap();
