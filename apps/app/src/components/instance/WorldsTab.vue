@@ -10,14 +10,19 @@ import { useInstancesStore } from '../../stores/instances'
 import { useSettingsStore } from '../../stores/settings'
 import { useTasksStore } from '../../stores/tasks'
 import { formatBytes, formatRelative } from '../../utils/format'
+import { useMarquee } from '../../utils/useMarquee'
+import { useSelection } from '../../utils/useSelection'
+import { useViewMode } from '../../utils/useViewMode'
 import ActionPanel from '../ActionPanel.vue'
 import type { PanelAction } from '../ActionPanel.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContextMenu from '../ContextMenu.vue'
 import type { MenuItem } from '../ContextMenu.vue'
+import MarqueeBox from '../MarqueeBox.vue'
 import ModalDialog from '../ModalDialog.vue'
 import PromptDialog from '../PromptDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
+import ViewToggle from '../ViewToggle.vue'
 import WorldDetail from './WorldDetail.vue'
 
 const props = defineProps<{ instanceId: string }>()
@@ -34,13 +39,24 @@ const renameValue = ref('')
 const renameFolder = ref(false)
 const copying = ref<World | null>(null)
 const backingUp = ref<World | null>(null)
-const deleting = ref<World | null>(null)
-const selected = ref<string | null>(null)
-const current = computed(() => worlds.value.find((w) => w.dirName === selected.value) ?? null)
+const deleting = ref<World[]>([])
+const view = useViewMode('worlds')
+const selected = ref(new Set<string>())
+const selection = useSelection(selected)
+const { box, onPointerDown } = useMarquee(selected)
+const selectedWorlds = computed(() => worlds.value.filter((w) => selected.value.has(w.dirName)))
+/** The world the single-world actions apply to: only when exactly one is selected. */
+const current = computed(() => (selectedWorlds.value.length === 1 ? selectedWorlds.value[0]! : null))
+const order = () => worlds.value.map((w) => w.dirName)
+function onKey(e: KeyboardEvent) {
+  if (selection.onKey(e, order())) return
+  if (e.key === 'Delete' && selectedWorlds.value.length) deleting.value = selectedWorlds.value
+}
 
 async function load() {
   loading.value = true
   worlds.value = (await tasks.guard(() => api.listWorlds(props.instanceId))) ?? []
+  selected.value = new Set(worlds.value.filter((w) => selected.value.has(w.dirName)).map((w) => w.dirName))
   loading.value = false
 }
 onMounted(load)
@@ -86,13 +102,13 @@ async function resetIcon(world: World) {
   if (done) tasks.toast(t.worlds.iconReset, 'ok')
 }
 
-function worldActions(world: World | null): PanelAction[] {
+function worldActions(world: World | null, doomed: World[]): PanelAction[] {
   const none = !world
   return [
     { label: t.worlds.play, icon: Play, disabled: none, title: t.worlds.playHint, action: () => world && play(world) },
     { label: t.worlds.rename, icon: Pencil, disabled: none, action: () => world && startRename(world) },
     { label: t.worlds.copy, icon: Copy, disabled: none, action: () => (copying.value = world) },
-    { label: t.worlds.delete, icon: Trash2, danger: true, disabled: none, action: () => (deleting.value = world) },
+    { label: t.worlds.delete, icon: Trash2, danger: true, disabled: !doomed.length, action: () => (deleting.value = doomed) },
     { label: t.worlds.manageDatapacks, icon: Layers, separatorBefore: true, disabled: none, action: () => world && (opened.value = world.dirName) },
     { label: t.worlds.backup, icon: Archive, disabled: none, action: () => (backingUp.value = world) },
     { label: t.worlds.copySeed, icon: Sprout, disabled: !world?.seed, action: () => world && void copySeed(world) },
@@ -102,7 +118,7 @@ function worldActions(world: World | null): PanelAction[] {
 }
 const panelActions = computed<PanelAction[]>(() => [
   { label: t.worlds.import, icon: Upload, primary: true, action: () => void importZip() },
-  ...worldActions(current.value),
+  ...worldActions(current.value, selectedWorlds.value),
 ])
 const footerActions = computed<PanelAction[]>(() => [
   { label: t.worlds.refresh, icon: RefreshCw, disabled: loading.value, action: () => void load() },
@@ -111,8 +127,10 @@ const footerActions = computed<PanelAction[]>(() => [
 
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 function openMenu(e: MouseEvent, world: World) {
-  selected.value = world.dirName
-  menu.value = { x: e.clientX, y: e.clientY, items: worldActions(world) }
+  if (!selected.value.has(world.dirName)) selected.value = new Set([world.dirName])
+  // Only deleting makes sense for several worlds at once.
+  const items = selectedWorlds.value.length > 1 ? worldActions(null, selectedWorlds.value).filter((a) => a.danger) : worldActions(world, [world])
+  menu.value = { x: e.clientX, y: e.clientY, items }
 }
 
 function startRename(world: World) {
@@ -157,14 +175,15 @@ async function backup(choose: boolean) {
 }
 
 async function confirmDelete() {
-  const world = deleting.value
-  deleting.value = null
-  if (!world) return
-  const done = await change(async () => {
-    await api.deleteWorld(props.instanceId, world.dirName)
-    return true
+  const doomed = deleting.value
+  deleting.value = []
+  if (!doomed.length) return
+  await tasks.guard(async () => {
+    for (const world of doomed) await api.deleteWorld(props.instanceId, world.dirName)
   })
-  if (done && opened.value === world.dirName) opened.value = null
+  // Reload even after a failure: the worlds deleted before it must leave the list.
+  await load()
+  if (opened.value && !worlds.value.some((w) => w.dirName === opened.value)) opened.value = null
 }
 </script>
 
@@ -180,8 +199,20 @@ async function confirmDelete() {
       <div class="flex min-w-0 flex-1 flex-col gap-2">
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!worlds.length" class="py-10 text-center text-faint">{{ t.worlds.empty }}</p>
-        <div v-else class="overflow-hidden rounded-xl border border-line">
-          <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
+        <template v-else>
+        <div class="flex items-center gap-2">
+          <span class="mr-auto text-faint">{{ t.instance.counted(worlds.length) }}<template v-if="selected.size"> · {{ t.instance.selectedCount(selected.size) }}</template></span>
+          <ViewToggle v-model="view" />
+        </div>
+        <div
+          class="!outline-none"
+          :class="view === 'list' ? 'overflow-hidden rounded-xl border border-line' : ''"
+          tabindex="-1"
+          @pointerdown="onPointerDown"
+          @dragstart.prevent
+          @keydown="onKey"
+        >
+          <div v-if="view === 'list'" class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-10 shrink-0" />
             <span class="min-w-0 flex-1">{{ t.worlds.name }} · {{ worlds.length }}</span>
             <span class="w-28 shrink-0">{{ t.worlds.mode }}</span>
@@ -189,18 +220,43 @@ async function confirmDelete() {
             <span class="w-28 shrink-0">{{ t.worlds.lastPlayed }}</span>
             <span class="w-20 shrink-0 text-right">{{ t.worlds.size }}</span>
           </div>
-          <ul role="listbox">
+          <ul role="listbox" aria-multiselectable="true" :class="view === 'tiles' ? 'grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-2.5' : ''">
             <li
               v-for="w in worlds"
               :key="w.dirName"
               role="option"
-              :aria-selected="selected === w.dirName"
-              class="flex cursor-default items-center gap-3 border-b border-line/60 px-3 py-2 last:border-b-0"
-              :class="selected === w.dirName ? 'bg-accent/12' : 'hover:bg-hover'"
-              @click="selected = w.dirName"
+              :data-select-key="w.dirName"
+              :aria-selected="selected.has(w.dirName)"
+              class="flex cursor-default"
+              :class="[
+                view === 'list' ? 'items-center gap-3 border-b border-line/60 px-3 py-2 last:border-b-0' : 'flex-col gap-2 rounded-xl border border-line p-3',
+                selected.has(w.dirName) ? (view === 'list' ? 'bg-accent/12' : 'border-accent bg-accent/12') : 'hover:bg-hover',
+              ]"
+              @click="selection.click(w.dirName, $event, order())"
               @dblclick="opened = w.dirName"
               @contextmenu.prevent="openMenu($event, w)"
             >
+              <div v-if="view === 'tiles'" class="flex items-center gap-2.5">
+                <img v-if="w.icon" :src="w.icon" alt="" class="pixelated size-12 shrink-0 rounded-md" />
+                <span v-else class="pix flex size-12 shrink-0 items-center justify-center bg-ok/15 text-ok"><Globe :size="20" /></span>
+                <span class="min-w-0">
+                  <span class="block truncate font-semibold">{{ w.name }}</span>
+                  <span class="block truncate text-[12px] text-faint">{{ w.dirName }}</span>
+                </span>
+              </div>
+              <template v-if="view === 'tiles'">
+                <div class="flex flex-wrap gap-1.5">
+                  <span v-if="w.gameMode" class="badge">{{ t.worlds.gameModes[w.gameMode] }}</span>
+                  <span v-if="w.hardcore" class="badge border-danger/50 bg-danger/15 text-danger">{{ t.worlds.hardcore }}</span>
+                  <span v-if="w.gameMode === null" class="badge text-warn">{{ t.worlds.unreadable }}</span>
+                  <span v-if="w.versionName" class="badge">{{ w.versionName }}</span>
+                </div>
+                <div class="flex justify-between text-[12px] text-faint">
+                  <span>{{ formatRelative(w.lastPlayed) }}</span>
+                  <span>{{ formatBytes(w.size) }}</span>
+                </div>
+              </template>
+              <template v-else>
               <img v-if="w.icon" :src="w.icon" alt="" class="pixelated size-10 shrink-0 rounded-md" />
               <span v-else class="pix flex size-10 shrink-0 items-center justify-center bg-ok/15 text-ok"><Globe :size="18" /></span>
               <span class="min-w-0 flex-1">
@@ -215,11 +271,14 @@ async function confirmDelete() {
               <span class="w-24 shrink-0 truncate text-[12.5px] text-muted">{{ w.versionName ?? '—' }}</span>
               <span class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(w.lastPlayed) }}</span>
               <span class="w-20 shrink-0 text-right text-[12.5px] text-faint">{{ formatBytes(w.size) }}</span>
+              </template>
             </li>
           </ul>
         </div>
-        <p v-if="worlds.length" class="text-[12px] text-faint">{{ t.worlds.selectionHint }}</p>
+        <p class="text-[12px] text-faint">{{ t.worlds.selectionHint }}</p>
+        </template>
       </div>
+      <MarqueeBox :box="box" />
       <ActionPanel :actions="panelActions" :footer="footerActions" />
     </div>
 
@@ -260,11 +319,11 @@ async function confirmDelete() {
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
 
     <ConfirmDialog
-      v-if="deleting"
-      :title="t.worlds.deleteTitle"
-      :text="t.worlds.deleteText(deleting.name)"
+      v-if="deleting.length"
+      :title="deleting.length > 1 ? t.worlds.deleteMany(deleting.length) : t.worlds.deleteTitle"
+      :text="deleting.length > 1 ? deleting.map((w) => w.name).join(', ') : t.worlds.deleteText(deleting[0]!.name)"
       @confirm="confirmDelete"
-      @close="deleting = null"
+      @close="deleting = []"
     />
   </div>
 </template>
