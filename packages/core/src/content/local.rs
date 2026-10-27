@@ -7,6 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use serde::Serialize;
 use serde_json::Value;
 
+use super::nested_pack;
 use super::packwiz::{self, PwMod};
 use super::{Loader, ResourceKind};
 use crate::error::{Error, IoContext, Result};
@@ -42,6 +43,9 @@ pub struct LocalResource {
     pub metadata: Option<ResourceMetadata>,
     /// Where the file came from, when a packwiz index describes it.
     pub origin: Option<PwMod>,
+    /// A resource or data pack whose `pack.mcmeta` is inside extra folders (`"Folder/"`), so Minecraft
+    /// does not see it. Name, description and icon are read from there.
+    pub nested_root: Option<String>,
 }
 
 fn is_pack_kind(kind: ResourceKind) -> bool {
@@ -102,7 +106,13 @@ pub fn scan_resources(game_dir: &Path, kind: ResourceKind) -> Result<Vec<LocalRe
                 None
             }
         };
+        let nested_root = if is_pack_kind(kind) && (file_type.is_dir() || lower.ends_with(".zip") || lower.ends_with(".zip.disabled")) {
+            nested_pack::nested_root_of(&path)
+        } else {
+            None
+        };
         resources.push(LocalResource {
+            nested_root,
             enabled: if file_type.is_dir() && is_pack_kind(kind) {
                 !disabled_pack_marker(&path).exists() || path.join(PACK_MCMETA).exists()
             } else {
@@ -137,6 +147,8 @@ fn read_metadata(
             parse_pack(std::fs::File::open(path).at(path)?, stem)
         }
         ResourceKind::ResourcePack | ResourceKind::DataPack => {
+            let nested = nested_pack::folder_nested_root(path).unwrap_or_default();
+            let path = &path.join(nested);
             let icon_png = std::fs::read(path.join("pack.png")).ok();
             let mcmeta = match std::fs::read(path.join(PACK_MCMETA)) {
                 Ok(bytes) => bytes,
@@ -297,6 +309,21 @@ pub fn set_enabled(
     Ok(new_name)
 }
 
+/// Makes a resource or data pack with an extra top folder loadable: a zip is rewritten with the folder
+/// as its root, a folder pack has its content moved up. Returns whether the pack needed fixing; on
+/// failure the pack is unchanged.
+pub fn fix_nested_pack(game_dir: &Path, kind: ResourceKind, file_name: &str) -> Result<bool> {
+    if !is_pack_kind(kind) {
+        return Err(Error::Other(format!("{file_name} is not a pack")));
+    }
+    let path = resource_path(game_dir, kind, file_name)?;
+    if path.is_dir() {
+        nested_pack::fix_folder(&path)
+    } else {
+        nested_pack::fix_zip(&path)
+    }
+}
+
 /// Deletes the file (or folder) together with its packwiz index entry.
 pub fn delete_resource(game_dir: &Path, kind: ResourceKind, file_name: &str) -> Result<()> {
     let path = resource_path(game_dir, kind, file_name)?;
@@ -347,10 +374,15 @@ pub fn parse_mod_jar(reader: impl Read + Seek) -> Result<Option<ResourceMetadata
 
 fn parse_pack(reader: impl Read + Seek, stem: &str) -> Result<Option<ResourceMetadata>> {
     let mut archive = zip::ZipArchive::new(reader)?;
-    let Some(mcmeta) = read_entry(&mut archive, "pack.mcmeta")? else {
+    let mut names = Vec::with_capacity(archive.len());
+    for name in archive.file_names() {
+        names.push(name?.into_owned());
+    }
+    let root = nested_pack::zip_nested_root(&names).unwrap_or_default();
+    let Some(mcmeta) = read_entry(&mut archive, &format!("{root}pack.mcmeta"))? else {
         return Ok(None);
     };
-    pack_metadata(&mcmeta, stem, read_entry(&mut archive, "pack.png")?)
+    pack_metadata(&mcmeta, stem, read_entry(&mut archive, &format!("{root}pack.png"))?)
 }
 
 fn pack_metadata(
@@ -813,5 +845,39 @@ authors = "mezz, others"
         assert_eq!(read_resource(dir.path(), kind, "a (1.21) (2).zip", 10).unwrap(), b"2");
         assert!(read_resource(dir.path(), kind, "a (1.21) (2).zip", 0).is_err());
         assert!(write_resource_new(dir.path(), kind, "../x.zip", b"3").is_err());
+    }
+
+    #[test]
+    fn nested_packs_are_listed_with_their_metadata_and_fixed() {
+        let dir = tempfile::tempdir().unwrap();
+        let kind = ResourceKind::ResourcePack;
+        let packs = dir.path().join("resourcepacks");
+        std::fs::create_dir_all(packs.join("folder/Inner")).unwrap();
+        std::fs::write(packs.join("folder/Inner/pack.mcmeta"), br#"{"pack":{"description":"in folder"}}"#).unwrap();
+        std::fs::write(
+            packs.join("a.zip.disabled"),
+            zip_of(&[("Top/pack.mcmeta", br#"{"pack":{"description":"in zip"}}"#), ("Top/pack.png", b"P")]).into_inner(),
+        )
+        .unwrap();
+        std::fs::write(packs.join("ok.zip"), zip_of(&[("pack.mcmeta", b"{}")]).into_inner()).unwrap();
+
+        let found = scan_resources(dir.path(), kind).unwrap();
+        let by_name = |name: &str| found.iter().find(|resource| resource.file_name == name).unwrap();
+        assert_eq!(by_name("a.zip.disabled").nested_root.as_deref(), Some("Top/"));
+        assert_eq!(by_name("a.zip.disabled").metadata.as_ref().unwrap().description.as_deref(), Some("in zip"));
+        assert_eq!(by_name("a.zip.disabled").metadata.as_ref().unwrap().icon_png.as_deref(), Some(&b"P"[..]));
+        assert_eq!(by_name("folder").nested_root.as_deref(), Some("Inner/"));
+        assert_eq!(by_name("folder").metadata.as_ref().unwrap().description.as_deref(), Some("in folder"));
+        assert_eq!(by_name("ok.zip").nested_root, None);
+
+        assert!(fix_nested_pack(dir.path(), kind, "a.zip.disabled").unwrap());
+        assert!(fix_nested_pack(dir.path(), kind, "folder").unwrap());
+        assert!(!fix_nested_pack(dir.path(), kind, "ok.zip").unwrap());
+        assert!(fix_nested_pack(dir.path(), ResourceKind::Mod, "ok.zip").is_err());
+        let found = scan_resources(dir.path(), kind).unwrap();
+        assert!(found.iter().all(|resource| resource.nested_root.is_none()));
+        assert_eq!(found[0].file_name, "a.zip.disabled");
+        assert_eq!(found[0].metadata.as_ref().unwrap().description.as_deref(), Some("in zip"));
+        assert!(packs.join("folder/pack.mcmeta").is_file());
     }
 }

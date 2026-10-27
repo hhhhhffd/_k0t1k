@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::ResourceKind;
+use super::{ResourceKind, nested_pack};
 use crate::error::{IoContext, Result};
 use crate::instance::fsutil::unique_path;
 use crate::instance::worlds;
@@ -42,6 +42,8 @@ pub struct SkippedFile {
 pub struct AddFilesReport {
     pub added: Vec<AddedFile>,
     pub skipped: Vec<SkippedFile>,
+    /// Resource packs that were zipped with an extra top folder and have been repaired on the way in.
+    pub fixed_nested: Vec<String>,
 }
 
 fn extension_of(path: &Path) -> String {
@@ -60,10 +62,15 @@ pub fn identify_file(path: &Path) -> Result<Option<ResourceKind>> {
 }
 
 fn identify_zip(path: &Path) -> Result<Option<ResourceKind>> {
-    let mut archive = zip::ZipArchive::new(File::open(path).at(path)?)?;
+    let archive = zip::ZipArchive::new(File::open(path).at(path)?)?;
     let (mut shaders, mut level, mut mcmeta, mut assets, mut data) = (false, false, false, false, false);
-    for index in 0..archive.len() {
-        let name = archive.by_index(index)?.name()?.into_owned();
+    let mut names = Vec::with_capacity(archive.len());
+    for name in archive.file_names() {
+        names.push(name?.into_owned());
+    }
+    // A pack zipped with an extra top folder is still a pack.
+    let root = nested_pack::zip_nested_root(&names).unwrap_or_default();
+    for name in names.iter().filter_map(|name| name.strip_prefix(&root)) {
         shaders |= name.starts_with("shaders/");
         level |= name == "level.dat";
         mcmeta |= name == "pack.mcmeta";
@@ -134,10 +141,15 @@ pub fn add_local_files(game_dir: &Path, kind: Option<ResourceKind>, paths: &[Pat
         std::fs::create_dir_all(&folder).at(&folder)?;
         let destination = unique_path(&folder, &file_name);
         std::fs::copy(path, &destination).at(&destination)?;
-        report.added.push(AddedFile {
-            file_name: destination.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or(file_name),
-            kind: target_kind,
-        });
+        let added_name = destination.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or(file_name);
+        if target_kind == ResourceKind::ResourcePack {
+            match nested_pack::fix_zip(&destination) {
+                Ok(true) => report.fixed_nested.push(added_name.clone()),
+                Ok(false) => {}
+                Err(error) => tracing::warn!("cannot fix the layout of {}: {error}", destination.display()),
+            }
+        }
+        report.added.push(AddedFile { file_name: added_name, kind: target_kind });
     }
     Ok(report)
 }
@@ -214,5 +226,23 @@ mod tests {
         let report = add_local_files(&game_dir, Some(ResourceKind::ResourcePack), &[notes, source.join("world.zip")]).unwrap();
         assert_eq!(report.added.len(), 1);
         assert_eq!(report.skipped.len(), 1);
+    }
+
+    #[test]
+    fn resource_packs_with_an_extra_folder_are_repaired_when_added() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("game");
+        let nested = zip_with(dir.path(), "nested.zip", &["Pack/pack.mcmeta", "Pack/assets/a"]);
+        assert_eq!(identify_file(&nested).unwrap(), Some(ResourceKind::ResourcePack));
+
+        let report = add_local_files(&game_dir, None, std::slice::from_ref(&nested)).unwrap();
+        assert_eq!(report.fixed_nested, ["nested.zip"]);
+        let mut archive = zip::ZipArchive::new(File::open(game_dir.join("resourcepacks/nested.zip")).unwrap()).unwrap();
+        assert!(archive.by_name("pack.mcmeta").is_ok() && archive.by_name("assets/a").is_ok());
+        // The dropped file itself is not touched.
+        assert!(zip::ZipArchive::new(File::open(&nested).unwrap()).unwrap().by_name("Pack/pack.mcmeta").is_ok());
+
+        let report = add_local_files(&game_dir, Some(ResourceKind::Mod), &[nested]).unwrap();
+        assert!(report.fixed_nested.is_empty());
     }
 }
