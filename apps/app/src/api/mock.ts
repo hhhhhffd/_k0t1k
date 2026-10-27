@@ -762,6 +762,12 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       if (idx >= 0) list.splice(idx, 1)
       return undefined
     }
+    case 'fix_nested_pack': {
+      const r = resourcesFor(a.instanceId as string, a.kind as LocalResourceKind).find((x) => x.fileName === a.fileName)
+      const had = !!r?.nestedRoot
+      if (r) r.nestedRoot = null
+      return had
+    }
     case 'check_updates': {
       await sleep(700)
       return resourcesFor(a.instanceId as string, a.kind as LocalResourceKind)
@@ -948,7 +954,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     }
     case 'add_local_files_to_instance': {
       findInstance(a.instanceId)
-      const report: AddFilesReport = { added: [], skipped: [] }
+      const report: AddFilesReport = { added: [], skipped: [], fixedNested: [] }
       for (const path of a.paths as string[]) {
         const fileName = path.split(/[\\/]/).pop() ?? path
         const extension = fileName.split('.').pop()?.toLowerCase()

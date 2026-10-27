@@ -23,6 +23,7 @@ import {
   ListOrdered,
   Lock,
   LockOpen,
+  PackageCheck,
   RefreshCw,
   Repeat,
   Search,
@@ -234,6 +235,13 @@ const convertPack = (r: LocalResource) =>
     return { ...(await packs.convert(props.instanceId, r.fileName, target)), title: t.packs.convertTo(target) }
   })
 const repairPack = (r: LocalResource) => runPackTool(async () => ({ ...(await packs.repair(props.instanceId, r.fileName)), title: t.packs.repair }))
+async function fixNested(items: LocalResource[]) {
+  let fixed = 0
+  await forEach(items, async (r) => {
+    if (await api.fixNestedPack(props.instanceId, props.kind, r.fileName)) fixed++
+  })
+  if (fixed) tasks.toast(t.packs.fixedCount(fixed), 'ok')
+}
 const targetVersion = ref<string | null>(null)
 watch(
   () => [props.instanceId, props.kind],
@@ -408,6 +416,13 @@ const selectionActions = computed<PanelAction[]>(() => {
         title: t.packs.mismatchHint,
         action: () => zip && void convertPack(zip),
       },
+      {
+        label: t.packs.fixNested,
+        icon: PackageCheck,
+        disabled: !items.some((r) => r.nestedRoot),
+        title: t.packs.fixNestedHint,
+        action: () => void fixNested(items.filter((r) => r.nestedRoot)),
+      },
       { label: t.packs.repair, icon: Wrench, disabled: packBusy.value || !zip, title: t.packs.repairHint, action: () => zip && void repairPack(zip) },
     )
   }
@@ -545,6 +560,7 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
                   <span v-if="kind === 'resourcePack' && mismatchOf(r)?.mismatch" class="badge badge-warn" :title="t.packs.mismatchHint">
                     {{ t.packs.madeFor(mismatchOf(r)!.madeFor ?? '?') }}
                   </span>
+                  <span v-if="kind === 'resourcePack' && r.nestedRoot" class="badge badge-warn" :title="t.packs.nestedBadgeHint(r.nestedRoot)">{{ t.packs.nestedBadge }}</span>
                   <button v-if="updates.has(r.fileName)" class="badge badge-accent cursor-pointer" :disabled="!!bulk" :title="t.instance.updateTo" @click.stop="applyUpdate(r)">
                     <ArrowUpCircle :size="12" />{{ updates.get(r.fileName)!.latest.versionNumber }}
                   </button>

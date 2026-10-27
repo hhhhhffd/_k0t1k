@@ -82,6 +82,7 @@
  *   list_local_resources(instanceId, kind: LocalResourceKind) -> LocalResource[]
  *   toggle_resource(instanceId, kind, fileName, enabled)     -> void
  *   delete_resource(instanceId, kind, fileName)              -> void
+ *   fix_nested_pack(instanceId, kind, fileName)              -> boolean  (moves a pack with an extra top folder to the root; false when nothing to fix)
  *   open_content_folder(instanceId, kind: ResourceKind)      -> void     (mods/resourcepacks/shaderpacks/saves; created when missing)
  *   open_config_folder(instanceId)                           -> void     (the game's config folder; created when missing)
  *   check_updates(instanceId, kind: LocalResourceKind)       -> AvailableUpdate[]
@@ -379,6 +380,8 @@ export const toggleResource = (
 ) => call<void>('toggle_resource', { instanceId, kind, fileName, enabled })
 export const deleteResource = (instanceId: string, kind: LocalResourceKind, fileName: string) =>
   call<void>('delete_resource', { instanceId, kind, fileName })
+export const fixNestedPack = (instanceId: string, kind: LocalResourceKind, fileName: string) =>
+  call<boolean>('fix_nested_pack', { instanceId, kind, fileName })
 export const openContentFolder = (instanceId: string, kind: LocalResourceKind | 'world') =>
   call<void>('open_content_folder', { instanceId, kind })
 export const openConfigFolder = (instanceId: string) => call<void>('open_config_folder', { instanceId })

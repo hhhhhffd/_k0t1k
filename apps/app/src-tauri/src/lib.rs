@@ -146,6 +146,7 @@ pub fn run() {
             content::open_config_folder,
             content::toggle_resource,
             content::delete_resource,
+            content::fix_nested_pack,
             content::check_updates,
             content::import_modpack_file,
             content::install_modpack_version,

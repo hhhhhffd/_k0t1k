@@ -74,6 +74,7 @@ pub struct LocalResourceView {
     modified: Option<chrono::DateTime<chrono::Utc>>,
     metadata: Option<ResourceMetadataView>,
     origin: Option<PwMod>,
+    nested_root: Option<String>,
 }
 
 impl From<LocalResource> for LocalResourceView {
@@ -94,6 +95,7 @@ impl From<LocalResource> for LocalResourceView {
                 loader: metadata.loader,
             }),
             origin: resource.origin,
+            nested_root: resource.nested_root,
         }
     }
 }
@@ -242,6 +244,13 @@ pub async fn toggle_resource(
 ) -> CommandResult<()> {
     let game_dir = instance_of(&state, &instance_id).await?.game_dir(&state.paths);
     blocking(move || core_content::set_enabled(&game_dir, kind, &file_name, enabled).map(|_| ())).await
+}
+
+/// Repairs a resource or data pack zipped (or placed) with an extra top folder.
+#[tauri::command]
+pub async fn fix_nested_pack(state: State<'_, AppState>, instance_id: String, kind: ResourceKind, file_name: String) -> CommandResult<bool> {
+    let game_dir = instance_of(&state, &instance_id).await?.game_dir(&state.paths);
+    blocking(move || core_content::fix_nested_pack(&game_dir, kind, &file_name)).await
 }
 
 #[tauri::command]

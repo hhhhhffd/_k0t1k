@@ -375,6 +375,8 @@ export interface LocalResource {
   modified: string | null
   metadata: ResourceMetadata | null
   origin: PwMod | null
+  /** The pack's `pack.mcmeta` lies inside this extra folder (`"Folder/"`), so Minecraft does not see the pack. */
+  nestedRoot?: string | null
 }
 
 export interface AvailableUpdate {
@@ -548,6 +550,8 @@ export type SkipReason = 'notAFile' | 'unsupportedType' | 'unknownType' | 'dataP
 export interface AddFilesReport {
   added: { fileName: string; kind: ResourceKind }[]
   skipped: { path: string; reason: SkipReason }[]
+  /** Resource packs that came zipped with an extra top folder and were repaired when added. */
+  fixedNested: string[]
 }
 
 /** `targetPath`s of blocked files that are now in the instance, and those still missing. */

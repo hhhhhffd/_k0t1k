@@ -21,6 +21,7 @@ export async function addFilesToInstance(instanceId: string, kind: LocalResource
   const report = await tasks.guard(() => addLocalFiles(instanceId, kind, paths))
   if (!report) return undefined
   if (report.added.length) tasks.toast(t.transfer.addedFiles(report.added.length), 'ok')
+  for (const name of report.fixedNested) tasks.toast(t.packs.fixedOnAdd(name), 'ok')
   for (const skipped of report.skipped) {
     tasks.toast(t.transfer.skippedFile(baseName(skipped.path), t.transfer.skipped[skipped.reason]), 'error')
   }
