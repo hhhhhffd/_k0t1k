@@ -8,9 +8,10 @@ use futures::{StreamExt, TryStreamExt, stream};
 use serde::{Deserialize, Serialize};
 
 use super::modrinth::HashAlgorithm;
+use super::murmur2;
 use super::packwiz::{self, PwMod};
-use super::{Clients, DependencyKind, Loader, Platform, ProjectVersion, ResourceKind, VersionFile};
-use crate::download::{Checksum, download_checked};
+use super::{Clients, DependencyKind, Loader, Platform, Project, ProjectVersion, ResourceKind, VersionFile};
+use crate::download::{Checksum, download_checked, sha1_file};
 use crate::error::{Error, IoContext, Result};
 use crate::progress::{ProgressEvent, ProgressFn};
 
@@ -315,14 +316,113 @@ async fn install_one(
     Ok(())
 }
 
-/// Checks every installed resource of `kind` that has a packwiz index (and no update lock) for a newer
-/// version. Modrinth entries are checked in one batch per hash type, CurseForge ones per project.
-/// CurseForge entries are skipped when `clients` has no CurseForge client.
+/// Gives files that were added by hand (no packwiz index) an index when Modrinth (by SHA-1) or
+/// CurseForge (by murmur2 fingerprint) knows them, like Prism's metadata update before an update check.
+/// Afterwards they show their catalog and can be updated. Returns how many files were identified.
+pub async fn identify_local_files(clients: &Clients, game_dir: &std::path::Path, kind: ResourceKind) -> Result<usize> {
+    let index_dir = packwiz::index_dir(game_dir, kind);
+    let indexed: HashSet<String> = packwiz::list(&index_dir)?.into_iter().map(|entry| entry.data.filename).collect();
+    let folder = game_dir.join(kind.folder());
+    let mut unknown: Vec<(String, PathBuf)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&folder) {
+        for entry in entries {
+            let entry = entry.at(&folder)?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let base = name.strip_suffix(".disabled").unwrap_or(&name).to_owned();
+            let is_file = entry.file_type().at(entry.path())?.is_file();
+            if is_file && !name.starts_with('.') && !base.ends_with(".pw.toml") && !indexed.contains(&base) {
+                unknown.push((base, entry.path()));
+            }
+        }
+    }
+    if unknown.is_empty() {
+        return Ok(0);
+    }
+
+    // Modrinth first, in one batch.
+    let mut by_sha1: HashMap<String, usize> = HashMap::new();
+    for (index, (_, path)) in unknown.iter().enumerate() {
+        by_sha1.insert(sha1_file(path).await?, index);
+    }
+    let hashes: Vec<String> = by_sha1.keys().cloned().collect();
+    let versions = clients.modrinth.versions_by_hashes(&hashes, HashAlgorithm::Sha1).await?;
+    let mut found: Vec<(usize, ProjectVersion, String)> = versions
+        .into_iter()
+        .filter_map(|(hash, version)| Some((*by_sha1.get(&hash)?, version, hash)))
+        .collect();
+    let mut projects = fetch_projects(clients, Platform::Modrinth, &found).await?;
+
+    // The rest on CurseForge, when a key is configured.
+    if let Some(curseforge) = &clients.curseforge {
+        let matched: HashSet<usize> = found.iter().map(|(index, ..)| *index).collect();
+        let mut by_fingerprint: HashMap<u32, usize> = HashMap::new();
+        for (index, (_, path)) in unknown.iter().enumerate().filter(|(index, _)| !matched.contains(index)) {
+            by_fingerprint.insert(murmur2::fingerprint_file(path)?, index);
+        }
+        let fingerprints: Vec<u32> = by_fingerprint.keys().copied().collect();
+        let from_curseforge: Vec<(usize, ProjectVersion, String)> = curseforge
+            .versions_by_fingerprints(&fingerprints)
+            .await?
+            .into_iter()
+            .filter_map(|(fingerprint, version)| Some((*by_fingerprint.get(&fingerprint)?, version, String::new())))
+            .collect();
+        projects.extend(fetch_projects(clients, Platform::CurseForge, &from_curseforge).await?);
+        found.extend(from_curseforge);
+    }
+
+    let mut identified = 0;
+    for (index, version, sha1) in found {
+        let (local_name, _) = &unknown[index];
+        let Some(project) = projects.get(&(version.platform, version.project_id.clone())) else {
+            continue;
+        };
+        // The file the hash matched; CurseForge versions carry a single file.
+        let Some(file) = version
+            .files
+            .iter()
+            .find(|file| sha1.is_empty() || file.hashes.sha1.as_deref() == Some(sha1.as_str()))
+        else {
+            continue;
+        };
+        let mut data = PwMod::new(project, &version, file, false)?;
+        // The index must name the file as it is on disk, which may differ from the catalog's name.
+        data.filename = local_name.clone();
+        packwiz::write(&index_dir, &project.slug, &data)?;
+        identified += 1;
+    }
+    Ok(identified)
+}
+
+/// The projects of `found`, keyed by platform and id.
+async fn fetch_projects(
+    clients: &Clients,
+    platform: Platform,
+    found: &[(usize, ProjectVersion, String)],
+) -> Result<HashMap<(Platform, String), Project>> {
+    let mut ids: Vec<String> = found.iter().map(|(_, version, _)| version.project_id.clone()).collect();
+    ids.sort();
+    ids.dedup();
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let projects = match (platform, &clients.curseforge) {
+        (Platform::Modrinth, _) => clients.modrinth.projects(&ids).await?,
+        (Platform::CurseForge, Some(curseforge)) => curseforge.projects(&ids).await?,
+        (Platform::CurseForge, None) => Vec::new(),
+    };
+    Ok(projects.into_iter().map(|project| ((platform, project.id.clone()), project)).collect())
+}
+
+/// Identifies hand-added files first ([`identify_local_files`]), then checks every installed resource of
+/// `kind` that has a packwiz index (and no update lock) for a newer version. Modrinth entries are checked
+/// in one batch per hash type, CurseForge ones per project. CurseForge entries are skipped when `clients`
+/// has no CurseForge client.
 pub async fn check_updates(
     clients: &Clients,
     ctx: &InstallContext,
     kind: ResourceKind,
 ) -> Result<Vec<AvailableUpdate>> {
+    identify_local_files(clients, &ctx.game_dir, kind).await?;
     let entries = packwiz::list(&packwiz::index_dir(&ctx.game_dir, kind))?;
     let loaders = ctx.loaders_for(kind);
     let game_versions = [ctx.game_version.clone()];

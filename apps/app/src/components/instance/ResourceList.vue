@@ -1,3 +1,11 @@
+<script lang="ts">
+import type { AvailableUpdate } from '../../api/types'
+
+/** Results of the automatic update check per `instance:kind`, so switching tabs does not ask the catalogs again. */
+const updateCache = new Map<string, { at: number; updates: AvailableUpdate[] }>()
+const UPDATE_CHECK_TTL_MS = 10 * 60 * 1000
+</script>
+
 <script setup lang="ts">
 import {
   ArrowDown,
@@ -5,7 +13,6 @@ import {
   ArrowUpCircle,
   ArrowUpFromLine,
   Ban,
-  Check,
   CircleCheck,
   Download,
   ExternalLink,
@@ -27,7 +34,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { computed, onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
 import { isTauri } from '../../api/commands'
-import type { AvailableUpdate, BlockedFile, JarScan, LocalResource, LocalResourceKind } from '../../api/types'
+import type { BlockedFile, JarScan, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n'
 import { usePacksStore, type PackResult } from '../../stores/packs'
 import { badgeOf, useRatscanStore } from '../../stores/ratscan'
@@ -65,13 +72,9 @@ const bulk = ref<{ done: number; total: number } | null>(null)
 
 const displayName = (r: LocalResource) => plainText(r.metadata?.name ?? '') || r.fileName
 const projectOf = (r: LocalResource) => (r.origin ? originProject(r.origin) : undefined)
-const sourceOf = (r: LocalResource) => {
-  const project = projectOf(r)
-  return project ? PLATFORM_LABELS[project.platform] : t.instance.localSource
-}
 
 // ---- sorting (column headers) ----
-type SortKey = 'name' | 'version' | 'source' | 'modified'
+type SortKey = 'name' | 'modified'
 const sortKey = ref<SortKey>('name')
 const sortAsc = ref(true)
 function sortBy(key: SortKey) {
@@ -83,8 +86,6 @@ function sortBy(key: SortKey) {
 }
 const sortValue: Record<SortKey, (r: LocalResource) => string> = {
   name: displayName,
-  version: (r) => r.metadata?.version ?? '',
-  source: sourceOf,
   modified: (r) => r.modified ?? '',
 }
 
@@ -101,7 +102,6 @@ const selected = ref(new Set<string>())
 let anchor: string | null = null
 const selectedItems = computed(() => resources.value.filter((r) => selected.value.has(r.fileName)))
 const single = computed(() => (selectedItems.value.length === 1 ? selectedItems.value[0]! : null))
-const allVisibleSelected = computed(() => visible.value.length > 0 && visible.value.every((r) => selected.value.has(r.fileName)))
 
 function select(r: LocalResource, e: MouseEvent) {
   const next = new Set(e.ctrlKey || e.metaKey || e.shiftKey ? selected.value : [])
@@ -117,15 +117,6 @@ function select(r: LocalResource, e: MouseEvent) {
   if (!e.shiftKey) anchor = r.fileName
   selected.value = next
 }
-function toggleOne(r: LocalResource) {
-  const next = new Set(selected.value)
-  if (!next.delete(r.fileName)) next.add(r.fileName)
-  anchor = r.fileName
-  selected.value = next
-}
-function toggleAll() {
-  selected.value = allVisibleSelected.value ? new Set() : new Set(visible.value.map((r) => r.fileName))
-}
 function onKey(e: KeyboardEvent) {
   if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault()
@@ -139,19 +130,28 @@ function onKey(e: KeyboardEvent) {
 
 async function load() {
   loading.value = true
-  updates.value = new Map()
   resources.value = (await tasks.guard(() => api.listLocalResources(props.instanceId, props.kind))) ?? []
   // Keep the selection of files that still exist (a toggle renames `x` to `x.disabled`, so match the base name too).
   const base = (name: string) => name.replace(/\.disabled$/, '')
   const kept = new Set([...selected.value].map(base))
   selected.value = new Set(resources.value.filter((r) => kept.has(base(r.fileName))).map((r) => r.fileName))
+  const present = new Set(resources.value.map((r) => r.fileName))
+  updates.value = new Map([...updates.value].filter(([name]) => present.has(name)))
   loading.value = false
   // Badges are an extra: a failure to read them must not hide the list.
   const extras = props.kind === 'mod' ? ratscan.refresh(props.instanceId) : props.kind === 'resourcePack' ? packs.refresh(props.instanceId) : undefined
   extras?.catch((e: unknown) => console.warn('cannot read the plugin results', e))
 }
-onMounted(load)
-watch(() => [props.instanceId, props.kind], load)
+/** Lists the files, then checks for updates on its own unless a check of the last minutes is cached. */
+async function openTab() {
+  updates.value = new Map()
+  await load()
+  const cached = updateCache.get(cacheKey())
+  if (cached && Date.now() - cached.at < UPDATE_CHECK_TTL_MS) updates.value = new Map(cached.updates.map((u) => [u.fileName, u]))
+  else if (resources.value.length) await checkUpdates(true)
+}
+onMounted(openTab)
+watch(() => [props.instanceId, props.kind], openTab)
 watch(() => packs.changed, load)
 
 // ---- RatScan (mods) ----
@@ -212,13 +212,30 @@ async function confirmDelete() {
   if (items) await forEach(items, (r) => api.deleteResource(props.instanceId, props.kind, r.fileName))
 }
 
-async function checkUpdates() {
+const cacheKey = () => `${props.instanceId}:${props.kind}`
+/** Changes to the files make the cached check stale. */
+const forgetCheck = () => updateCache.delete(cacheKey())
+
+/**
+ * Identifies hand-added files on Modrinth/CurseForge (they get catalog metadata) and looks for newer
+ * versions. `silent` is the automatic check when the tab opens: it reports nothing when all is up to date.
+ */
+async function checkUpdates(silent = false) {
+  if (checking.value) return
   checking.value = true
-  const found = await tasks.guard(() => api.checkUpdates(props.instanceId, props.kind))
+  const found = await (silent
+    ? api.checkUpdates(props.instanceId, props.kind).catch((e: unknown) => {
+        console.warn('automatic update check failed', e)
+        return undefined
+      })
+    : tasks.guard(() => api.checkUpdates(props.instanceId, props.kind)))
   checking.value = false
   if (!found) return
+  updateCache.set(cacheKey(), { at: Date.now(), updates: found })
   updates.value = new Map(found.map((u) => [u.fileName, u]))
-  if (!found.length) tasks.toast(t.instance.noUpdates, 'ok')
+  // identified files now show their catalog
+  await load()
+  if (!silent && !found.length) tasks.toast(t.instance.noUpdates, 'ok')
 }
 
 async function applyUpdate(r: LocalResource) {
@@ -229,6 +246,8 @@ async function applyUpdate(r: LocalResource) {
   tasks.showBlocked(report.blocked, props.instanceId)
   // core replaces the old file of an already installed project, so nothing is deleted here
   tasks.toast(t.instance.updated, 'ok')
+  forgetCheck()
+  updates.value = new Map([...updates.value].filter(([name]) => name !== r.fileName))
   noteAdded(report.installed.map((i) => i.fileName))
   await load()
 }
@@ -250,6 +269,8 @@ async function updateAll() {
     bulk.value.done++
   }
   bulk.value = null
+  forgetCheck()
+  updates.value = new Map()
   tasks.showBlocked(blocked, props.instanceId)
   if (updated) tasks.toast(t.updates.updatedAll(updated), 'ok')
   await load()
@@ -257,6 +278,7 @@ async function updateAll() {
 
 /** New files: scan jars in the background, offer to convert packs made for another version. */
 function noteAdded(fileNames: string[]) {
+  forgetCheck()
   if (props.kind === 'mod') ratscan.scanAdded(props.instanceId, fileNames)
   else if (props.kind === 'resourcePack') void packs.offerConversion(props.instanceId, fileNames)
 }
@@ -394,8 +416,6 @@ function openMenu(r: LocalResource, e: MouseEvent) {
 
 const columns: { key: SortKey; label: () => string; class: string }[] = [
   { key: 'name', label: () => t.instance.columns.name, class: '' },
-  { key: 'version', label: () => t.instance.columns.version, class: 'w-32' },
-  { key: 'source', label: () => t.instance.columns.source, class: 'w-28' },
   { key: 'modified', label: () => t.instance.columns.modified, class: 'w-28' },
 ]
 </script>
@@ -421,16 +441,6 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
         <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.instance.noResources }}</p>
         <div v-else class="card overflow-hidden !outline-none" tabindex="0" role="listbox" aria-multiselectable="true" @keydown="onKey">
           <div class="flex items-center gap-3 border-b border-line bg-raised px-3 py-1.5 text-[12px] font-semibold text-muted">
-            <button
-              role="checkbox"
-              class="tick"
-              :class="{ on: allVisibleSelected }"
-              :aria-checked="allVisibleSelected"
-              :aria-label="t.instance.selectAll"
-              @click="toggleAll"
-            >
-              <Check v-if="allVisibleSelected" :size="12" :stroke-width="3.5" />
-            </button>
             <span class="w-9 shrink-0" />
             <span class="w-9 shrink-0" />
             <button
@@ -455,16 +465,6 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
               @click="select(r, $event)"
               @contextmenu.prevent="openMenu(r, $event)"
             >
-              <button
-                role="checkbox"
-                class="tick"
-                :class="{ on: selected.has(r.fileName) }"
-                :aria-checked="selected.has(r.fileName)"
-                :aria-label="displayName(r)"
-                @click.stop="toggleOne(r)"
-              >
-                <Check v-if="selected.has(r.fileName)" :size="12" :stroke-width="3.5" />
-              </button>
               <span class="flex w-9 shrink-0" @click.stop>
                 <ToggleSwitch :model-value="r.enabled" :label="t.common.enabled" @update:model-value="setEnabled([r], $event)" />
               </span>
@@ -475,6 +475,9 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
               <div class="min-w-0 flex-1" :class="r.enabled ? '' : 'opacity-60'">
                 <div class="flex items-center gap-1.5">
                   <span class="truncate font-semibold">{{ displayName(r) }}</span>
+                  <span v-if="r.metadata?.version" class="badge shrink-0">{{ r.metadata.version }}</span>
+                  <span v-if="projectOf(r)" class="badge badge-accent shrink-0">{{ PLATFORM_LABELS[projectOf(r)!.platform] }}</span>
+                  <span v-else class="badge shrink-0" :title="t.instance.localSourceHint">{{ t.instance.localSource }}</span>
                   <Lock v-if="isLocked(r)" :size="12" class="shrink-0 text-warn" :title="t.updates.lock" />
                   <button
                     v-if="kind === 'mod' && jarsByName.get(r.fileName)?.scan"
@@ -494,8 +497,6 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
                   {{ r.fileName }} · {{ r.isDir ? t.instance.folderItem : formatBytes(r.size) }}<template v-if="r.metadata?.authors.length"> · {{ r.metadata.authors.join(', ') }}</template>
                 </div>
               </div>
-              <span class="w-32 shrink-0 truncate text-[12.5px] text-muted" :title="r.metadata?.version ?? ''">{{ r.metadata?.version ?? '—' }}</span>
-              <span class="w-28 shrink-0 truncate text-[12.5px]" :class="r.origin ? 'text-accent' : 'text-faint'" :title="r.origin ? '' : t.instance.localSourceHint">{{ sourceOf(r) }}</span>
               <span class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(r.modified) }}</span>
             </li>
           </ul>
@@ -544,25 +545,3 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
   </div>
 </template>
 
-<style scoped>
-/* selection box, drawn like CheckBox.vue */
-.tick {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 1px solid var(--c-line);
-  background: var(--c-base);
-  color: var(--c-accent-fg);
-}
-.tick.on {
-  border-color: var(--c-accent);
-  background: var(--c-accent);
-}
-.tick:focus-visible {
-  outline: 2px solid var(--c-accent);
-}
-</style>
