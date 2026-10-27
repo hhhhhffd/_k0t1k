@@ -8,6 +8,7 @@ import CrashDialog from './components/CrashDialog.vue'
 import LaunchScanDialog from './components/LaunchScanDialog.vue'
 import MainToolbar from './components/MainToolbar.vue'
 import RelocationNotice from './components/RelocationNotice.vue'
+import SizeGrip from './components/SizeGrip.vue'
 import StatusBar from './components/StatusBar.vue'
 import TitleBar from './components/TitleBar.vue'
 import TaskBar from './components/TaskBar.vue'
@@ -67,5 +68,6 @@ onMounted(async () => {
     <CrashDialog v-if="onboarding === null" />
     <LaunchScanDialog />
     <ToastHost />
+    <SizeGrip />
   </div>
 </template>
