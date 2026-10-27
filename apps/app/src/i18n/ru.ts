@@ -415,6 +415,7 @@ export const ru: Dictionary = {
     delete: 'Удалить скриншот?',
     sharedNote: 'Скриншоты лежат в общей папке и видны во всех экземплярах, где она включена.',
     count: (n: number) => `Скриншотов: ${n}`,
+    deleteMany: (n: number) => `Удалить скриншоты: ${n}?`,
   },
   servers: {
     players: 'Игроки',

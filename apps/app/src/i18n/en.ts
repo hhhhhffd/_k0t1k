@@ -414,6 +414,7 @@ export const en = {
     delete: 'Delete screenshot?',
     sharedNote: 'Screenshots are in a shared folder and show in every instance that has it enabled.',
     count: (n: number) => `Screenshots: ${n}`,
+    deleteMany: (n: number) => `Delete ${n} screenshots?`,
   },
   servers: {
     players: 'Players',
