@@ -141,7 +141,7 @@ channel), not a Prism meta package, and it excludes the loaders and other client
   failures are only logged at debug level and the next state change reconnects. Setting: `discord.enabled`
   (default true), read when a game starts.
 
-- Server status is a Server List Ping over TCP in `instance/servers.rs` (5 s timeout, no SRV lookup).
+- Server status is a Server List Ping over TCP in `instance/servers.rs` (5 s timeout; an address without a port follows its `_minecraft._tcp` SRV record through `hickory-resolver`, and all resolved addresses are dialled concurrently, IPv4 first).
 
 ## Data directory (portable)
 

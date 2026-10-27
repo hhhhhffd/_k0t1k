@@ -373,7 +373,6 @@ export const ru: Dictionary = {
     moveUp: 'Выше',
     moveDown: 'Ниже',
     delete: 'Удалить сервер?',
-    srvNote: 'Если сервер не отвечает, попробуйте указать порт в адресе.',
     noName: 'Сервер Minecraft',
     play: 'Играть',
     playOn: 'Запустить игру и сразу подключиться к серверу',

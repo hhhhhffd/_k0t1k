@@ -125,7 +125,6 @@ async function confirmDelete() {
         <button class="btn btn-ghost btn-icon text-muted hover:!text-danger" :aria-label="t.common.delete" @click="deleting = i"><Trash2 :size="15" /></button>
       </li>
     </ul>
-    <p class="text-[12px] text-faint">{{ t.servers.srvNote }}</p>
 
     <ModalDialog v-if="editing" :title="t.servers.editTitle" :width="440" @close="editing = null">
       <div class="flex flex-col gap-3">

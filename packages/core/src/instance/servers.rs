@@ -3,8 +3,15 @@
 //! favicon, `hidden` and tags of newer versions survive. The game rewrites the file when it exits, so
 //! callers must refuse to edit while the instance is running.
 
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
+
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
+use hickory_resolver::TokioResolver;
+use hickory_resolver::proto::rr::RData;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,6 +27,10 @@ use crate::paths::Paths;
 const SERVERS_FILE: &str = "servers.dat";
 const DEFAULT_PORT: u16 = 25565;
 const PING_TIMEOUT: Duration = Duration::from_secs(5);
+/// An SRV lookup that takes longer falls back to the plain host, like the game does.
+const SRV_TIMEOUT: Duration = Duration::from_secs(2);
+/// Head start of an IPv4 connection attempt over the next address (Happy Eyeballs style).
+const CONNECT_STAGGER: Duration = Duration::from_millis(250);
 /// A status response is a few hundred bytes plus an optional 64x64 favicon; this only stops a
 /// server from making the launcher buffer an unbounded amount.
 const MAX_RESPONSE: usize = 1024 * 1024;
@@ -317,8 +328,8 @@ fn packet(id: i32, body: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Splits `host`, `host:port`, `[v6]` and `[v6]:port`; the port defaults to 25565.
-fn split_address(address: &str) -> Result<(String, u16)> {
+/// Splits `host`, `host:port`, `[v6]` and `[v6]:port`; the port is `None` when the address has none.
+fn split_address(address: &str) -> Result<(String, Option<u16>)> {
     let address = address.trim();
     let bad_port = |port: &str| Error::Other(format!("{port:?} is not a valid port"));
     let (host, port) = if let Some(rest) = address.strip_prefix('[') {
@@ -333,10 +344,7 @@ fn split_address(address: &str) -> Result<(String, u16)> {
     if host.is_empty() {
         return Err(Error::Other("the server address is empty".into()));
     }
-    let port = match port {
-        Some(port) => port.parse().map_err(|_| bad_port(port))?,
-        None => DEFAULT_PORT,
-    };
+    let port = port.map(|port| port.parse().map_err(|_| bad_port(port))).transpose()?;
     Ok((host.to_owned(), port))
 }
 
@@ -407,8 +415,59 @@ fn parse_status(json: &str, latency: Duration) -> Result<ServerStatus> {
     })
 }
 
+/// The `_minecraft._tcp` SRV target of `host` (lowest priority, highest weight), as the game resolves a
+/// server address without a port. `None` when there is no record or DNS fails.
+async fn srv_target(host: &str) -> Option<(String, u16)> {
+    static RESOLVER: OnceLock<Option<TokioResolver>> = OnceLock::new();
+    let resolver = RESOLVER
+        .get_or_init(|| {
+            let mut builder = TokioResolver::builder_tokio().ok()?;
+            let options = builder.options_mut();
+            options.timeout = SRV_TIMEOUT;
+            options.attempts = 1;
+            builder.build().ok()
+        })
+        .as_ref()?;
+    let name = format!("_minecraft._tcp.{}.", host.trim_end_matches('.'));
+    let lookup = tokio::time::timeout(SRV_TIMEOUT, resolver.srv_lookup(name)).await.ok()?.ok()?;
+    lookup
+        .answers()
+        .iter()
+        .filter_map(|record| match &record.data {
+            RData::SRV(srv) => Some(srv),
+            _ => None,
+        })
+        .min_by_key(|srv| (srv.priority, std::cmp::Reverse(srv.weight)))
+        .map(|srv| (srv.target.to_utf8().trim_end_matches('.').to_owned(), srv.port))
+        .filter(|(target, _)| !target.is_empty())
+}
+
+/// Connects to every address of `host` at once, IPv4 first with a short head start for each, and keeps
+/// the first that answers: a host whose first address is unreachable (often IPv6) does not stall the ping.
+async fn connect_fastest(host: &str, port: u16) -> Result<TcpStream> {
+    let mut addresses: Vec<SocketAddr> = tokio::net::lookup_host((host, port)).await.map_err(ping_io)?.collect();
+    addresses.sort_by_key(|address| address.is_ipv6());
+    addresses.dedup();
+    let mut attempts: FuturesUnordered<_> = addresses
+        .into_iter()
+        .enumerate()
+        .map(|(index, address)| async move {
+            tokio::time::sleep(CONNECT_STAGGER * u32::try_from(index).unwrap_or(u32::MAX)).await;
+            TcpStream::connect(address).await
+        })
+        .collect();
+    let mut last_error = None;
+    while let Some(attempt) = attempts.next().await {
+        match attempt {
+            Ok(stream) => return Ok(stream),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(last_error.map_or_else(|| Error::Other(format!("{host} has no address")), ping_io))
+}
+
 async fn ping_exchange(host: &str, port: u16) -> Result<ServerStatus> {
-    let mut stream = TcpStream::connect((host, port)).await.map_err(ping_io)?;
+    let mut stream = connect_fastest(host, port).await?;
     let started = Instant::now();
     stream.write_all(&handshake(host, port)).await.map_err(ping_io)?;
     stream.write_all(&packet(0, &[])).await.map_err(ping_io)?;
@@ -447,13 +506,17 @@ async fn ping_exchange(host: &str, port: u16) -> Result<ServerStatus> {
     Ok(status)
 }
 
-/// Asks the server for its status (Server List Ping). `address` is `host` or `host:port`. SRV records
-/// (`_minecraft._tcp`) are not resolved: a server that relies on one is pinged on the default port.
+/// Asks the server for its status (Server List Ping). `address` is `host` or `host:port`; without a port
+/// the `_minecraft._tcp` SRV record is followed first, like the game does (e.g. `hypixel.net`).
 pub async fn ping(address: &str) -> Result<ServerStatus> {
     let (host, port) = split_address(address)?;
-    tokio::time::timeout(PING_TIMEOUT, ping_exchange(&host, port))
-        .await
-        .map_err(|_| Error::Other(format!("{address} did not answer within {} s", PING_TIMEOUT.as_secs())))?
+    tokio::time::timeout(PING_TIMEOUT, async {
+        let srv = if port.is_some() || host.parse::<IpAddr>().is_ok() { None } else { srv_target(&host).await };
+        let (host, port) = srv.unwrap_or((host, port.unwrap_or(DEFAULT_PORT)));
+        ping_exchange(&host, port).await
+    })
+    .await
+    .map_err(|_| Error::Other(format!("{address} did not answer within {} s", PING_TIMEOUT.as_secs())))?
 }
 
 #[cfg(test)]
@@ -601,11 +664,11 @@ mod tests {
 
     #[test]
     fn addresses_are_split_with_the_default_port() {
-        assert_eq!(split_address("mc.example.com").unwrap(), ("mc.example.com".into(), 25565));
-        assert_eq!(split_address(" mc.example.com:1234 ").unwrap(), ("mc.example.com".into(), 1234));
-        assert_eq!(split_address("[::1]:99").unwrap(), ("::1".into(), 99));
-        assert_eq!(split_address("[::1]").unwrap(), ("::1".into(), 25565));
-        assert_eq!(split_address("::1").unwrap(), ("::1".into(), 25565));
+        assert_eq!(split_address("mc.example.com").unwrap(), ("mc.example.com".into(), None));
+        assert_eq!(split_address(" mc.example.com:1234 ").unwrap(), ("mc.example.com".into(), Some(1234)));
+        assert_eq!(split_address("[::1]:99").unwrap(), ("::1".into(), Some(99)));
+        assert_eq!(split_address("[::1]").unwrap(), ("::1".into(), None));
+        assert_eq!(split_address("::1").unwrap(), ("::1".into(), None));
         assert!(split_address("host:abc").is_err());
         assert!(split_address(":25565").is_err());
         assert!(split_address("").is_err());

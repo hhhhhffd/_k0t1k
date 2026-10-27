@@ -372,7 +372,6 @@ export const en = {
     moveUp: 'Move up',
     moveDown: 'Move down',
     delete: 'Delete server?',
-    srvNote: 'If the server does not answer, try adding the port to the address.',
     noName: 'Minecraft server',
     play: 'Play',
     playOn: 'Launch the game and join this server',

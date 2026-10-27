@@ -24,6 +24,8 @@ toml = "1"
 flate2 = "1"
 base64 = "0.23"
 ed25519-dalek = "3"
+# SRV records (`_minecraft._tcp`) for the server list ping; std and tokio only resolve A/AAAA.
+hickory-resolver = "0.26.3"
 
 [dev-dependencies]
 tempfile = "3"
