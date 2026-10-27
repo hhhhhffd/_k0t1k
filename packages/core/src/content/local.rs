@@ -31,7 +31,11 @@ pub struct LocalResource {
     /// Name on disk, including a trailing `.disabled` when the resource is disabled.
     pub file_name: String,
     pub enabled: bool,
+    /// Bytes of a file; 0 for a folder (an unpacked resource or shader pack).
     pub size: u64,
+    pub is_dir: bool,
+    /// Last modification time on disk.
+    pub modified: Option<chrono::DateTime<chrono::Utc>>,
     pub metadata: Option<ResourceMetadata>,
     /// Where the file came from, when a packwiz index describes it.
     pub origin: Option<PwMod>,
@@ -76,11 +80,9 @@ pub fn scan_resources(game_dir: &Path, kind: ResourceKind) -> Result<Vec<LocalRe
         }
 
         let file_type = entry.file_type().at(&path)?;
-        let size = if file_type.is_file() {
-            entry.metadata().at(&path)?.len()
-        } else {
-            0
-        };
+        let entry_metadata = entry.metadata().at(&path)?;
+        let size = if file_type.is_file() { entry_metadata.len() } else { 0 };
+        let modified = entry_metadata.modified().ok().map(chrono::DateTime::<chrono::Utc>::from);
         let metadata = match read_metadata(&path, kind, base_name(&file_name)) {
             Ok(metadata) => metadata,
             Err(error) => {
@@ -91,6 +93,8 @@ pub fn scan_resources(game_dir: &Path, kind: ResourceKind) -> Result<Vec<LocalRe
         resources.push(LocalResource {
             enabled: !file_name.ends_with(DISABLED_SUFFIX),
             size,
+            is_dir: file_type.is_dir(),
+            modified,
             metadata,
             origin: index
                 .iter()

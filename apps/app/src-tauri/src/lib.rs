@@ -141,6 +141,7 @@ pub fn run() {
             content::install_version,
             content::list_local_resources,
             content::open_content_folder,
+            content::open_config_folder,
             content::toggle_resource,
             content::delete_resource,
             content::check_updates,

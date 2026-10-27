@@ -1,5 +1,28 @@
 <script setup lang="ts">
-import { ArrowUpCircle, ArrowUpFromLine, Download, ExternalLink, FilePlus, FolderOpen, History, ListOrdered, Lock, LockOpen, RefreshCw, Search, ShieldCheck, Trash2, Wrench } from '@lucide/vue'
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpCircle,
+  ArrowUpFromLine,
+  Ban,
+  Check,
+  CircleCheck,
+  Download,
+  ExternalLink,
+  FilePlus,
+  FolderCog,
+  FolderOpen,
+  History,
+  ListOrdered,
+  Lock,
+  LockOpen,
+  RefreshCw,
+  Repeat,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Wrench,
+} from '@lucide/vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { computed, onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
@@ -10,11 +33,14 @@ import { usePacksStore, type PackResult } from '../../stores/packs'
 import { badgeOf, useRatscanStore } from '../../stores/ratscan'
 import { useTasksStore } from '../../stores/tasks'
 import { openExternal } from '../../utils/external'
-import { errorMessage, formatBytes, originProject, PLATFORM_LABELS } from '../../utils/format'
+import { errorMessage, formatBytes, formatRelative, originProject, plainText, PLATFORM_LABELS } from '../../utils/format'
 import { baseName } from '../../utils/useFileDrop'
+import ActionPanel from '../ActionPanel.vue'
+import type { PanelAction } from '../ActionPanel.vue'
 import ChangeVersionDialog from '../ChangeVersionDialog.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContentDialog from '../ContentDialog.vue'
+import ContextMenu from '../ContextMenu.vue'
 import ModalDialog from '../ModalDialog.vue'
 import ModListDialog from '../ModListDialog.vue'
 import ScanDetailsDialog from '../ScanDetailsDialog.vue'
@@ -33,21 +59,92 @@ const loading = ref(true)
 const filter = ref('')
 const updates = ref<Map<string, AvailableUpdate>>(new Map())
 const checking = ref(false)
-const toDelete = ref<LocalResource | null>(null)
+const toDelete = ref<LocalResource[] | null>(null)
 /** Progress of "update all"; `null` when it is not running. */
 const bulk = ref<{ done: number; total: number } | null>(null)
 
+const displayName = (r: LocalResource) => plainText(r.metadata?.name ?? '') || r.fileName
+const projectOf = (r: LocalResource) => (r.origin ? originProject(r.origin) : undefined)
+const sourceOf = (r: LocalResource) => {
+  const project = projectOf(r)
+  return project ? PLATFORM_LABELS[project.platform] : t.instance.localSource
+}
+
+// ---- sorting (column headers) ----
+type SortKey = 'name' | 'version' | 'source' | 'modified'
+const sortKey = ref<SortKey>('name')
+const sortAsc = ref(true)
+function sortBy(key: SortKey) {
+  if (sortKey.value === key) sortAsc.value = !sortAsc.value
+  else {
+    sortKey.value = key
+    sortAsc.value = key !== 'modified'
+  }
+}
+const sortValue: Record<SortKey, (r: LocalResource) => string> = {
+  name: displayName,
+  version: (r) => r.metadata?.version ?? '',
+  source: sourceOf,
+  modified: (r) => r.modified ?? '',
+}
+
 const visible = computed(() => {
   const needle = filter.value.trim().toLowerCase()
-  return resources.value.filter(
-    (r) => !needle || r.fileName.toLowerCase().includes(needle) || r.metadata?.name.toLowerCase().includes(needle),
-  )
+  const value = sortValue[sortKey.value]
+  return resources.value
+    .filter((r) => !needle || r.fileName.toLowerCase().includes(needle) || displayName(r).toLowerCase().includes(needle))
+    .sort((a, b) => value(a).localeCompare(value(b), undefined, { numeric: true, sensitivity: 'base' }) * (sortAsc.value ? 1 : -1))
 })
+
+// ---- selection: click, Ctrl+click toggles, Shift+click selects a range ----
+const selected = ref(new Set<string>())
+let anchor: string | null = null
+const selectedItems = computed(() => resources.value.filter((r) => selected.value.has(r.fileName)))
+const single = computed(() => (selectedItems.value.length === 1 ? selectedItems.value[0]! : null))
+const allVisibleSelected = computed(() => visible.value.length > 0 && visible.value.every((r) => selected.value.has(r.fileName)))
+
+function select(r: LocalResource, e: MouseEvent) {
+  const next = new Set(e.ctrlKey || e.metaKey || e.shiftKey ? selected.value : [])
+  if (e.shiftKey && anchor) {
+    const names = visible.value.map((x) => x.fileName)
+    const [from, to] = [names.indexOf(anchor), names.indexOf(r.fileName)].sort((a, b) => a - b)
+    if (from! >= 0) names.slice(from, to! + 1).forEach((name) => next.add(name))
+  } else if ((e.ctrlKey || e.metaKey) && next.has(r.fileName)) {
+    next.delete(r.fileName)
+  } else {
+    next.add(r.fileName)
+  }
+  if (!e.shiftKey) anchor = r.fileName
+  selected.value = next
+}
+function toggleOne(r: LocalResource) {
+  const next = new Set(selected.value)
+  if (!next.delete(r.fileName)) next.add(r.fileName)
+  anchor = r.fileName
+  selected.value = next
+}
+function toggleAll() {
+  selected.value = allVisibleSelected.value ? new Set() : new Set(visible.value.map((r) => r.fileName))
+}
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    selected.value = new Set(visible.value.map((r) => r.fileName))
+  } else if (e.key === 'Delete' && selectedItems.value.length) {
+    toDelete.value = selectedItems.value
+  } else if (e.key === 'Escape') {
+    selected.value = new Set()
+  }
+}
 
 async function load() {
   loading.value = true
   updates.value = new Map()
   resources.value = (await tasks.guard(() => api.listLocalResources(props.instanceId, props.kind))) ?? []
+  // Keep the selection of files that still exist (a toggle renames `x` to `x.disabled`, so match the base name too).
+  const base = (name: string) => name.replace(/\.disabled$/, '')
+  const kept = new Set([...selected.value].map(base))
+  selected.value = new Set(resources.value.filter((r) => kept.has(base(r.fileName))).map((r) => r.fileName))
   loading.value = false
   // Badges are an extra: a failure to read them must not hide the list.
   const extras = props.kind === 'mod' ? ratscan.refresh(props.instanceId) : props.kind === 'resourcePack' ? packs.refresh(props.instanceId) : undefined
@@ -69,27 +166,24 @@ const badgeClass = { clean: 'badge-ok', suspicious: 'badge-warn', dangerous: 'ba
 const badgeText = computed(() => ({ clean: t.scan.clean, suspicious: t.scan.suspicious, dangerous: t.scan.dangerous, unknown: t.scan.unknown }))
 
 // ---- packconv (resource packs) ----
-const packBusy = ref<string | null>(null)
+const packBusy = ref(false)
 const packResult = ref<(PackResult & { title: string }) | null>(null)
 const isZipPack = (r: LocalResource) => props.kind === 'resourcePack' && /\.zip(\.disabled)?$/i.test(r.fileName)
-async function convertPack(r: LocalResource) {
-  packBusy.value = r.fileName
-  const result = await tasks.guard(async () => {
+const mismatchOf = (r: LocalResource) => packs.compat[props.instanceId]?.[r.fileName]
+async function runPackTool(action: () => Promise<PackResult & { title: string }>) {
+  packBusy.value = true
+  const result = await tasks.guard(action)
+  packBusy.value = false
+  if (result) packResult.value = result
+  await load()
+}
+const convertPack = (r: LocalResource) =>
+  runPackTool(async () => {
     const target = await packs.targetFor(props.instanceId)
     if (!target) throw new Error(t.packs.noTarget)
     return { ...(await packs.convert(props.instanceId, r.fileName, target)), title: t.packs.convertTo(target) }
   })
-  packBusy.value = null
-  if (result) packResult.value = result
-  await load()
-}
-async function repairPack(r: LocalResource) {
-  packBusy.value = r.fileName
-  const result = await tasks.guard(async () => ({ ...(await packs.repair(props.instanceId, r.fileName)), title: t.packs.repair }))
-  packBusy.value = null
-  if (result) packResult.value = result
-  await load()
-}
+const repairPack = (r: LocalResource) => runPackTool(async () => ({ ...(await packs.repair(props.instanceId, r.fileName)), title: t.packs.repair }))
 const targetVersion = ref<string | null>(null)
 watch(
   () => [props.instanceId, props.kind],
@@ -99,23 +193,23 @@ watch(
   { immediate: true },
 )
 
-async function toggle(r: LocalResource, enabled: boolean) {
-  const ok = await tasks.guard(async () => {
-    await api.toggleResource(props.instanceId, props.kind, r.fileName, enabled)
-    return true
+/** Runs `action` for each file in turn and reloads once; the first failure stops the rest. */
+async function forEach(items: LocalResource[], action: (r: LocalResource) => Promise<void>) {
+  await tasks.guard(async () => {
+    for (const r of items) await action(r)
   })
-  if (ok) await load()
+  await load()
 }
+const setEnabled = (items: LocalResource[], enabled: boolean) =>
+  forEach(
+    items.filter((r) => r.enabled !== enabled),
+    (r) => api.toggleResource(props.instanceId, props.kind, r.fileName, enabled),
+  )
 
 async function confirmDelete() {
-  const r = toDelete.value
+  const items = toDelete.value
   toDelete.value = null
-  if (!r) return
-  const ok = await tasks.guard(async () => {
-    await api.deleteResource(props.instanceId, props.kind, r.fileName)
-    return true
-  })
-  if (ok) await load()
+  if (items) await forEach(items, (r) => api.deleteResource(props.instanceId, props.kind, r.fileName))
 }
 
 async function checkUpdates() {
@@ -167,8 +261,6 @@ function noteAdded(fileNames: string[]) {
   else if (props.kind === 'resourcePack') void packs.offerConversion(props.instanceId, fileNames)
 }
 
-const openFolder = () => tasks.guard(() => api.openContentFolder(props.instanceId, props.kind))
-
 /** Files the game reads from the folder; the backend checks each picked file the same way as a dropped one. */
 const fileExtensions: Record<LocalResourceKind, string[]> = {
   mod: ['jar', 'litemod', 'zip'],
@@ -192,10 +284,8 @@ async function addFiles() {
   await load()
 }
 
-const projectOf = (r: LocalResource) => (r.origin ? originProject(r.origin) : undefined)
-const openHomepage = (r: LocalResource) => {
-  const url = projectOf(r)?.url
-  if (url) void tasks.guard(() => openExternal(url))
+function openHomepages(items: LocalResource[]) {
+  for (const url of items.map((r) => projectOf(r)?.url).filter((url) => url !== undefined)) void tasks.guard(() => openExternal(url))
 }
 async function versionChanged(fileNames: string[]) {
   noteAdded(fileNames)
@@ -203,26 +293,111 @@ async function versionChanged(fileNames: string[]) {
 }
 
 const isLocked = (r: LocalResource) => r.origin?.['x-prismlauncher-lock-update'] === true
-
-async function toggleLock(r: LocalResource) {
-  const locked = !isLocked(r)
-  const ok = await tasks.guard(async () => {
-    await api.setUpdateLock(props.instanceId, props.kind, r.fileName, locked)
-    return true
+async function setLocked(items: LocalResource[], locked: boolean) {
+  await tasks.guard(async () => {
+    for (const r of items) {
+      await api.setUpdateLock(props.instanceId, props.kind, r.fileName, locked)
+      if (r.origin) r.origin['x-prismlauncher-lock-update'] = locked
+    }
   })
-  if (!ok || !r.origin) return
-  r.origin['x-prismlauncher-lock-update'] = locked
-  if (locked) {
-    const next = new Map(updates.value)
-    next.delete(r.fileName)
-    updates.value = next
-  }
+  if (locked) updates.value = new Map([...updates.value].filter(([name]) => !items.some((r) => r.fileName === name)))
 }
 
 function closeContent() {
   showContent.value = false
   void load()
 }
+
+// ---- side panel and context menu ----
+/** Actions on the selected files; shared by the side panel and the right-click menu. */
+const selectionActions = computed<PanelAction[]>(() => {
+  const items = selectedItems.value
+  const one = single.value
+  const fromCatalog = items.filter((r) => r.origin)
+  const allLocked = fromCatalog.length > 0 && fromCatalog.every(isLocked)
+  const list: PanelAction[] = [
+    { label: t.instance.changeVersion, icon: History, disabled: !one?.origin, title: one && !one.origin ? t.instance.localSourceHint : undefined, action: () => (changingVersion.value = one) },
+    { label: t.instance.enable, icon: CircleCheck, disabled: !items.some((r) => !r.enabled), action: () => void setEnabled(items, true) },
+    { label: t.instance.disable, icon: Ban, disabled: !items.some((r) => r.enabled), action: () => void setEnabled(items, false) },
+    { label: t.common.delete, icon: Trash2, danger: true, disabled: !items.length, action: () => (toDelete.value = items) },
+    {
+      label: t.instance.openHomepage,
+      icon: ExternalLink,
+      separatorBefore: true,
+      disabled: !fromCatalog.length || fromCatalog.length > 10,
+      action: () => openHomepages(fromCatalog),
+    },
+    {
+      label: allLocked ? t.updates.unlock : t.updates.lock,
+      icon: allLocked ? LockOpen : Lock,
+      disabled: !fromCatalog.length,
+      action: () => void setLocked(fromCatalog, !allLocked),
+    },
+  ]
+  if (props.kind === 'resourcePack') {
+    const zip = one && isZipPack(one) ? one : null
+    list.push(
+      {
+        label: targetVersion.value ? t.packs.convertTo(targetVersion.value) : t.packs.convert,
+        icon: Repeat,
+        disabled: packBusy.value || !zip || !mismatchOf(zip)?.mismatch || !targetVersion.value,
+        title: t.packs.mismatchHint,
+        action: () => zip && void convertPack(zip),
+      },
+      { label: t.packs.repair, icon: Wrench, disabled: packBusy.value || !zip, title: t.packs.repairHint, action: () => zip && void repairPack(zip) },
+    )
+  }
+  return list
+})
+
+const panelActions = computed<PanelAction[]>(() => {
+  const list: PanelAction[] = [
+    { label: t.instance.download[props.kind], icon: Download, primary: true, action: () => (showContent.value = true) },
+    { label: checking.value ? t.instance.checking : t.instance.checkUpdates, icon: RefreshCw, busy: checking.value, disabled: checking.value || !!bulk.value || !resources.value.length, action: () => void checkUpdates() },
+  ]
+  if (updates.value.size) {
+    list.push({
+      label: bulk.value ? t.updates.updatingAll(bulk.value.done, bulk.value.total) : `${t.updates.updateAll} (${updates.value.size})`,
+      icon: ArrowUpFromLine,
+      disabled: !!bulk.value,
+      action: () => void updateAll(),
+    })
+  }
+  list.push({ label: t.instance.addFile, icon: FilePlus, title: t.instance.addFileHint, action: () => void addFiles() })
+  const selection = selectionActions.value
+  selection[0] = { ...selection[0]!, separatorBefore: true }
+  list.push(...selection)
+  list.push({ label: t.instance.exportList, icon: ListOrdered, separatorBefore: true, disabled: !resources.value.length, action: () => (showList.value = true) })
+  if (props.kind === 'mod') {
+    list.push({
+      label: scanning.value ? t.scan.scanning(ratscan.progress!.done, ratscan.progress!.total) : t.scan.scanMods,
+      icon: ShieldCheck,
+      disabled: scanning.value || !resources.value.length,
+      action: () => void scanMods(),
+    })
+  }
+  return list
+})
+const footerActions = computed<PanelAction[]>(() => [
+  { label: t.instance.openFolder, icon: FolderOpen, title: t.instance.folderOf[props.kind], action: () => void tasks.guard(() => api.openContentFolder(props.instanceId, props.kind)) },
+  ...(props.kind === 'mod' ? [{ label: t.instance.openConfigs, icon: FolderCog, action: () => void tasks.guard(() => api.openConfigFolder(props.instanceId)) }] : []),
+])
+
+const menu = ref<{ x: number; y: number } | null>(null)
+function openMenu(r: LocalResource, e: MouseEvent) {
+  if (!selected.value.has(r.fileName)) {
+    selected.value = new Set([r.fileName])
+    anchor = r.fileName
+  }
+  menu.value = { x: e.clientX, y: e.clientY }
+}
+
+const columns: { key: SortKey; label: () => string; class: string }[] = [
+  { key: 'name', label: () => t.instance.columns.name, class: '' },
+  { key: 'version', label: () => t.instance.columns.version, class: 'w-32' },
+  { key: 'source', label: () => t.instance.columns.source, class: 'w-28' },
+  { key: 'modified', label: () => t.instance.columns.modified, class: 'w-28' },
+]
 </script>
 
 <template>
@@ -230,103 +405,118 @@ function closeContent() {
     <p v-if="sharedNote" class="flex items-center gap-2 text-muted">
       <span class="badge badge-accent">{{ t.sharedFolder.badge }}</span>{{ sharedNote }}
     </p>
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="relative max-w-xs min-w-40 flex-1">
-        <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />
-        <input v-model="filter" class="input !pl-8" :placeholder="t.instance.filterPlaceholder" :aria-label="t.instance.filterPlaceholder" />
+    <div class="flex items-start gap-3">
+      <div class="flex min-w-0 flex-1 flex-col gap-2">
+        <div class="flex items-center gap-2">
+          <div class="relative max-w-sm flex-1">
+            <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />
+            <input v-model="filter" class="input !pl-8" :placeholder="t.instance.filterPlaceholder" :aria-label="t.instance.filterPlaceholder" />
+          </div>
+          <span class="text-faint">
+            {{ t.instance.counted(resources.length) }}<template v-if="selected.size"> · {{ t.instance.selectedCount(selected.size) }}</template>
+          </span>
+        </div>
+
+        <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
+        <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.instance.noResources }}</p>
+        <div v-else class="card overflow-hidden !outline-none" tabindex="0" role="listbox" aria-multiselectable="true" @keydown="onKey">
+          <div class="flex items-center gap-3 border-b border-line bg-raised px-3 py-1.5 text-[12px] font-semibold text-muted">
+            <button
+              role="checkbox"
+              class="tick"
+              :class="{ on: allVisibleSelected }"
+              :aria-checked="allVisibleSelected"
+              :aria-label="t.instance.selectAll"
+              @click="toggleAll"
+            >
+              <Check v-if="allVisibleSelected" :size="12" :stroke-width="3.5" />
+            </button>
+            <span class="w-9 shrink-0" />
+            <span class="w-9 shrink-0" />
+            <button
+              v-for="c in columns"
+              :key="c.key"
+              class="flex shrink-0 items-center gap-1 text-left hover:text-fg"
+              :class="c.class || 'min-w-0 flex-1'"
+              @click="sortBy(c.key)"
+            >
+              {{ c.label() }}
+              <component :is="sortAsc ? ArrowUp : ArrowDown" v-if="sortKey === c.key" :size="12" />
+            </button>
+          </div>
+          <ul>
+            <li
+              v-for="r in visible"
+              :key="r.fileName"
+              role="option"
+              :aria-selected="selected.has(r.fileName)"
+              class="flex cursor-default items-center gap-3 border-b border-line/60 px-3 py-1.5 last:border-b-0"
+              :class="selected.has(r.fileName) ? 'bg-accent/12' : 'hover:bg-hover'"
+              @click="select(r, $event)"
+              @contextmenu.prevent="openMenu(r, $event)"
+            >
+              <button
+                role="checkbox"
+                class="tick"
+                :class="{ on: selected.has(r.fileName) }"
+                :aria-checked="selected.has(r.fileName)"
+                :aria-label="displayName(r)"
+                @click.stop="toggleOne(r)"
+              >
+                <Check v-if="selected.has(r.fileName)" :size="12" :stroke-width="3.5" />
+              </button>
+              <span class="flex w-9 shrink-0" @click.stop>
+                <ToggleSwitch :model-value="r.enabled" :label="t.common.enabled" @update:model-value="setEnabled([r], $event)" />
+              </span>
+              <img v-if="r.metadata?.icon" :src="r.metadata.icon" alt="" class="pixelated size-9 shrink-0 rounded-md" :class="r.enabled ? '' : 'opacity-50'" />
+              <span v-else class="pix flex size-9 shrink-0 items-center justify-center bg-accent/15 font-bold text-accent" :class="r.enabled ? '' : 'opacity-50'">
+                {{ displayName(r).charAt(0).toUpperCase() }}
+              </span>
+              <div class="min-w-0 flex-1" :class="r.enabled ? '' : 'opacity-60'">
+                <div class="flex items-center gap-1.5">
+                  <span class="truncate font-semibold">{{ displayName(r) }}</span>
+                  <Lock v-if="isLocked(r)" :size="12" class="shrink-0 text-warn" :title="t.updates.lock" />
+                  <button
+                    v-if="kind === 'mod' && jarsByName.get(r.fileName)?.scan"
+                    class="badge cursor-pointer"
+                    :class="badgeClass[badgeOf(jarsByName.get(r.fileName)!.scan!.verdict)]"
+                    :title="t.scan.details"
+                    @click.stop="scanDetails = jarsByName.get(r.fileName)!"
+                  >{{ badgeText[badgeOf(jarsByName.get(r.fileName)!.scan!.verdict)] }}</button>
+                  <span v-if="kind === 'resourcePack' && mismatchOf(r)?.mismatch" class="badge badge-warn" :title="t.packs.mismatchHint">
+                    {{ t.packs.madeFor(mismatchOf(r)!.madeFor ?? '?') }}
+                  </span>
+                  <button v-if="updates.has(r.fileName)" class="badge badge-accent cursor-pointer" :disabled="!!bulk" :title="t.instance.updateTo" @click.stop="applyUpdate(r)">
+                    <ArrowUpCircle :size="12" />{{ updates.get(r.fileName)!.latest.versionNumber }}
+                  </button>
+                </div>
+                <div class="truncate text-[12px] text-faint">
+                  {{ r.fileName }} · {{ r.isDir ? t.instance.folderItem : formatBytes(r.size) }}<template v-if="r.metadata?.authors.length"> · {{ r.metadata.authors.join(', ') }}</template>
+                </div>
+              </div>
+              <span class="w-32 shrink-0 truncate text-[12.5px] text-muted" :title="r.metadata?.version ?? ''">{{ r.metadata?.version ?? '—' }}</span>
+              <span class="w-28 shrink-0 truncate text-[12.5px]" :class="r.origin ? 'text-accent' : 'text-faint'" :title="r.origin ? '' : t.instance.localSourceHint">{{ sourceOf(r) }}</span>
+              <span class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(r.modified) }}</span>
+            </li>
+          </ul>
+        </div>
+        <p class="text-[12px] text-faint">{{ t.instance.selectionHint }}</p>
       </div>
-      <span class="mr-auto text-faint">{{ resources.length }}</span>
-      <button v-if="updates.size" class="btn btn-primary" :disabled="!!bulk" @click="updateAll">
-        <ArrowUpFromLine :size="15" />{{ bulk ? t.updates.updatingAll(bulk.done, bulk.total) : `${t.updates.updateAll} (${updates.size})` }}
-      </button>
-      <button v-if="kind === 'mod'" class="btn" :disabled="scanning || !resources.length" @click="scanMods">
-        <ShieldCheck :size="15" :class="scanning ? 'animate-pulse' : ''" />{{ scanning ? t.scan.scanning(ratscan.progress!.done, ratscan.progress!.total) : t.scan.scanMods }}
-      </button>
-      <button class="btn" :disabled="checking || !!bulk || !resources.length" @click="checkUpdates">
-        <RefreshCw :size="15" :class="checking ? 'animate-spin' : ''" />{{ checking ? t.instance.checking : t.instance.checkUpdates }}
-      </button>
-      <button class="btn btn-icon" :title="t.instance.folderOf[kind]" :aria-label="t.instance.folderOf[kind]" @click="openFolder"><FolderOpen :size="15" /></button>
-      <button class="btn btn-icon" :disabled="!resources.length" :title="t.instance.exportList" :aria-label="t.instance.exportList" @click="showList = true"><ListOrdered :size="15" /></button>
-      <button class="btn" :title="t.instance.addFileHint" @click="addFiles"><FilePlus :size="15" />{{ t.instance.addFile }}</button>
-      <button class="btn btn-primary" @click="showContent = true"><Download :size="16" />{{ t.instance.download[kind] }}</button>
+
+      <ActionPanel :actions="panelActions" :footer="footerActions" />
     </div>
 
-    <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
-    <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.instance.noResources }}</p>
-    <ul v-else class="flex flex-col gap-1.5">
-      <li v-for="r in visible" :key="r.fileName" class="card flex items-center gap-3 px-3 py-2" :class="r.enabled ? '' : 'opacity-60'">
-        <ToggleSwitch :model-value="r.enabled" :label="t.common.enabled" @update:model-value="toggle(r, $event)" />
-        <img v-if="r.metadata?.icon" :src="r.metadata.icon" alt="" class="pixelated size-9 rounded-md" />
-        <span v-else class="pix flex size-9 shrink-0 items-center justify-center bg-accent/15 font-bold text-accent">
-          {{ (r.metadata?.name ?? r.fileName).charAt(0).toUpperCase() }}
-        </span>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2">
-            <span class="truncate font-semibold">{{ r.metadata?.name ?? r.fileName }}</span>
-            <span v-if="r.metadata?.version" class="badge">{{ r.metadata.version }}</span>
-            <span v-if="!r.origin" class="badge" :title="t.instance.unknownOrigin">?</span>
-            <span v-else-if="projectOf(r)" class="badge badge-accent">{{ PLATFORM_LABELS[projectOf(r)!.platform] }}</span>
-            <button
-              v-if="kind === 'mod' && jarsByName.get(r.fileName)?.scan"
-              class="badge cursor-pointer"
-              :class="badgeClass[badgeOf(jarsByName.get(r.fileName)!.scan!.verdict)]"
-              :title="t.scan.details"
-              @click="scanDetails = jarsByName.get(r.fileName)!"
-            >{{ badgeText[badgeOf(jarsByName.get(r.fileName)!.scan!.verdict)] }}</button>
-            <span
-              v-if="kind === 'resourcePack' && packs.compat[instanceId]?.[r.fileName]?.mismatch"
-              class="badge badge-warn"
-              :title="t.packs.mismatchHint"
-            >{{ t.packs.madeFor(packs.compat[instanceId][r.fileName].madeFor ?? '?') }}</span>
-          </div>
-          <div class="truncate text-[12px] text-faint">{{ r.fileName }} · {{ formatBytes(r.size) }}<template v-if="r.metadata?.authors"> · {{ r.metadata.authors.join(', ') }}</template></div>
-        </div>
-        <template v-if="projectOf(r)">
-          <button class="btn btn-ghost btn-icon text-muted" :title="t.instance.changeVersion" :aria-label="t.instance.changeVersion" @click="changingVersion = r">
-            <History :size="15" />
-          </button>
-          <button
-            class="btn btn-ghost btn-icon text-muted"
-            :title="t.instance.homepage(PLATFORM_LABELS[projectOf(r)!.platform])"
-            :aria-label="t.instance.homepage(PLATFORM_LABELS[projectOf(r)!.platform])"
-            @click="openHomepage(r)"
-          >
-            <ExternalLink :size="15" />
-          </button>
-        </template>
-        <button
-          v-if="r.origin"
-          class="btn btn-ghost btn-icon"
-          :class="isLocked(r) ? 'text-warn' : 'text-faint'"
-          :title="isLocked(r) ? t.updates.unlock : t.updates.lock"
-          :aria-label="isLocked(r) ? t.updates.unlock : t.updates.lock"
-          :aria-pressed="isLocked(r)"
-          @click="toggleLock(r)"
-        >
-          <component :is="isLocked(r) ? Lock : LockOpen" :size="15" />
-        </button>
-        <template v-if="isZipPack(r)">
-          <button
-            v-if="packs.compat[instanceId]?.[r.fileName]?.mismatch && targetVersion"
-            class="btn h-7"
-            :disabled="packBusy !== null"
-            @click="convertPack(r)"
-          >{{ packBusy === r.fileName ? t.packs.working : t.packs.convertTo(targetVersion) }}</button>
-          <button class="btn btn-ghost btn-icon text-muted" :disabled="packBusy !== null" :title="t.packs.repairHint" :aria-label="t.packs.repair" @click="repairPack(r)">
-            <Wrench :size="15" />
-          </button>
-        </template>
-        <button v-if="updates.has(r.fileName)" class="btn btn-primary h-7" :disabled="!!bulk" @click="applyUpdate(r)">
-          <ArrowUpCircle :size="14" />{{ t.instance.updateTo }} {{ updates.get(r.fileName)!.latest.versionNumber }}
-        </button>
-        <button class="btn btn-ghost btn-icon text-muted hover:!text-danger" :aria-label="t.common.delete" @click="toDelete = r"><Trash2 :size="15" /></button>
-      </li>
-    </ul>
-
+    <ContextMenu
+      v-if="menu"
+      :x="menu.x"
+      :y="menu.y"
+      :items="selectionActions.map((a) => ({ label: a.label, icon: a.icon, disabled: a.disabled, danger: a.danger, separatorBefore: a.separatorBefore, action: a.action }))"
+      @close="menu = null"
+    />
     <ConfirmDialog
       v-if="toDelete"
-      :title="t.instance.deleteResource"
-      :text="toDelete.fileName"
+      :title="toDelete.length === 1 ? t.instance.deleteResource : t.instance.deleteResources(toDelete.length)"
+      :text="toDelete.map((r) => r.fileName).slice(0, 8).join(', ') + (toDelete.length > 8 ? '…' : '')"
       @confirm="confirmDelete"
       @close="toDelete = null"
     />
@@ -353,3 +543,26 @@ function closeContent() {
     />
   </div>
 </template>
+
+<style scoped>
+/* selection box, drawn like CheckBox.vue */
+.tick {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--c-line);
+  background: var(--c-base);
+  color: var(--c-accent-fg);
+}
+.tick.on {
+  border-color: var(--c-accent);
+  background: var(--c-accent);
+}
+.tick:focus-visible {
+  outline: 2px solid var(--c-accent);
+}
+</style>

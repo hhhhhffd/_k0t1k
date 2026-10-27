@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Archive, Copy, Ellipsis, FolderOpen, Globe, ImageOff, Layers, Pencil, Play, RefreshCw, Sprout, Trash2, Upload } from '@lucide/vue'
+import { Archive, Copy, FolderOpen, Globe, ImageOff, Layers, Pencil, Play, RefreshCw, Sprout, Trash2, Upload } from '@lucide/vue'
 import { open, save } from '@tauri-apps/plugin-dialog'
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
 import { isTauri } from '../../api/commands'
 import type { World } from '../../api/types'
@@ -10,6 +10,8 @@ import { useInstancesStore } from '../../stores/instances'
 import { useSettingsStore } from '../../stores/settings'
 import { useTasksStore } from '../../stores/tasks'
 import { formatBytes, formatRelative } from '../../utils/format'
+import ActionPanel from '../ActionPanel.vue'
+import type { PanelAction } from '../ActionPanel.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContextMenu from '../ContextMenu.vue'
 import type { MenuItem } from '../ContextMenu.vue'
@@ -33,6 +35,9 @@ const renameFolder = ref(false)
 const copying = ref<World | null>(null)
 const backingUp = ref<World | null>(null)
 const deleting = ref<World | null>(null)
+/** Folder name of the highlighted world; the side panel acts on it. */
+const selected = ref<string | null>(null)
+const current = computed(() => worlds.value.find((w) => w.dirName === selected.value) ?? null)
 
 async function load() {
   loading.value = true
@@ -82,20 +87,34 @@ async function resetIcon(world: World) {
   if (done) tasks.toast(t.worlds.iconReset, 'ok')
 }
 
+/** Actions on one world; shared by the side panel and the right-click menu. */
+function worldActions(world: World | null): PanelAction[] {
+  const none = !world
+  return [
+    { label: t.worlds.play, icon: Play, disabled: none, title: t.worlds.playHint, action: () => world && play(world) },
+    { label: t.worlds.rename, icon: Pencil, disabled: none, action: () => world && startRename(world) },
+    { label: t.worlds.copy, icon: Copy, disabled: none, action: () => (copying.value = world) },
+    { label: t.worlds.delete, icon: Trash2, danger: true, disabled: none, action: () => (deleting.value = world) },
+    { label: t.worlds.manageDatapacks, icon: Layers, separatorBefore: true, disabled: none, action: () => world && (opened.value = world.dirName) },
+    { label: t.worlds.backup, icon: Archive, disabled: none, action: () => (backingUp.value = world) },
+    { label: t.worlds.copySeed, icon: Sprout, disabled: !world?.seed, action: () => world && void copySeed(world) },
+    { label: t.worlds.resetIcon, icon: ImageOff, disabled: !world?.icon, action: () => world && void resetIcon(world) },
+    { label: t.worlds.openFolder, icon: FolderOpen, disabled: none, action: () => world && void openFolder(world) },
+  ]
+}
+const panelActions = computed<PanelAction[]>(() => [
+  { label: t.worlds.import, icon: Upload, primary: true, action: () => void importZip() },
+  ...worldActions(current.value),
+])
+const footerActions = computed<PanelAction[]>(() => [
+  { label: t.worlds.refresh, icon: RefreshCw, disabled: loading.value, action: () => void load() },
+  { label: t.worlds.openSaves, icon: FolderOpen, action: () => void openSaves() },
+])
+
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 function openMenu(e: MouseEvent, world: World) {
-  const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  menu.value = {
-    x: box.right - 220,
-    y: box.bottom + 4,
-    items: [
-      { label: t.worlds.manageDatapacks, icon: Layers, action: () => (opened.value = world.dirName) },
-      { label: t.worlds.copySeed, icon: Sprout, disabled: !world.seed, action: () => void copySeed(world) },
-      { label: t.worlds.resetIcon, icon: ImageOff, disabled: !world.icon, action: () => void resetIcon(world) },
-      { label: t.worlds.backup, icon: Archive, separatorBefore: true, action: () => (backingUp.value = world) },
-      { label: t.worlds.copy, icon: Copy, action: () => (copying.value = world) },
-    ],
-  }
+  selected.value = world.dirName
+  menu.value = { x: e.clientX, y: e.clientY, items: worldActions(world) }
 }
 
 function startRename(world: World) {
@@ -159,38 +178,52 @@ async function confirmDelete() {
     @back="opened = null"
   />
   <div v-else class="flex flex-col gap-3">
-    <div class="flex items-center gap-2">
-      <span class="mr-auto text-faint">{{ worlds.length }}</span>
-      <button class="btn btn-icon" :disabled="loading" :title="t.worlds.refresh" :aria-label="t.worlds.refresh" @click="load"><RefreshCw :size="15" /></button>
-      <button class="btn" @click="openSaves"><FolderOpen :size="15" />{{ t.worlds.openSaves }}</button>
-      <button class="btn btn-primary" @click="importZip"><Upload :size="15" />{{ t.worlds.import }}</button>
+    <div class="flex items-start gap-3">
+      <div class="flex min-w-0 flex-1 flex-col gap-2">
+        <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
+        <p v-else-if="!worlds.length" class="py-10 text-center text-faint">{{ t.worlds.empty }}</p>
+        <div v-else class="card overflow-hidden">
+          <div class="flex items-center gap-3 border-b border-line bg-raised px-3 py-1.5 text-[12px] font-semibold text-muted">
+            <span class="w-10 shrink-0" />
+            <span class="min-w-0 flex-1">{{ t.worlds.name }} · {{ worlds.length }}</span>
+            <span class="w-28 shrink-0">{{ t.worlds.mode }}</span>
+            <span class="w-24 shrink-0">{{ t.worlds.version }}</span>
+            <span class="w-28 shrink-0">{{ t.worlds.lastPlayed }}</span>
+            <span class="w-20 shrink-0 text-right">{{ t.worlds.size }}</span>
+          </div>
+          <ul role="listbox">
+            <li
+              v-for="w in worlds"
+              :key="w.dirName"
+              role="option"
+              :aria-selected="selected === w.dirName"
+              class="flex cursor-default items-center gap-3 border-b border-line/60 px-3 py-2 last:border-b-0"
+              :class="selected === w.dirName ? 'bg-accent/12' : 'hover:bg-hover'"
+              @click="selected = w.dirName"
+              @dblclick="opened = w.dirName"
+              @contextmenu.prevent="openMenu($event, w)"
+            >
+              <img v-if="w.icon" :src="w.icon" alt="" class="pixelated size-10 shrink-0 rounded-md" />
+              <span v-else class="pix flex size-10 shrink-0 items-center justify-center bg-ok/15 text-ok"><Globe :size="18" /></span>
+              <span class="min-w-0 flex-1">
+                <span class="flex items-center gap-2">
+                  <span class="truncate font-semibold">{{ w.name }}</span>
+                  <span v-if="w.hardcore" class="badge border-danger/50 bg-danger/15 text-danger">{{ t.worlds.hardcore }}</span>
+                  <span v-if="w.gameMode === null" class="badge text-warn">{{ t.worlds.unreadable }}</span>
+                </span>
+                <span class="block truncate text-[12px] text-faint">{{ w.dirName }}</span>
+              </span>
+              <span class="w-28 shrink-0 truncate text-[12.5px] text-muted">{{ w.gameMode ? t.worlds.gameModes[w.gameMode] : '—' }}</span>
+              <span class="w-24 shrink-0 truncate text-[12.5px] text-muted">{{ w.versionName ?? '—' }}</span>
+              <span class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(w.lastPlayed) }}</span>
+              <span class="w-20 shrink-0 text-right text-[12.5px] text-faint">{{ formatBytes(w.size) }}</span>
+            </li>
+          </ul>
+        </div>
+        <p v-if="worlds.length" class="text-[12px] text-faint">{{ t.worlds.selectionHint }}</p>
+      </div>
+      <ActionPanel :actions="panelActions" :footer="footerActions" />
     </div>
-
-    <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
-    <p v-else-if="!worlds.length" class="py-10 text-center text-faint">{{ t.worlds.empty }}</p>
-    <ul v-else class="flex flex-col gap-1.5">
-      <li v-for="w in worlds" :key="w.dirName" class="card flex items-center gap-3 px-3 py-2.5">
-        <button class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="opened = w.dirName">
-          <img v-if="w.icon" :src="w.icon" alt="" class="pixelated size-10 shrink-0 rounded-md" />
-          <span v-else class="pix flex size-10 shrink-0 items-center justify-center bg-ok/15 text-ok"><Globe :size="18" /></span>
-          <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-2">
-              <span class="truncate font-semibold">{{ w.name }}</span>
-              <span v-if="w.gameMode" class="badge">{{ t.worlds.gameModes[w.gameMode] }}</span>
-              <span v-if="w.hardcore" class="badge border-danger/50 bg-danger/15 text-danger">{{ t.worlds.hardcore }}</span>
-              <span v-if="w.versionName" class="badge">{{ w.versionName }}</span>
-              <span v-if="w.gameMode === null" class="badge text-warn">{{ t.worlds.unreadable }}</span>
-            </span>
-            <span class="block truncate text-[12px] text-faint">{{ w.dirName }} · {{ formatBytes(w.size) }} · {{ formatRelative(w.lastPlayed) }}</span>
-          </span>
-        </button>
-        <button class="btn" :title="t.worlds.playHint" @click="play(w)"><Play :size="13" fill="currentColor" />{{ t.worlds.play }}</button>
-        <button class="btn btn-ghost btn-icon text-muted" :title="t.worlds.openFolder" :aria-label="t.worlds.openFolder" @click="openFolder(w)"><FolderOpen :size="15" /></button>
-        <button class="btn btn-ghost btn-icon text-muted" :title="t.worlds.rename" :aria-label="t.worlds.rename" @click="startRename(w)"><Pencil :size="15" /></button>
-        <button class="btn btn-ghost btn-icon text-muted" :title="t.worlds.more" :aria-label="t.worlds.more" @click="openMenu($event, w)"><Ellipsis :size="15" /></button>
-        <button class="btn btn-ghost btn-icon text-muted hover:!text-danger" :title="t.worlds.delete" :aria-label="t.worlds.delete" @click="deleting = w"><Trash2 :size="15" /></button>
-      </li>
-    </ul>
 
     <ModalDialog v-if="renaming" :title="t.worlds.renameTitle" :width="420" @close="renaming = null">
       <div class="flex flex-col gap-3">

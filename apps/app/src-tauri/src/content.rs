@@ -70,6 +70,8 @@ pub struct LocalResourceView {
     file_name: String,
     enabled: bool,
     size: u64,
+    is_dir: bool,
+    modified: Option<chrono::DateTime<chrono::Utc>>,
     metadata: Option<ResourceMetadataView>,
     origin: Option<PwMod>,
 }
@@ -80,6 +82,8 @@ impl From<LocalResource> for LocalResourceView {
             file_name: resource.file_name,
             enabled: resource.enabled,
             size: resource.size,
+            is_dir: resource.is_dir,
+            modified: resource.modified,
             metadata: resource.metadata.map(|metadata| ResourceMetadataView {
                 id: metadata.id,
                 name: metadata.name,
@@ -213,6 +217,17 @@ pub async fn list_local_resources(state: State<'_, AppState>, instance_id: Strin
 pub async fn open_content_folder(app: AppHandle, state: State<'_, AppState>, instance_id: String, kind: ResourceKind) -> CommandResult<()> {
     let instance = instance_of(&state, &instance_id).await?;
     let folder = instance.game_dir(&state.paths).join(kind.folder());
+    let target = folder.clone();
+    blocking(move || std::fs::create_dir_all(&target).at(&target)).await?;
+    app.opener().open_path(folder.display().to_string(), None::<&str>)?;
+    Ok(())
+}
+
+/// Opens the instance's `config` folder, where mods keep their settings.
+#[tauri::command]
+pub async fn open_config_folder(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> CommandResult<()> {
+    let instance = instance_of(&state, &instance_id).await?;
+    let folder = instance.game_dir(&state.paths).join("config");
     let target = folder.clone();
     blocking(move || std::fs::create_dir_all(&target).at(&target)).await?;
     app.opener().open_path(folder.display().to_string(), None::<&str>)?;

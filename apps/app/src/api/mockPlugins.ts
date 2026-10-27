@@ -107,7 +107,7 @@ export function installTestHook(ctx: PluginMockContext) {
       files.set(fileKey(instanceId, kind, fileName), bytes)
       const list = ctx.resourcesFor(instanceId, kind)
       if (!list.some((r) => r.fileName === fileName)) {
-        list.unshift({ fileName, enabled: true, size: bytes.length, metadata: null, origin: null })
+        list.unshift({ fileName, enabled: true, size: bytes.length, isDir: false, modified: new Date().toISOString(), metadata: null, origin: null })
       }
     },
   }
@@ -156,7 +156,7 @@ export async function pluginCommand(cmd: string, a: Args, ctx: PluginMockContext
       let name = args.fileName
       for (let n = 2; list.some((r) => r.fileName === name); n++) name = args.fileName.replace(/(\.[^.]+)?$/, ` (${n})$1`)
       files.set(fileKey(args.instanceId, args.kind, name), body)
-      list.unshift({ fileName: name, enabled: true, size: body.length, metadata: null, origin: null })
+      list.unshift({ fileName: name, enabled: true, size: body.length, isDir: false, modified: new Date().toISOString(), metadata: null, origin: null })
       return { value: name }
     }
     case 'resourcepack_compat': {

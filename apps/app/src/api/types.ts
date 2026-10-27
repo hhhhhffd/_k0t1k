@@ -365,7 +365,11 @@ export interface PwMod {
 export interface LocalResource {
   fileName: string
   enabled: boolean
+  /** Bytes of a file; 0 for a folder. */
   size: number
+  isDir: boolean
+  /** ISO time of the last change on disk. */
+  modified: string | null
   metadata: ResourceMetadata | null
   origin: PwMod | null
 }

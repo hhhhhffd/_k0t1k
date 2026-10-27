@@ -315,7 +315,7 @@ function resourcesFor(instanceId: string, kind: LocalResourceKind): LocalResourc
     list = seeds.map((s, i) => {
       const fileName = `${s[0]}-1.${i}.${i + 2}.${kind === 'mod' ? 'jar' : 'zip'}`
       return {
-        fileName, enabled: i !== 3, size: 600_000 + i * 410_000,
+        fileName, enabled: i !== 3, size: 600_000 + i * 410_000, isDir: false, modified: new Date().toISOString(),
         metadata: { id: s[0], name: s[1], version: `1.${i}.${i + 2}`, authors: [s[2]], description: s[3], icon: null, loader: null },
         origin: i % 3 === 2 ? null : { name: s[1], filename: fileName, update: { modrinth: { 'mod-id': `mr-${s[0]}`, version: `mr-${s[0]}-v${i}` } } },
       }
@@ -353,7 +353,7 @@ function datapacksFor(instanceId: string, world: string): LocalResource[] {
     list = catalog.dataPack.slice(0, 2).map((seed, i) => {
       const fileName = `${seed[0]}-1.${i}.zip`
       return {
-        fileName, enabled: true, size: 300_000 + i * 2_000_000,
+        fileName, enabled: true, size: 300_000 + i * 2_000_000, isDir: false, modified: new Date().toISOString(),
         metadata: { id: seed[0], name: seed[1], version: `1.${i}`, authors: [seed[2]], description: seed[3], icon: null, loader: null },
         origin: i === 0 ? { name: seed[1], filename: fileName, update: { modrinth: { 'mod-id': `mr-${seed[0]}`, version: `mr-${seed[0]}-v${i}` } } } : null,
       }
@@ -733,7 +733,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       const previous = installed.findIndex((r) => r.origin?.update.modrinth?.['mod-id'] === v.projectId)
       if (previous >= 0) installed.splice(previous, 1)
       installed.unshift({
-        fileName: file.filename, enabled: true, size: file.size,
+        fileName: file.filename, enabled: true, size: file.size, isDir: false, modified: new Date().toISOString(),
         metadata: { id: v.projectId, name: v.name, version: v.versionNumber, authors: [], description: null, icon: null, loader: null },
         origin: { name: v.name, filename: file.filename, update: { modrinth: { 'mod-id': v.projectId, version: v.id } } },
       })
@@ -794,6 +794,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     }
     case 'open_world_folder': return undefined
     case 'open_content_folder': return undefined
+    case 'open_config_folder': return undefined
     case 'reset_world_icon': {
       notRunning(a.instanceId)
       const world = worldsFor(a.instanceId as string).find((w) => w.dirName === a.dirName)
@@ -826,7 +827,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       notRunning(a.instanceId)
       const list = datapacksFor(a.instanceId as string, a.world as string)
       const fileName = uniqueName(list.map((x) => x.fileName), fileNameOf(a.path, 'pack.zip'))
-      list.unshift({ fileName, enabled: true, size: 120_000, metadata: null, origin: null })
+      list.unshift({ fileName, enabled: true, size: 120_000, isDir: false, modified: new Date().toISOString(), metadata: null, origin: null })
       return fileName
     }
     case 'install_datapack': {
@@ -836,7 +837,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       const fileName = v.files[0]!.filename.replace(/\.jar$/, '.zip')
       await fakeTask(`datapack-${v.id}`, `Установка ${v.name}`, ['Скачивание', 'Проверка хеша'], 450)
       datapacksFor(a.instanceId as string, a.world as string).unshift({
-        fileName, enabled: true, size: v.files[0]!.size,
+        fileName, enabled: true, size: v.files[0]!.size, isDir: false, modified: new Date().toISOString(),
         metadata: { id: v.projectId, name: v.name, version: v.versionNumber, authors: [], description: null, icon: null, loader: null },
         origin: { name: v.name, filename: fileName, update: { modrinth: { 'mod-id': v.projectId, version: v.id } } },
       })
@@ -949,7 +950,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
           continue
         }
         resourcesFor(a.instanceId as string, kind).unshift({
-          fileName, enabled: true, size: 900_000,
+          fileName, enabled: true, size: 900_000, isDir: false, modified: new Date().toISOString(),
           metadata: { id: fileName, name: fileName.replace(/\.[^.]+$/, ''), version: null, authors: [], description: null, icon: null, loader: null },
           origin: null,
         })

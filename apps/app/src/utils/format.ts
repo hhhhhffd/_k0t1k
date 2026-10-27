@@ -53,6 +53,9 @@ export function originProject(origin: PwMod): { platform: Platform; projectId: s
   return undefined
 }
 
+/** Removes Minecraft `§x` formatting codes, which pack authors put into names and descriptions. */
+export const plainText = (text: string) => text.replace(/§./gs, '').trim()
+
 export const PLATFORM_LABELS: Record<Platform, string> = { modrinth: 'Modrinth', curseForge: 'CurseForge' }
 
 const dateLocale = () => (language.value === 'ru' ? 'ru-RU' : 'en-US')

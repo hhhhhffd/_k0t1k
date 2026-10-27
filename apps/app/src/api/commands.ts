@@ -82,6 +82,7 @@
  *   toggle_resource(instanceId, kind, fileName, enabled)     -> void
  *   delete_resource(instanceId, kind, fileName)              -> void
  *   open_content_folder(instanceId, kind: ResourceKind)      -> void     (mods/resourcepacks/shaderpacks/saves; created when missing)
+ *   open_config_folder(instanceId)                           -> void     (the game's config folder; created when missing)
  *   check_updates(instanceId, kind: LocalResourceKind)       -> AvailableUpdate[]
  *   import_modpack_file(path, name?)                         -> ModpackImport (.mrpack / CurseForge .zip; emits `progress`)
  *   install_modpack_version(platform, projectId, versionId, name?) -> ModpackImport (emits `progress`)
@@ -368,6 +369,7 @@ export const deleteResource = (instanceId: string, kind: LocalResourceKind, file
   call<void>('delete_resource', { instanceId, kind, fileName })
 export const openContentFolder = (instanceId: string, kind: LocalResourceKind | 'world') =>
   call<void>('open_content_folder', { instanceId, kind })
+export const openConfigFolder = (instanceId: string) => call<void>('open_config_folder', { instanceId })
 export const checkUpdates = (instanceId: string, kind: LocalResourceKind) =>
   call<AvailableUpdate[]>('check_updates', { instanceId, kind })
 export const importModpackFile = (path: string, name?: string) =>
