@@ -12,6 +12,7 @@ use chrono::{DateTime, Utc};
 use k0t1k_core::component::MINECRAFT_UID;
 use k0t1k_core::i18n::tr;
 use k0t1k_core::error::IoContext;
+use k0t1k_core::content::modcompat::{self, ModCompat};
 use k0t1k_core::content::{self as core_content, ResourceKind};
 use k0t1k_core::packformat;
 use k0t1k_core::plugins::{self, KnownPlugin, Manifest, PluginRecord, Resolved, Source};
@@ -361,6 +362,21 @@ pub async fn resourcepack_compat(state: State<'_, AppState>, instance_id: String
             packs.insert(file_name.clone(), PackCompat { file_name, made_for: range.map(packformat::releases_label), mismatch });
         }
         Ok(packs.into_values().collect())
+    })
+    .await
+}
+
+/// Enabled and disabled mod jars that declare another Minecraft version or loader than the instance.
+/// Jars that state nothing, or something not understood, are left out.
+#[tauri::command]
+pub async fn mod_compat(state: State<'_, AppState>, instance_id: String) -> CommandResult<Vec<ModCompat>> {
+    let instance = instance_of(&state, &instance_id).await?;
+    let (game_dir, instance_dir) = (instance.game_dir(&state.paths), instance.dir(&state.paths));
+    blocking(move || {
+        let Some(minecraft) = modcompat::minecraft_of_components(&instance.components) else {
+            return Ok(Vec::new());
+        };
+        modcompat::check_mods(&game_dir, &instance_dir, minecraft, modcompat::loader_of_components(&instance.components))
     })
     .await
 }

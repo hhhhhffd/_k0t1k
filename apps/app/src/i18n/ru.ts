@@ -127,6 +127,18 @@ export const ru: Dictionary = {
     nothingToRepair: 'Исправлять нечего.',
     offer: (name: string, madeFor: string, target: string) => `${name} сделан для ${madeFor}. Конвертировать в ${target} для этой сборки?`,
   },
+  modCompat: {
+    madeFor: (needs: string) => `для ${needs}`,
+    madeForLoader: (loaders: string) => `мод для ${loaders}`,
+    versionHint: (needs: string) => `Этот мод сделан для Minecraft ${needs}, а у вас в сборке другая версия. Он может вылететь или просто не загрузиться.`,
+    loaderHint: (loaders: string) => `Этот мод сделан для ${loaders}, а в этой сборке другой загрузчик. Он не загрузится.`,
+    title: 'Не те моды для этой версии',
+    text: (version: string) => `Эти моды сами заявляют, что делались не для этой сборки (Minecraft ${version}). Игра может вылететь или проигнорировать их.`,
+    needsVersion: (needs: string) => `нужен Minecraft ${needs}`,
+    needsLoader: (loaders: string) => `нужен ${loaders}`,
+    launchAnyway: 'Всё равно запустить',
+    disableAndLaunch: 'Отключить их и запустить',
+  },
   plugins: {
     title: 'Плагины',
     intro: 'RatScan (проверка модов) и packconv (конвертер ресурспаков) работают в песочнице без доступа к вашим файлам. Обновления подписаны.',

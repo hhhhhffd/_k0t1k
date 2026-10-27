@@ -715,6 +715,18 @@ export interface PackCompat {
   mismatch: boolean
 }
 
+/** A mod jar whose own descriptor names another Minecraft version or loader than the instance has. */
+export interface ModCompat {
+  fileName: string
+  enabled: boolean
+  /** What the mod asks of Minecraft, like `>=1.20 <1.21`; null unless the version mismatches. */
+  needs: string | null
+  minecraftMismatch: boolean
+  /** Loaders the jar is made for; empty unless the loader mismatches. */
+  madeForLoaders: LoaderId[]
+  loaderMismatch: boolean
+}
+
 export interface ConvertReport {
   from: string
   to: string

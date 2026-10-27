@@ -136,6 +136,7 @@
  *   ratscan_report(instanceId, sha1)                         -> ScanResult | null
  *   read_resource_file(instanceId, kind, fileName)           -> ArrayBuffer   (binary IPC, up to 256 MiB)
  *   save_resource_file(raw body, header x-args)              -> string        (new file in the resource folder, never replaces; resolves to the name used)
+ *   mod_compat(instanceId)                                  -> ModCompat[]   (mod jars whose own descriptor wants another Minecraft version or loader; unreadable ones are left out)
  *   resourcepack_compat(instanceId)                          -> PackCompat[]  (zip packs: declared releases and whether they differ from the instance)
  * Events (backend -> frontend, via emit)
  *   microsoft-login-stage  LoginStage  (a step of finish_microsoft_login has started)
@@ -183,6 +184,7 @@ import type {
   LocalResource,
   LocalResourceKind,
   JarScan,
+  ModCompat,
   PackCompat,
   PluginId,
   PluginInfo,
@@ -483,6 +485,7 @@ export function saveResourceFile(instanceId: string, kind: LocalResourceKind, fi
   const json = new TextEncoder().encode(JSON.stringify({ instanceId, kind, fileName }))
   return callBinary<string>('save_resource_file', bytes, { 'x-args': btoa(String.fromCharCode(...json)) })
 }
+export const modCompat = (instanceId: string) => call<ModCompat[]>('mod_compat', { instanceId })
 export const resourcepackCompat = (instanceId: string) => call<PackCompat[]>('resourcepack_compat', { instanceId })
 
 // ---- events ----

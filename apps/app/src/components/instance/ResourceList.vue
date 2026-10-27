@@ -37,6 +37,7 @@ import { isTauri } from '../../api/commands'
 import type { BlockedFile, JarScan, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n'
 import { usePacksStore, type PackResult } from '../../stores/packs'
+import { useModCompatStore } from '../../stores/modCompat'
 import { badgeOf, useRatscanStore } from '../../stores/ratscan'
 import { useTasksStore } from '../../stores/tasks'
 import { openExternal } from '../../utils/external'
@@ -140,7 +141,7 @@ async function load() {
   updates.value = new Map([...updates.value].filter(([name]) => present.has(name)))
   loading.value = false
   // Badges are an extra: a failure to read them must not hide the list.
-  const extras = props.kind === 'mod' ? ratscan.refresh(props.instanceId) : props.kind === 'resourcePack' ? packs.refresh(props.instanceId) : undefined
+  const extras = props.kind === 'mod' ? Promise.all([ratscan.refresh(props.instanceId), modCompat.refresh(props.instanceId)]) : props.kind === 'resourcePack' ? packs.refresh(props.instanceId) : undefined
   extras?.catch((e: unknown) => console.warn('cannot read the plugin results', e))
 }
 async function openTab() {
@@ -155,6 +156,7 @@ watch(() => [props.instanceId, props.kind], openTab)
 watch(() => packs.changed, load)
 
 // ---- RatScan (mods) ----
+const modCompat = useModCompatStore()
 const jarsByName = computed(() => new Map((ratscan.jars[props.instanceId] ?? []).map((jar) => [jar.fileName, jar])))
 const scanning = computed(() => ratscan.progress?.instanceId === props.instanceId)
 const scanDetails = ref<JarScan | null>(null)
@@ -476,6 +478,9 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
                     :title="t.scan.details"
                     @click.stop="scanDetails = jarsByName.get(r.fileName)!"
                   >{{ badgeText[badgeOf(jarsByName.get(r.fileName)!.scan!.verdict)] }}</button>
+                  <span v-if="kind === 'mod' && modCompat.byFile[instanceId]?.[r.fileName]" class="badge badge-warn" :title="modCompat.hint(modCompat.byFile[instanceId][r.fileName])">
+                    {{ modCompat.label(modCompat.byFile[instanceId][r.fileName]) }}
+                  </span>
                   <span v-if="kind === 'resourcePack' && mismatchOf(r)?.mismatch" class="badge badge-warn" :title="t.packs.mismatchHint">
                     {{ t.packs.madeFor(mismatchOf(r)!.madeFor ?? '?') }}
                   </span>

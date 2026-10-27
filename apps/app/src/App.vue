@@ -6,6 +6,7 @@ import type { OnboardingInfo, RelocationReport } from './api/types'
 import BlockedFilesDialog from './components/BlockedFilesDialog.vue'
 import CrashDialog from './components/CrashDialog.vue'
 import LaunchScanDialog from './components/LaunchScanDialog.vue'
+import ModCompatDialog from './components/ModCompatDialog.vue'
 import MainToolbar from './components/MainToolbar.vue'
 import RelocationNotice from './components/RelocationNotice.vue'
 import SizeGrip from './components/SizeGrip.vue'
@@ -66,6 +67,7 @@ onMounted(async () => {
     <RelocationNotice v-if="relocationReport" :report="relocationReport" @close="relocationReport = null" />
     <BlockedFilesDialog v-if="tasks.blocked.length" :files="tasks.blocked" :instance-id="tasks.blockedInstanceId" @close="tasks.blocked = []" />
     <CrashDialog v-if="onboarding === null" />
+    <ModCompatDialog />
     <LaunchScanDialog />
     <ToastHost />
     <SizeGrip />

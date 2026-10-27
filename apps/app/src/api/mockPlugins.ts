@@ -176,6 +176,9 @@ export async function pluginCommand(cmd: string, a: Args, ctx: PluginMockContext
       }
       return { value: packs }
     }
+    case 'mod_compat':
+      // The real backend reads fabric.mod.json, mods.toml and friends in Rust; the mock jars have none.
+      return { value: [] }
     default:
       return undefined
   }

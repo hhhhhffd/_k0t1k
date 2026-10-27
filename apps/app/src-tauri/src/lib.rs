@@ -193,6 +193,7 @@ pub fn run() {
             plugins::read_resource_file,
             plugins::save_resource_file,
             plugins::resourcepack_compat,
+            plugins::mod_compat,
             update::check_for_update,
             update::install_update,
         ])

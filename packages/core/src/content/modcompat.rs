@@ -39,9 +39,10 @@ pub struct ModCompat {
     pub loader_mismatch: bool,
 }
 
-/// The mod loader among an instance's components, if any.
+/// The mod loader among an instance's components, if any. A turned-off loader counts as none:
+/// the game starts as vanilla and mods are not loaded at all.
 pub fn loader_of_components(components: &[ComponentSpec]) -> Option<Loader> {
-    components.iter().find_map(|component| match component.uid.as_str() {
+    components.iter().filter(|component| !component.disabled).find_map(|component| match component.uid.as_str() {
         "net.fabricmc.fabric-loader" => Some(Loader::Fabric),
         "org.quiltmc.quilt-loader" => Some(Loader::Quilt),
         "net.minecraftforge" => Some(Loader::Forge),
@@ -490,6 +491,13 @@ mod tests {
         assert!(template[0].minecraft.is_empty());
         assert!(descriptors_of_jar(jar(&[("fabric.mod.json", "{broken")])).is_err());
         assert!(descriptors_of_jar(jar(&[("readme.txt", "x")])).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_turned_off_loader_is_no_loader() {
+        let component = |uid: &str, disabled| ComponentSpec { uid: uid.into(), version: "1".into(), dependency_only: false, disabled };
+        assert_eq!(loader_of_components(&[component("net.fabricmc.fabric-loader", false)]), Some(Loader::Fabric));
+        assert_eq!(loader_of_components(&[component("net.fabricmc.fabric-loader", true)]), None);
     }
 
     fn fabric(spec: &[&str]) -> Descriptor {

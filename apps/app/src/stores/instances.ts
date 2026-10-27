@@ -3,6 +3,7 @@ import { computed, reactive, ref, shallowReactive } from 'vue'
 import * as api from '../api/commands'
 import type { GameCrashed, GameLogBatch, GameLogLine, Instance, InstanceRunState, ModpackImport, ProjectVersion, RunSession, RunState, SessionId } from '../api/types'
 import { t } from '../i18n'
+import { useModCompatStore } from './modCompat'
 import { useRatscanStore } from './ratscan'
 import { useTasksStore } from './tasks'
 import { baseName } from '../utils/useFileDrop'
@@ -30,6 +31,7 @@ export interface PendingInstance {
 export const useInstancesStore = defineStore('instances', () => {
   const tasks = useTasksStore()
   const ratscan = useRatscanStore()
+  const modCompat = useModCompatStore()
   const instances = ref<Instance[]>([])
   const loaded = ref(false)
   /** Folder holding the instance folders; custom icons are files in it. */
@@ -126,9 +128,10 @@ export const useInstancesStore = defineStore('instances', () => {
     return upsert(result.instance)
   }
 
-  /** Resolves to undefined when the user cancels at the mod scan questions (unscanned or dangerous mods). */
+  /** Resolves to undefined when the user cancels at the mod scan questions (mods for another version, unscanned or dangerous mods). */
   /** `world` opens that saves folder on start (Quick Play) instead of joining a server. */
   async function launch(id: string, accountId?: string, server?: string, world?: string) {
+    if (!(await modCompat.confirmLaunch(id))) return undefined
     if (!(await ratscan.confirmLaunch(id))) return undefined
     const alreadyRunning = liveSessionsOf(id).length > 0
     const sessionId = await api.launchInstance(id, accountId, server, world)

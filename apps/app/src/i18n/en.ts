@@ -127,6 +127,18 @@ export const en = {
     nothingToRepair: 'Nothing needed repair.',
     offer: (name: string, madeFor: string, target: string) => `${name} was made for ${madeFor}. Convert it to ${target} for this instance?`,
   },
+  modCompat: {
+    madeFor: (needs: string) => `for ${needs}`,
+    madeForLoader: (loaders: string) => `${loaders} mod`,
+    versionHint: (needs: string) => `This mod is made for Minecraft ${needs}, not for the version of this instance. It may crash or simply not load.`,
+    loaderHint: (loaders: string) => `This mod is made for ${loaders}, not for the loader of this instance. It will not load.`,
+    title: 'Some mods are not for this version',
+    text: (version: string) => `The mods below say they are not meant for this instance (Minecraft ${version}). The game may crash or ignore them.`,
+    needsVersion: (needs: string) => `needs Minecraft ${needs}`,
+    needsLoader: (loaders: string) => `needs ${loaders}`,
+    launchAnyway: 'Launch anyway',
+    disableAndLaunch: 'Disable these and launch',
+  },
   plugins: {
     title: 'Plugins',
     intro: 'RatScan (mod scanner) and packconv (resource pack converter) run in a sandbox without access to your files. Updates are signed.',
