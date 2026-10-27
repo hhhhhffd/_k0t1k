@@ -47,9 +47,11 @@ export const useTasksStore = defineStore('tasks', () => {
   function handle(e: ProgressEvent) {
     tasks.set(e.task, e)
     if (e.error) {
-      reported.add(e.error)
-      setTimeout(() => reported.delete(e.error!), 10_000)
-      toast(`${e.title ?? e.task}: ${e.error}`, 'error')
+      // Stored the way `guard` compares it, so the same error is not toasted twice.
+      const message = errorMessage(e.error)
+      reported.add(message)
+      setTimeout(() => reported.delete(message), 10_000)
+      toast(`${e.title ?? e.task}: ${message}`, 'error')
     }
     if (e.finished || e.error) setTimeout(() => tasks.delete(e.task), e.error ? 6000 : 2500)
   }

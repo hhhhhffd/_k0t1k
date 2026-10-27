@@ -17,11 +17,15 @@ export function minecraftVersionOf(inst: Instance): string {
 
 /** The instance's mod loader. A turned-off loader is still returned (its version and mods are kept) with `disabled` set. */
 export function loaderOf(inst: Instance): { id: LoaderId; label: string; version: string; disabled: boolean } | undefined {
+  // An enabled loader wins over a turned-off one (a Prism import can carry both).
+  let off: ReturnType<typeof loaderOf>
   for (const id of Object.keys(LOADER_UIDS) as LoaderId[]) {
     const comp = inst.components.find((c) => c.uid === LOADER_UIDS[id])
-    if (comp) return { id, label: LOADER_LABELS[id], version: comp.version, disabled: comp.disabled ?? false }
+    if (!comp) continue
+    if (!comp.disabled) return { id, label: LOADER_LABELS[id], version: comp.version, disabled: false }
+    off ??= { id, label: LOADER_LABELS[id], version: comp.version, disabled: true }
   }
-  return undefined
+  return off
 }
 
 export function clientOf(inst: Instance): { id: ClientId; label: string; version: string } | undefined {

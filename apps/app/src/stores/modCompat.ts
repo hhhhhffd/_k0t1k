@@ -45,10 +45,15 @@ export const useModCompatStore = defineStore('modCompat', () => {
     }
     if (!mods.length) return true
     const instance = useInstancesStore().instances.find((i) => i.id === instanceId)
+    // A second launch while the question is open cancels the first one instead of leaving it pending forever.
+    prompt.value?.answer('cancel')
+    let current: ModCompatPrompt | undefined
     const choice = await new Promise<'launch' | 'disable' | 'cancel'>((resolve) => {
-      prompt.value = { instanceId, minecraftVersion: instance ? minecraftVersionOf(instance) : '?', mods, answer: resolve }
+      current = { instanceId, minecraftVersion: instance ? minecraftVersionOf(instance) : '?', mods, answer: resolve }
+      prompt.value = current
     })
-    prompt.value = null
+    // Close the dialog only if it still shows this question; compared by `answer` because the ref holds a proxy.
+    if (prompt.value && prompt.value.answer === current?.answer) prompt.value = null
     if (choice === 'cancel') return false
     if (choice === 'disable') {
       for (const mod of mods) await api.toggleResource(instanceId, 'mod', mod.fileName, false)
