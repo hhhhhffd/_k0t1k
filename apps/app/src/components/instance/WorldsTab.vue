@@ -35,7 +35,6 @@ const renameFolder = ref(false)
 const copying = ref<World | null>(null)
 const backingUp = ref<World | null>(null)
 const deleting = ref<World | null>(null)
-/** Folder name of the highlighted world; the side panel acts on it. */
 const selected = ref<string | null>(null)
 const current = computed(() => worlds.value.find((w) => w.dirName === selected.value) ?? null)
 
@@ -87,7 +86,6 @@ async function resetIcon(world: World) {
   if (done) tasks.toast(t.worlds.iconReset, 'ok')
 }
 
-/** Actions on one world; shared by the side panel and the right-click menu. */
 function worldActions(world: World | null): PanelAction[] {
   const none = !world
   return [
@@ -99,7 +97,7 @@ function worldActions(world: World | null): PanelAction[] {
     { label: t.worlds.backup, icon: Archive, disabled: none, action: () => (backingUp.value = world) },
     { label: t.worlds.copySeed, icon: Sprout, disabled: !world?.seed, action: () => world && void copySeed(world) },
     { label: t.worlds.resetIcon, icon: ImageOff, disabled: !world?.icon, action: () => world && void resetIcon(world) },
-    { label: t.worlds.openFolder, icon: FolderOpen, disabled: none, action: () => world && void openFolder(world) },
+    { label: t.worlds.openFolder, icon: FolderOpen, iconClass: 'text-warn', disabled: none, action: () => world && void openFolder(world) },
   ]
 }
 const panelActions = computed<PanelAction[]>(() => [
@@ -108,7 +106,7 @@ const panelActions = computed<PanelAction[]>(() => [
 ])
 const footerActions = computed<PanelAction[]>(() => [
   { label: t.worlds.refresh, icon: RefreshCw, disabled: loading.value, action: () => void load() },
-  { label: t.worlds.openSaves, icon: FolderOpen, action: () => void openSaves() },
+  { label: t.worlds.openSaves, icon: FolderOpen, iconClass: 'text-warn', action: () => void openSaves() },
 ])
 
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
@@ -182,8 +180,8 @@ async function confirmDelete() {
       <div class="flex min-w-0 flex-1 flex-col gap-2">
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!worlds.length" class="py-10 text-center text-faint">{{ t.worlds.empty }}</p>
-        <div v-else class="card overflow-hidden">
-          <div class="flex items-center gap-3 border-b border-line bg-raised px-3 py-1.5 text-[12px] font-semibold text-muted">
+        <div v-else class="overflow-hidden rounded-xl border border-line">
+          <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-10 shrink-0" />
             <span class="min-w-0 flex-1">{{ t.worlds.name }} · {{ worlds.length }}</span>
             <span class="w-28 shrink-0">{{ t.worlds.mode }}</span>

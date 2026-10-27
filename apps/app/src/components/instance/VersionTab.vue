@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ArrowUpCircle, Box, FolderOpen, Pencil, Puzzle, Trash2, Wrench } from '@lucide/vue'
+import { ArrowUpCircle, Box, Pencil, Puzzle, Trash2, Wrench } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
-import { listLoaderVersions, openInstanceFolder } from '../../api/commands'
+import { listLoaderVersions } from '../../api/commands'
 import { CLIENT_UIDS, COMPONENT_MINECRAFT, LOADER_UIDS, type ClientId, type Instance, type LoaderId, type LoaderVersion } from '../../api/types'
 import { t } from '../../i18n'
 import { useInstancesStore } from '../../stores/instances'
 import { useTasksStore } from '../../stores/tasks'
 import { CLIENT_LABELS, LOADER_LABELS, clientOf, loaderOf, minecraftVersionOf } from '../../utils/format'
+import ActionPanel from '../ActionPanel.vue'
+import type { PanelAction } from '../ActionPanel.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import LoaderPicker from '../LoaderPicker.vue'
 import McVersionList from '../McVersionList.vue'
@@ -85,6 +87,21 @@ function removeLoader() {
   confirmRemove.value = false
   void apply(minecraftVersionOf(props.instance), null)
 }
+
+const actions = computed<PanelAction[]>(() => {
+  const locked = running.value || busy.value
+  const list: PanelAction[] = [
+    { label: t.version.change, icon: Pencil, disabled: locked, action: openEditor },
+    { label: loader.value || client.value ? t.version.replaceLoader : t.version.installLoader, icon: Puzzle, disabled: locked, action: openEditor },
+  ]
+  if (loader.value && newestLoader.value) {
+    list.push({ label: t.version.updateLoader(newestLoader.value.version), icon: ArrowUpCircle, iconClass: 'text-ok', disabled: locked, action: updateLoader })
+  }
+  if (loader.value || client.value) {
+    list.push({ label: client.value ? t.version.removeClient : t.version.removeLoader, icon: Trash2, danger: true, disabled: locked, action: () => (confirmRemove.value = true) })
+  }
+  return list
+})
 </script>
 
 <template>
@@ -93,7 +110,7 @@ function removeLoader() {
     <p v-else-if="instance.managedPack" class="rounded-lg border border-line bg-raised px-3 py-2 text-[12.5px] text-muted">{{ t.version.managedNote }}</p>
 
     <div class="flex gap-3">
-      <div class="card min-w-0 flex-1 overflow-hidden">
+      <div class="min-w-0 flex-1 self-start overflow-hidden rounded-xl border border-line">
         <div class="grid grid-cols-[1fr_200px] border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
           <span>{{ t.version.component }}</span>
           <span>{{ t.version.version }}</span>
@@ -118,21 +135,7 @@ function removeLoader() {
         </button>
       </div>
 
-      <div class="flex w-56 shrink-0 flex-col gap-1">
-        <button class="btn justify-start" :disabled="running || busy" @click="openEditor"><Pencil :size="15" class="text-accent" />{{ t.version.change }}</button>
-        <button class="btn justify-start" :disabled="running || busy" @click="openEditor">
-          <Puzzle :size="15" class="text-accent" />{{ loader || client ? t.version.replaceLoader : t.version.installLoader }}
-        </button>
-        <button v-if="loader && newestLoader" class="btn justify-start" :disabled="running || busy" @click="updateLoader">
-          <ArrowUpCircle :size="15" class="text-ok" />
-          <span class="truncate">{{ t.version.updateLoader(newestLoader.version) }}</span>
-        </button>
-        <button v-if="loader || client" class="btn justify-start" :disabled="running || busy" @click="confirmRemove = true">
-          <Trash2 :size="15" class="text-danger" />{{ client ? t.version.removeClient : t.version.removeLoader }}
-        </button>
-        <div class="my-1 h-px bg-line" />
-        <button class="btn justify-start" @click="tasks.guard(() => openInstanceFolder(instance.id))"><FolderOpen :size="15" class="text-warn" />{{ t.library.openFolder }}</button>
-      </div>
+      <ActionPanel :actions="actions" />
     </div>
 
     <ModalDialog v-if="editing" :title="t.version.dialogTitle" large @close="editing = false">

@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { AvailableUpdate } from '../../api/types'
 
-/** Results of the automatic update check per `instance:kind`, so switching tabs does not ask the catalogs again. */
+/** Automatic update checks per `instance:kind`, so switching tabs does not query the catalogs again. */
 const updateCache = new Map<string, { at: number; updates: AvailableUpdate[] }>()
 const UPDATE_CHECK_TTL_MS = 10 * 60 * 1000
 </script>
@@ -73,7 +73,6 @@ const bulk = ref<{ done: number; total: number } | null>(null)
 const displayName = (r: LocalResource) => plainText(r.metadata?.name ?? '') || r.fileName
 const projectOf = (r: LocalResource) => (r.origin ? originProject(r.origin) : undefined)
 
-// ---- sorting (column headers) ----
 type SortKey = 'name' | 'modified'
 const sortKey = ref<SortKey>('name')
 const sortAsc = ref(true)
@@ -97,7 +96,6 @@ const visible = computed(() => {
     .sort((a, b) => value(a).localeCompare(value(b), undefined, { numeric: true, sensitivity: 'base' }) * (sortAsc.value ? 1 : -1))
 })
 
-// ---- selection: click, Ctrl+click toggles, Shift+click selects a range ----
 const selected = ref(new Set<string>())
 let anchor: string | null = null
 const selectedItems = computed(() => resources.value.filter((r) => selected.value.has(r.fileName)))
@@ -142,7 +140,6 @@ async function load() {
   const extras = props.kind === 'mod' ? ratscan.refresh(props.instanceId) : props.kind === 'resourcePack' ? packs.refresh(props.instanceId) : undefined
   extras?.catch((e: unknown) => console.warn('cannot read the plugin results', e))
 }
-/** Lists the files, then checks for updates on its own unless a check of the last minutes is cached. */
 async function openTab() {
   updates.value = new Map()
   await load()
@@ -193,7 +190,7 @@ watch(
   { immediate: true },
 )
 
-/** Runs `action` for each file in turn and reloads once; the first failure stops the rest. */
+/** The first failure stops the rest. */
 async function forEach(items: LocalResource[], action: (r: LocalResource) => Promise<void>) {
   await tasks.guard(async () => {
     for (const r of items) await action(r)
@@ -213,13 +210,9 @@ async function confirmDelete() {
 }
 
 const cacheKey = () => `${props.instanceId}:${props.kind}`
-/** Changes to the files make the cached check stale. */
 const forgetCheck = () => updateCache.delete(cacheKey())
 
-/**
- * Identifies hand-added files on Modrinth/CurseForge (they get catalog metadata) and looks for newer
- * versions. `silent` is the automatic check when the tab opens: it reports nothing when all is up to date.
- */
+/** `silent`: the automatic check, which reports nothing when all is up to date. */
 async function checkUpdates(silent = false) {
   if (checking.value) return
   checking.value = true
@@ -233,7 +226,7 @@ async function checkUpdates(silent = false) {
   if (!found) return
   updateCache.set(cacheKey(), { at: Date.now(), updates: found })
   updates.value = new Map(found.map((u) => [u.fileName, u]))
-  // identified files now show their catalog
+  // files identified by the check now have catalog metadata
   await load()
   if (!silent && !found.length) tasks.toast(t.instance.noUpdates, 'ok')
 }
@@ -283,7 +276,6 @@ function noteAdded(fileNames: string[]) {
   else if (props.kind === 'resourcePack') void packs.offerConversion(props.instanceId, fileNames)
 }
 
-/** Files the game reads from the folder; the backend checks each picked file the same way as a dropped one. */
 const fileExtensions: Record<LocalResourceKind, string[]> = {
   mod: ['jar', 'litemod', 'zip'],
   resourcePack: ['zip'],
@@ -330,8 +322,7 @@ function closeContent() {
   void load()
 }
 
-// ---- side panel and context menu ----
-/** Actions on the selected files; shared by the side panel and the right-click menu. */
+/** Shared by the side panel and the right-click menu. */
 const selectionActions = computed<PanelAction[]>(() => {
   const items = selectedItems.value
   const one = single.value
@@ -401,8 +392,8 @@ const panelActions = computed<PanelAction[]>(() => {
   return list
 })
 const footerActions = computed<PanelAction[]>(() => [
-  { label: t.instance.openFolder, icon: FolderOpen, title: t.instance.folderOf[props.kind], action: () => void tasks.guard(() => api.openContentFolder(props.instanceId, props.kind)) },
-  ...(props.kind === 'mod' ? [{ label: t.instance.openConfigs, icon: FolderCog, action: () => void tasks.guard(() => api.openConfigFolder(props.instanceId)) }] : []),
+  { label: t.instance.openFolder, icon: FolderOpen, iconClass: 'text-warn', title: t.instance.folderOf[props.kind], action: () => void tasks.guard(() => api.openContentFolder(props.instanceId, props.kind)) },
+  ...(props.kind === 'mod' ? [{ label: t.instance.openConfigs, icon: FolderCog, iconClass: 'text-warn', action: () => void tasks.guard(() => api.openConfigFolder(props.instanceId)) }] : []),
 ])
 
 const menu = ref<{ x: number; y: number } | null>(null)
@@ -439,8 +430,8 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
 
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.instance.noResources }}</p>
-        <div v-else class="card overflow-hidden !outline-none" tabindex="0" role="listbox" aria-multiselectable="true" @keydown="onKey">
-          <div class="flex items-center gap-3 border-b border-line bg-raised px-3 py-1.5 text-[12px] font-semibold text-muted">
+        <div v-else class="overflow-hidden rounded-xl border border-line !outline-none" tabindex="0" role="listbox" aria-multiselectable="true" @keydown="onKey">
+          <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-9 shrink-0" />
             <span class="w-9 shrink-0" />
             <button

@@ -28,7 +28,6 @@ const loading = ref(true)
 /** `index` null adds a new server. */
 const editing = ref<{ index: number | null; server: Server } | null>(null)
 const deleting = ref<number | null>(null)
-/** Index of the highlighted server; the side panel acts on it. */
 const selected = ref<number | null>(null)
 
 const policyOptions = (Object.keys(t.servers.policies) as ResourcePackPolicy[]).map((value) => ({ value, label: t.servers.policies[value] }))
@@ -95,7 +94,6 @@ async function confirmDelete() {
   await change(() => api.removeServer(props.instanceId, index))
 }
 
-/** Actions on one server; shared by the side panel and the right-click menu. */
 function serverActions(index: number | null): PanelAction[] {
   const server = index === null ? undefined : servers.value[index]
   return [
@@ -130,8 +128,8 @@ function openMenu(e: MouseEvent, index: number) {
       <div class="min-w-0 flex-1">
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!servers.length" class="py-10 text-center text-faint">{{ t.servers.empty }}</p>
-        <div v-else class="card overflow-hidden">
-          <div class="flex items-center gap-3 border-b border-line bg-raised px-3 py-1.5 text-[12px] font-semibold text-muted">
+        <div v-else class="overflow-hidden rounded-xl border border-line">
+          <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-10 shrink-0" />
             <span class="min-w-0 flex-1">{{ t.servers.name }} · {{ servers.length }}</span>
             <span class="w-24 shrink-0">{{ t.servers.players }}</span>
