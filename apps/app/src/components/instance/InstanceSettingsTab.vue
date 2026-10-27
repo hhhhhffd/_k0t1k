@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { Check, FolderOpen } from '@lucide/vue'
+import { FolderOpen } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { detectJava, fileUrl, isTauri, listManagedJava, openLauncherFolder } from '../../api/commands'
 import { type Instance, type InstanceSettings, type JavaInstall, SHARED_FOLDERS, type SharedFolder } from '../../api/types'
@@ -36,10 +36,22 @@ const draft = reactive({
 const isShared = (folder: SharedFolder) => draft.sharedFolders.includes(folder)
 function setShared(folder: SharedFolder, on: boolean) {
   draft.sharedFolders = SHARED_FOLDERS.filter((f) => (f === folder ? on : isShared(f)))
-  markDirty()
+  markDirty(true)
 }
 const dirty = ref(false)
-const markDirty = () => (dirty.value = true)
+const SAVE_DELAY_MS = 500
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+let saving = false
+let editedWhileSaving = false
+const justSaved = ref(false)
+let savedTimer: ReturnType<typeof setTimeout> | undefined
+/** Autosave: text edits are saved after a short pause, switches and pickers at once. */
+function markDirty(immediate = false) {
+  dirty.value = true
+  clearTimeout(saveTimer)
+  if (immediate) void save()
+  else saveTimer = setTimeout(() => void save(), SAVE_DELAY_MS)
+}
 
 // Java the launcher downloaded plus installations found on the system, offered as quick choices for the override.
 const javaInstalls = ref<JavaInstall[]>([])
@@ -51,7 +63,12 @@ function onSaveShortcut(e: KeyboardEvent) {
   }
 }
 onMounted(() => window.addEventListener('keydown', onSaveShortcut))
-onBeforeUnmount(() => window.removeEventListener('keydown', onSaveShortcut))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onSaveShortcut)
+  clearTimeout(savedTimer)
+  // Leaving the tab must not lose an edit that is still waiting for its pause.
+  if (dirty.value) void save()
+})
 
 onMounted(async () => {
   const [managed, detected] = await Promise.all([tasks.guard(listManagedJava), tasks.guard(detectJava)])
@@ -64,7 +81,7 @@ const javaOptions = computed(() =>
 function chooseJava(path: string) {
   if (!draft.settings.java) return
   draft.settings.java.path = path
-  markDirty()
+  markDirty(true)
 }
 
 async function pickJava() {
@@ -114,7 +131,7 @@ function overrideModel<K extends keyof InstanceSettings>(key: K, fromGlobal: () 
     get: () => draft.settings[key] != null,
     set: (on: boolean) => {
       draft.settings[key] = on ? fromGlobal() : undefined
-      markDirty()
+      markDirty(true)
     },
   })
 }
@@ -137,41 +154,42 @@ const windowView = computed(() => draft.settings.window ?? global.value?.window 
 const commandsView = computed(() => draft.settings.commands ?? global.value?.commands ?? { preLaunch: '', postExit: '', wrapper: '' })
 
 async function save() {
-  const saved = await tasks.guard(() =>
-    store.updateSettings(props.instance.id, {
-      icon: draft.icon,
-      notes: draft.notes,
-      joinServer: draft.joinServer.trim() || null,
-      sharedFolders: draft.sharedFolders,
-      settings: clone(draft.settings),
-    }),
-  )
-  if (saved) {
-    dirty.value = false
-    tasks.toast(t.iset.saved, 'ok')
+  clearTimeout(saveTimer)
+  if (saving) {
+    editedWhileSaving = true
+    return
   }
+  saving = true
+  do {
+    editedWhileSaving = false
+    dirty.value = false
+    const saved = await tasks.guard(() =>
+      store.updateSettings(props.instance.id, {
+        icon: draft.icon,
+        notes: draft.notes,
+        joinServer: draft.joinServer.trim() || null,
+        sharedFolders: draft.sharedFolders,
+        settings: clone(draft.settings),
+      }),
+    )
+    if (saved) {
+      justSaved.value = true
+      clearTimeout(savedTimer)
+      savedTimer = setTimeout(() => (justSaved.value = false), 1800)
+    } else {
+      // The error is already shown; the edit stays pending until the next change or leaving the tab retries it.
+      dirty.value = true
+      editedWhileSaving = false
+    }
+  } while (editedWhileSaving)
+  saving = false
 }
 </script>
 
 <template>
-  <Teleport to="#tab-actions" defer>
-    <button
-      class="flex size-9 items-center justify-center rounded-full border transition-all"
-      :class="
-        dirty
-          ? 'border-accent bg-accent text-accent-fg shadow-[var(--glow)] hover:brightness-110'
-          : 'border-line bg-raised text-faint opacity-60'
-      "
-      :disabled="!dirty"
-      :title="`${t.common.save} (Ctrl+S)`"
-      :aria-label="t.common.save"
-      @click="save"
-    >
-      <Check :size="18" :stroke-width="3" />
-    </button>
-  </Teleport>
   <!-- Section cards flow into two columns when the tab is wide enough, one column otherwise. -->
-  <div v-if="global" class="@container" @input.capture="markDirty" @change.capture="markDirty">
+  <div v-if="global" class="@container" @input.capture="markDirty()" @change.capture="markDirty()">
+    <p class="mb-1 h-4 text-right text-[12px] text-ok transition-opacity" :class="justSaved ? 'opacity-100' : 'opacity-0'" role="status">{{ justSaved ? t.iset.saved : '' }}</p>
     <div class="columns-1 gap-3 pb-4 @4xl:columns-2 [&>section]:mb-3 [&>section]:break-inside-avoid">
     <section class="card flex flex-col gap-3 p-4">
       <h3 class="text-[14px] font-semibold">{{ t.iset.general }}</h3>
@@ -241,7 +259,7 @@ async function save() {
           :aria-checked="(draft.settings.overlay ?? null) === o.value"
           class="h-8 flex-1 rounded-md px-2 font-medium transition-colors"
           :class="(draft.settings.overlay ?? null) === o.value ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
-          @click="((draft.settings.overlay = o.value), markDirty())"
+          @click="((draft.settings.overlay = o.value), markDirty(true))"
         >{{ o.label }}</button>
       </div>
     </section>

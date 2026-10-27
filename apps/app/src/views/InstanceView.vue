@@ -102,8 +102,6 @@ const { dragging } = useFileDrop(async (paths) => {
           <span class="flex items-center gap-1 text-muted"><History :size="12" />{{ formatRelative(instance.lastPlayed) }}</span>
         </div>
       </div>
-      <!-- Tab actions (e.g. save in Settings) are teleported here, so they never cover the tab content. -->
-      <div id="tab-actions" class="flex shrink-0 items-center gap-2"></div>
       <button v-if="instance.managedPack" class="tool shrink-0" @click="showPackUpdate = true"><RefreshCw :size="15" class="text-ok" />{{ t.pack.check }}</button>
       <button class="tool shrink-0" @click="openExportMenu"><Upload :size="15" class="text-ok" />{{ t.transfer.export }}</button>
       <button class="tool shrink-0" :title="t.instance.instanceFolderHint" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="15" class="text-warn" />{{ t.instance.instanceFolder }}</button>
