@@ -136,6 +136,7 @@
  *   ratscan_report(instanceId, sha1)                         -> ScanResult | null
  *   read_resource_file(instanceId, kind, fileName)           -> ArrayBuffer   (binary IPC, up to 256 MiB)
  *   save_resource_file(raw body, header x-args)              -> string        (new file in the resource folder, never replaces; resolves to the name used)
+ *   mod_compat_files(instanceId, paths)                     -> ModCompat[]   (the same check for jars about to be added)
  *   mod_compat(instanceId)                                  -> ModCompat[]   (mod jars whose own descriptor wants another Minecraft version or loader; unreadable ones are left out)
  *   resourcepack_compat(instanceId)                          -> PackCompat[]  (zip packs: declared releases and whether they differ from the instance)
  * Events (backend -> frontend, via emit)
@@ -486,6 +487,7 @@ export function saveResourceFile(instanceId: string, kind: LocalResourceKind, fi
   return callBinary<string>('save_resource_file', bytes, { 'x-args': btoa(String.fromCharCode(...json)) })
 }
 export const modCompat = (instanceId: string) => call<ModCompat[]>('mod_compat', { instanceId })
+export const modCompatFiles = (instanceId: string, paths: string[]) => call<ModCompat[]>('mod_compat_files', { instanceId, paths })
 export const resourcepackCompat = (instanceId: string) => call<PackCompat[]>('resourcepack_compat', { instanceId })
 
 // ---- events ----

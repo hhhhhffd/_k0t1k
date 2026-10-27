@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{Read, Seek};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -118,6 +118,34 @@ pub fn check_mods(game_dir: &Path, instance_dir: &Path, minecraft: &str, loader:
         .collect();
     found.sort_by_key(|compat| compat.file_name.to_lowercase());
     Ok(found)
+}
+
+/// Jars about to be added to the instance that do not fit its Minecraft version or loader.
+/// Unreadable files and files that state nothing are left out, like in [`check_mods`].
+pub fn check_new_jars(game_dir: &Path, paths: &[PathBuf], minecraft: &str, loader: Option<Loader>) -> Vec<ModCompat> {
+    let Some(loader) = loader else {
+        return Vec::new();
+    };
+    let names = |path: &PathBuf| path.file_name().map(|name| name.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let installed = std::fs::read_dir(game_dir.join(ResourceKind::Mod.folder()))
+        .map(|entries| entries.filter_map(|entry| entry.ok()).map(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase()).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let has_connector = installed.iter().chain(paths.iter().map(names).collect::<Vec<_>>().iter()).any(|name| name.contains("connector"));
+    paths
+        .iter()
+        .filter(|path| names(path).ends_with(".jar"))
+        .filter_map(|path| {
+            let descriptors = match std::fs::File::open(path).at(path).and_then(descriptors_of_jar) {
+                Ok(descriptors) => descriptors,
+                Err(error) => {
+                    tracing::warn!("cannot read the descriptors of {}: {error}", path.display());
+                    return None;
+                }
+            };
+            let file_name = path.file_name()?.to_string_lossy().into_owned();
+            judge(file_name, &descriptors, minecraft, loader, has_connector)
+        })
+        .collect()
 }
 
 fn accepts(instance: Loader, jar: Loader) -> bool {
@@ -543,5 +571,28 @@ mod tests {
         // the second run is answered from the cache
         assert_eq!(check_mods(&game, &instance, "1.21.4", Some(Loader::Fabric)).unwrap(), found);
         assert!(check_mods(&game, &instance, "1.21.4", None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn new_jars_are_judged_before_they_are_added() {
+        let dir = tempfile::tempdir().unwrap();
+        let (game, incoming) = (dir.path().join("game"), dir.path().join("incoming"));
+        std::fs::create_dir_all(&incoming).unwrap();
+        let write = |name: &str, text: &str| {
+            let path = incoming.join(name);
+            std::fs::write(&path, jar(&[("fabric.mod.json", text)]).into_inner()).unwrap();
+            path
+        };
+        let old = write("old.jar", r#"{"id":"o","depends":{"minecraft":"1.20.1"}}"#);
+        let ok = write("ok.jar", r#"{"id":"k","depends":{"minecraft":"1.21.x"}}"#);
+        let broken = incoming.join("broken.jar");
+        std::fs::write(&broken, b"not a zip").unwrap();
+        let pack = incoming.join("pack.zip");
+        std::fs::write(&pack, b"").unwrap();
+        // the game folder may not have a mods folder yet
+        let found = check_new_jars(&game, &[old, ok, broken, pack], "1.21.4", Some(Loader::Fabric));
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].file_name.as_str(), found[0].needs.as_deref()), ("old.jar", Some("1.20.1")));
+        assert!(check_new_jars(&game, &[incoming.join("old.jar")], "1.21.4", None).is_empty());
     }
 }

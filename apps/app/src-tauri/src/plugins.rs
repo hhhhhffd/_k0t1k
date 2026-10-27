@@ -381,6 +381,20 @@ pub async fn mod_compat(state: State<'_, AppState>, instance_id: String) -> Comm
     .await
 }
 
+/// Jars about to be added that declare another Minecraft version or loader than the instance.
+#[tauri::command]
+pub async fn mod_compat_files(state: State<'_, AppState>, instance_id: String, paths: Vec<PathBuf>) -> CommandResult<Vec<ModCompat>> {
+    let instance = instance_of(&state, &instance_id).await?;
+    let game_dir = instance.game_dir(&state.paths);
+    blocking(move || {
+        let Some(minecraft) = modcompat::minecraft_of_components(&instance.components) else {
+            return Ok(Vec::new());
+        };
+        Ok(modcompat::check_new_jars(&game_dir, &paths, minecraft, modcompat::loader_of_components(&instance.components)))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

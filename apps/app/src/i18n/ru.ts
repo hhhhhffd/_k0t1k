@@ -142,6 +142,10 @@ export const ru: Dictionary = {
     someMismatch: (n: number) => `Модов для другой версии или загрузчика: ${n}`,
     launchAnyway: 'Всё равно запустить',
     disableAndLaunch: 'Отключить их и запустить',
+    addTitle: 'Эти моды не для этой версии',
+    addText: (version: string) => `Эти моды сами заявляют, что делались не для этой сборки (Minecraft ${version}). Всё равно добавить?`,
+    addAnyway: 'Всё равно добавить',
+    skipThese: 'Пропустить эти',
   },
   plugins: {
     title: 'Плагины',

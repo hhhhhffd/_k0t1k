@@ -142,6 +142,10 @@ export const en = {
     someMismatch: (n: number) => `Mods made for another version or loader: ${n}`,
     launchAnyway: 'Launch anyway',
     disableAndLaunch: 'Disable these and launch',
+    addTitle: 'These mods are not for this version',
+    addText: (version: string) => `The mods below say they are not meant for this instance (Minecraft ${version}). Add them anyway?`,
+    addAnyway: 'Add anyway',
+    skipThese: 'Skip these',
   },
   plugins: {
     title: 'Plugins',

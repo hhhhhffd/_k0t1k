@@ -1,6 +1,7 @@
 import { addLocalFiles } from '../api/commands'
 import type { AddFilesReport, LocalResourceKind } from '../api/types'
 import { t } from '../i18n'
+import { useModCompatStore } from '../stores/modCompat'
 import { usePacksStore } from '../stores/packs'
 import { useRatscanStore } from '../stores/ratscan'
 import { useTasksStore } from '../stores/tasks'
@@ -12,6 +13,11 @@ import { baseName } from './useFileDrop'
  */
 export async function addFilesToInstance(instanceId: string, kind: LocalResourceKind | null, paths: string[]): Promise<AddFilesReport | undefined> {
   const tasks = useTasksStore()
+  if (kind === 'mod' || kind === null) {
+    const checked = await useModCompatStore().confirmAdd(instanceId, paths)
+    if (!checked?.length) return undefined
+    paths = checked
+  }
   const report = await tasks.guard(() => addLocalFiles(instanceId, kind, paths))
   if (!report) return undefined
   if (report.added.length) tasks.toast(t.transfer.addedFiles(report.added.length), 'ok')
