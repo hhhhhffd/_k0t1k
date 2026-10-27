@@ -329,8 +329,8 @@ pub struct PackCompat {
     mismatch: bool,
 }
 
-/// For every zip resource pack of the instance: the releases it was made for and whether that
-/// differs from the instance's Minecraft version. Folders and unreadable zips are left out.
+/// For every zip or folder resource pack of the instance: the releases it was made for and whether that
+/// differs from the instance's Minecraft version. Unreadable zips are left out.
 #[tauri::command]
 pub async fn resourcepack_compat(state: State<'_, AppState>, instance_id: String) -> CommandResult<Vec<PackCompat>> {
     let instance = instance_of(&state, &instance_id).await?;
@@ -348,15 +348,19 @@ pub async fn resourcepack_compat(state: State<'_, AppState>, instance_id: String
         for entry in entries.flatten() {
             let file_name = entry.file_name().to_string_lossy().into_owned();
             let lower = file_name.to_ascii_lowercase();
-            if !(lower.ends_with(".zip") || lower.ends_with(".zip.disabled")) || !entry.path().is_file() {
-                continue;
-            }
-            let range = match std::fs::File::open(entry.path()).at(entry.path()).and_then(packformat::zip_declared_range) {
-                Ok(range) => range,
-                Err(error) => {
-                    tracing::warn!("cannot read the pack format of {}: {error}", entry.path().display());
-                    continue;
+            let path = entry.path();
+            let range = if path.is_dir() {
+                core_content::folder_declared_range(&path)
+            } else if lower.ends_with(".zip") || lower.ends_with(".zip.disabled") {
+                match std::fs::File::open(&path).at(&path).and_then(packformat::zip_declared_range) {
+                    Ok(range) => range,
+                    Err(error) => {
+                        tracing::warn!("cannot read the pack format of {}: {error}", path.display());
+                        continue;
+                    }
                 }
+            } else {
+                continue;
             };
             let mismatch = matches!((range, wanted), (Some((min, max)), Some(wanted)) if wanted < min || wanted > max);
             packs.insert(file_name.clone(), PackCompat { file_name, made_for: range.map(packformat::releases_label), mismatch });

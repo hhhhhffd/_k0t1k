@@ -156,10 +156,62 @@ fn read_metadata(
     }
 }
 
-/// Reads a whole file of an instance's resource folder, failing when it is larger than `max_bytes`
-/// or is a folder.
+const MAX_PACK_DEPTH: usize = 32;
+
+/// Zips a folder pack in memory. A disabled pack's `pack.mcmeta.disabled` is stored as `pack.mcmeta`.
+/// Symbolic links are skipped; the sum of the file sizes may not exceed `max_bytes`.
+fn zip_folder_pack(root: &Path, max_bytes: u64) -> Result<Vec<u8>> {
+    use std::io::Write;
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let has_active_mcmeta = root.join(PACK_MCMETA).is_file();
+    let mut total = 0u64;
+    let mut pending = vec![(root.to_path_buf(), String::new(), 0usize)];
+    while let Some((dir, prefix, depth)) = pending.pop() {
+        if depth > MAX_PACK_DEPTH {
+            return Err(Error::Other(format!("{} is nested too deeply", root.display())));
+        }
+        for entry in std::fs::read_dir(&dir).at(&dir)? {
+            let entry = entry.at(&dir)?;
+            let path = entry.path();
+            let file_type = entry.file_type().at(&path)?;
+            let mut name = format!("{prefix}{}", entry.file_name().to_string_lossy());
+            if file_type.is_dir() {
+                pending.push((path, format!("{name}/"), depth + 1));
+            } else if file_type.is_file() {
+                if name == format!("{PACK_MCMETA}{DISABLED_SUFFIX}") {
+                    if has_active_mcmeta {
+                        continue;
+                    }
+                    name = PACK_MCMETA.to_owned();
+                }
+                total += entry.metadata().at(&path)?.len();
+                if total > max_bytes {
+                    return Err(Error::Other(format!("{} is larger than {max_bytes} bytes", root.display())));
+                }
+                let bytes = std::fs::read(&path).at(&path)?;
+                writer.start_file(name, options)?;
+                writer.write_all(&bytes).at(&path)?;
+            }
+        }
+    }
+    Ok(writer.finish()?.into_inner())
+}
+
+/// The format range declared by a folder pack's `pack.mcmeta` (or `pack.mcmeta.disabled`); `None`
+/// when it has none or it is unreadable.
+pub fn folder_declared_range(folder: &Path) -> Option<(crate::packformat::PackFormat, crate::packformat::PackFormat)> {
+    let bytes = std::fs::read(folder.join(PACK_MCMETA)).or_else(|_| std::fs::read(disabled_pack_marker(folder))).ok()?;
+    crate::packformat::declared_range(&bytes)
+}
+
+/// Reads a whole file of an instance's resource folder, failing when it is larger than `max_bytes`.
+/// A folder pack is read as an in-memory zip of its contents, so plugins treat it like a zip pack.
 pub fn read_resource(game_dir: &Path, kind: ResourceKind, file_name: &str, max_bytes: u64) -> Result<Vec<u8>> {
     let path = resource_path(game_dir, kind, file_name)?;
+    if path.is_dir() && is_pack_kind(kind) {
+        return zip_folder_pack(&path, max_bytes);
+    }
     let size = std::fs::metadata(&path).at(&path)?.len();
     if !path.is_file() || size > max_bytes {
         return Err(Error::Other(format!("{file_name} is not a file or is larger than {max_bytes} bytes")));
@@ -689,6 +741,26 @@ authors = "mezz, others"
         assert!(!mods.join("a.jar").exists());
         assert!(packwiz::list(&mods.join(".index")).unwrap().is_empty());
         std::fs::remove_dir_all(&game_dir).unwrap();
+    }
+
+    #[test]
+    fn folder_pack_is_read_as_a_zip() {
+        let dir = tempfile::tempdir().unwrap();
+        let pack = dir.path().join("resourcepacks/Folder");
+        std::fs::create_dir_all(pack.join("assets/minecraft/textures")).unwrap();
+        std::fs::write(pack.join("pack.mcmeta.disabled"), br#"{"pack":{"pack_format":15}}"#).unwrap();
+        std::fs::write(pack.join("assets/minecraft/textures/a.png"), b"PNG").unwrap();
+        assert_eq!(folder_declared_range(&pack), Some(((15, 0), (15, 0))));
+
+        let bytes = read_resource(dir.path(), ResourceKind::ResourcePack, "Folder", 1 << 20).unwrap();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let mut names: Vec<_> = archive.file_names().map(|name| name.unwrap().into_owned()).collect();
+        names.sort();
+        assert_eq!(names, ["assets/minecraft/textures/a.png", "pack.mcmeta"]);
+        let mut content = String::new();
+        std::io::Read::read_to_string(&mut archive.by_name("pack.mcmeta").unwrap(), &mut content).unwrap();
+        assert!(content.contains("15"));
+        assert!(read_resource(dir.path(), ResourceKind::ResourcePack, "Folder", 4).is_err());
     }
 
     #[test]

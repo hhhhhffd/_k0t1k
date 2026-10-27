@@ -31,7 +31,7 @@ export function conversionTarget(instanceVersion: string, supported: string[]): 
   return best
 }
 
-/** `Faithful.zip` and `Faithful.zip.disabled` both give `Faithful`. */
+/** `Faithful.zip` and `Faithful.zip.disabled` both give `Faithful`; a folder pack keeps its name (and is saved as a zip). */
 const stemOf = (fileName: string) => fileName.replace(/\.disabled$/i, '').replace(/\.zip$/i, '')
 
 export interface PackResult {
@@ -88,13 +88,12 @@ export const usePacksStore = defineStore('packs', () => {
 
   /** After packs were added: offers to convert those made for another version, without blocking anything. */
   async function offerConversion(instanceId: string, fileNames: string[]) {
-    const names = fileNames.filter((name) => /\.zip(\.disabled)?$/i.test(name))
-    if (!names.length) return
+    if (!fileNames.length) return
     try {
       await refresh(instanceId)
       const target = await targetFor(instanceId)
       if (!target) return
-      for (const name of names) {
+      for (const name of fileNames) {
         const pack = compat.value[instanceId]?.[name]
         if (!pack?.mismatch) continue
         tasks.toast(t.packs.offer(name, pack.madeFor ?? '?', target), 'info', {

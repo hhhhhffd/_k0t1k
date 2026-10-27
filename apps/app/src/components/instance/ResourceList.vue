@@ -185,7 +185,7 @@ const badgeText = computed(() => ({ clean: t.scan.clean, suspicious: t.scan.susp
 // ---- packconv (resource packs) ----
 const packBusy = ref(false)
 const packResult = ref<(PackResult & { title: string }) | null>(null)
-const isZipPack = (r: LocalResource) => props.kind === 'resourcePack' && /\.zip(\.disabled)?$/i.test(r.fileName)
+const isZipPack = (r: LocalResource) => props.kind === 'resourcePack' && (r.isDir || /\.zip(\.disabled)?$/i.test(r.fileName))
 const mismatchOf = (r: LocalResource) => packs.compat[props.instanceId]?.[r.fileName]
 async function runPackTool(action: () => Promise<PackResult & { title: string }>) {
   packBusy.value = true
