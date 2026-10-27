@@ -42,12 +42,14 @@ import { useTasksStore } from '../../stores/tasks'
 import { openExternal } from '../../utils/external'
 import { errorMessage, formatBytes, formatRelative, originProject, plainText, PLATFORM_LABELS } from '../../utils/format'
 import { addFilesToInstance } from '../../utils/addFiles'
+import { useMarquee } from '../../utils/useMarquee'
 import ActionPanel from '../ActionPanel.vue'
 import type { PanelAction } from '../ActionPanel.vue'
 import ChangeVersionDialog from '../ChangeVersionDialog.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContentDialog from '../ContentDialog.vue'
 import ContextMenu from '../ContextMenu.vue'
+import MarqueeBox from '../MarqueeBox.vue'
 import ModalDialog from '../ModalDialog.vue'
 import ModListDialog from '../ModListDialog.vue'
 import ScanDetailsDialog from '../ScanDetailsDialog.vue'
@@ -98,6 +100,7 @@ const visible = computed(() => {
 
 const selected = ref(new Set<string>())
 let anchor: string | null = null
+const { box, onPointerDown } = useMarquee(selected)
 const selectedItems = computed(() => resources.value.filter((r) => selected.value.has(r.fileName)))
 const single = computed(() => (selectedItems.value.length === 1 ? selectedItems.value[0]! : null))
 
@@ -425,7 +428,7 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
 
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.instance.noResources }}</p>
-        <div v-else class="overflow-hidden rounded-xl border border-line !outline-none" tabindex="0" role="listbox" aria-multiselectable="true" @keydown="onKey">
+        <div v-else class="overflow-hidden rounded-xl border border-line !outline-none" tabindex="0" role="listbox" aria-multiselectable="true" @pointerdown="onPointerDown" @dragstart.prevent @keydown="onKey">
           <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-9 shrink-0" />
             <span class="w-9 shrink-0" />
@@ -444,6 +447,7 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
             <li
               v-for="r in visible"
               :key="r.fileName"
+              :data-select-key="r.fileName"
               role="option"
               :aria-selected="selected.has(r.fileName)"
               class="flex cursor-default items-center gap-3 border-b border-line/60 px-3 py-1.5 last:border-b-0"
@@ -490,6 +494,7 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
         <p class="text-[12px] text-faint">{{ t.instance.selectionHint }}</p>
       </div>
 
+      <MarqueeBox :box="box" />
       <ActionPanel :actions="panelActions" :footer="footerActions" />
     </div>
 
