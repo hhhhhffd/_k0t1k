@@ -1,7 +1,7 @@
-import { onBeforeUnmount, ref, type Ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 
 /** Elements that keep their own click behaviour: a drag never starts on them. */
-const INTERACTIVE = 'button, a, input, textarea, select, label, [role="switch"], [data-no-marquee]'
+const INTERACTIVE = 'button, a, input, textarea, select, label, [role="switch"], [role="dialog"], [role="menu"], [data-no-marquee]'
 /** Distance from the container edge where dragging starts scrolling it, and the top scroll speed in px per frame. */
 const EDGE = 40
 const MAX_SPEED = 20
@@ -23,25 +23,34 @@ function scrollParent(el: HTMLElement): HTMLElement | null {
   return null
 }
 
+/** Keys are not taken from fields where they edit text. */
+const isTextField = (el: EventTarget | null) =>
+  el instanceof HTMLElement && (el.isContentEditable || el.closest('input, textarea, select') !== null)
+
 /**
  * Explorer-like selection for a list or grid: drag a rectangle over items marked `data-select-key`,
  * Ctrl/Shift+drag adds to the selection, a click on empty space clears it.
- * Bind `onPointerDown` to the (focusable) wrapper; click selection of single items stays with the caller.
+ * `anchor` is any element of the tab; the drag may start anywhere in the scrollable area around it
+ * (margins, empty space), except on buttons, inputs, links and `data-no-marquee` blocks.
+ * `onKey` receives key presses (Ctrl+A, Delete, Esc) while the component is mounted and no text field or dialog has focus.
+ * Click selection of single items stays with the caller.
  */
-export function useMarquee(selected: Ref<Set<string>>) {
+export function useMarquee(selected: Ref<Set<string>>, anchor: Ref<HTMLElement | null>, onKey?: (e: KeyboardEvent) => void) {
   const box = ref<MarqueeBox | null>(null)
   let cleanup: (() => void) | null = null
 
   function onPointerDown(event: PointerEvent) {
-    if (event.button !== 0 || cleanup) return
-    const root = event.currentTarget as HTMLElement
+    if (event.button !== 0 || cleanup || !anchor.value) return
     const target = event.target as HTMLElement
-    if (target.closest(INTERACTIVE)) return
-    root.focus({ preventScroll: true })
+    if (!(target instanceof HTMLElement) || target.closest(INTERACTIVE)) return
+    const scroller = scrollParent(anchor.value)
+    const root = scroller ?? document.body
+    if (!root.contains(target)) return
+    // A press on the scrollbar belongs to the scrollbar.
+    if (scroller && (event.clientX >= scroller.getBoundingClientRect().left + scroller.clientWidth || event.clientY >= scroller.getBoundingClientRect().top + scroller.clientHeight)) return
 
     const additive = event.ctrlKey || event.metaKey || event.shiftKey
     const base = additive ? new Set(selected.value) : new Set<string>()
-    const scroller = scrollParent(root)
     const bounds = () => (scroller ? scroller.getBoundingClientRect() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight })
     const scrollLeft = () => scroller?.scrollLeft ?? scrollX
     const scrollTop = () => scroller?.scrollTop ?? scrollY
@@ -129,7 +138,22 @@ export function useMarquee(selected: Ref<Set<string>>) {
     cleanup = finish
   }
 
-  onBeforeUnmount(() => cleanup?.())
+  function onWindowKey(e: KeyboardEvent) {
+    if (!onKey || !anchor.value || isTextField(e.target) || document.querySelector('[role="dialog"], [role="menu"]')) return
+    // `code`, not `key`: on the Russian layout the A key reports 'ф'.
+    if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) onKey(e)
+    else if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'Delete' || e.key === 'Escape')) onKey(e)
+  }
 
-  return { box, onPointerDown }
+  onMounted(() => {
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onWindowKey)
+  })
+  onBeforeUnmount(() => {
+    window.removeEventListener('pointerdown', onPointerDown)
+    window.removeEventListener('keydown', onWindowKey)
+    cleanup?.()
+  })
+
+  return { box }
 }

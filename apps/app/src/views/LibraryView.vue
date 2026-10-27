@@ -50,7 +50,8 @@ const view = useViewMode('library', 'tiles')
 /** Instances picked with Ctrl/Shift or the rubber band; when empty, the single instance in `layout.selectedId` is the selection. */
 const picked = ref(new Set<string>())
 const selection = useSelection(picked)
-const { box, onPointerDown } = useMarquee(picked)
+const libraryRoot = ref<HTMLElement | null>(null)
+const { box } = useMarquee(picked, libraryRoot, onKey)
 const pickedInstances = computed(() => store.instances.filter((i) => picked.value.has(i.id)))
 const isSelected = (id: string) => (picked.value.size ? picked.value.has(id) : layout.selectedId === id)
 // The side panel follows the picked instances: it shows one of them.
@@ -247,7 +248,7 @@ const { dragging, position: dragPosition } = useFileDrop(async (paths, at) => {
     <div class="relative min-w-0 flex-1">
       <CatBackdrop />
       <div class="absolute inset-0 overflow-y-auto px-3 py-2">
-      <div class="min-h-full outline-none" tabindex="-1" @pointerdown="onPointerDown" @click.self="clearSelection" @keydown="onKey">
+      <div ref="libraryRoot" class="min-h-full outline-none" @click.self="clearSelection">
         <div v-if="store.instances.length" class="flex justify-end px-1 pb-1" @click.self="clearSelection"><ViewToggle v-model="view" /></div>
         <div v-if="store.loaded && !store.instances.length && !store.pending.length" class="flex flex-col items-center gap-3 py-24 text-center">
           <img :src="mascot" alt="" class="pixelated anim-bob size-24 opacity-90" />

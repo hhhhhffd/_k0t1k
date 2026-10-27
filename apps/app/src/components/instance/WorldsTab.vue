@@ -43,7 +43,6 @@ const deleting = ref<World[]>([])
 const view = useViewMode('worlds')
 const selected = ref(new Set<string>())
 const selection = useSelection(selected)
-const { box, onPointerDown } = useMarquee(selected)
 const selectedWorlds = computed(() => worlds.value.filter((w) => selected.value.has(w.dirName)))
 /** The world the single-world actions apply to: only when exactly one is selected. */
 const current = computed(() => (selectedWorlds.value.length === 1 ? selectedWorlds.value[0]! : null))
@@ -52,6 +51,8 @@ function onKey(e: KeyboardEvent) {
   if (selection.onKey(e, order())) return
   if (e.key === 'Delete' && selectedWorlds.value.length) deleting.value = selectedWorlds.value
 }
+const tabRoot = ref<HTMLElement | null>(null)
+const { box } = useMarquee(selected, tabRoot, onKey)
 
 async function load() {
   loading.value = true
@@ -194,7 +195,7 @@ async function confirmDelete() {
     :world="worlds.find((w) => w.dirName === opened)!"
     @back="opened = null"
   />
-  <div v-else class="flex flex-col gap-3">
+  <div v-else ref="tabRoot" class="flex flex-col gap-3">
     <div class="flex items-start gap-3">
       <div class="flex min-w-0 flex-1 flex-col gap-2">
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
@@ -207,10 +208,7 @@ async function confirmDelete() {
         <div
           class="!outline-none"
           :class="view === 'list' ? 'overflow-hidden rounded-xl border border-line' : ''"
-          tabindex="-1"
-          @pointerdown="onPointerDown"
           @dragstart.prevent
-          @keydown="onKey"
         >
           <div v-if="view === 'list'" class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-10 shrink-0" />

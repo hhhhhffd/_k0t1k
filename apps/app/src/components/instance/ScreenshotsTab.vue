@@ -22,7 +22,6 @@ const viewing = ref<number | null>(null)
 const deleting = ref<Screenshot[]>([])
 const view = useViewMode('screenshots', 'tiles')
 const selected = ref(new Set<string>())
-const { box, onPointerDown } = useMarquee(selected)
 const selectedShots = computed(() => shots.value.filter((s) => selected.value.has(s.fileName)))
 
 /** A plain click opens the viewer; with Ctrl/Shift, or once something is selected, it selects instead. */
@@ -46,7 +45,7 @@ function onShotClick(index: number, e: MouseEvent) {
 }
 let anchor: number | null = null
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+  if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault()
     selected.value = new Set(shots.value.map((s) => s.fileName))
   } else if (e.key === 'Delete' && selectedShots.value.length) {
@@ -55,6 +54,8 @@ function onKey(e: KeyboardEvent) {
     selected.value = new Set()
   }
 }
+const tabRoot = ref<HTMLElement | null>(null)
+const { box } = useMarquee(selected, tabRoot, onKey)
 
 async function load() {
   loading.value = true
@@ -82,7 +83,7 @@ async function confirmDelete() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
+  <div ref="tabRoot" class="flex flex-col gap-3">
     <p v-if="shared" class="flex items-center gap-2 text-muted">
       <span class="badge badge-accent">{{ t.sharedFolder.badge }}</span>{{ t.shots.sharedNote }}
     </p>
@@ -95,7 +96,7 @@ async function confirmDelete() {
       <button class="btn" @click="openFolder"><FolderOpen :size="15" />{{ t.shots.openFolder }}</button>
     </div>
 
-    <div class="flex min-h-[40vh] flex-col outline-none" tabindex="-1" @pointerdown="onPointerDown" @dragstart.prevent @keydown="onKey">
+    <div class="flex min-h-[40vh] flex-col outline-none" @dragstart.prevent>
       <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
       <p v-else-if="!shots.length" class="py-10 text-center text-faint">{{ t.shots.empty }}</p>
       <ul

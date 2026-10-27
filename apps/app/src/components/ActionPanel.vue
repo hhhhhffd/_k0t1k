@@ -22,7 +22,7 @@ const iconColor = (a: PanelAction) => (a.primary ? '' : a.danger ? 'text-danger'
 </script>
 
 <template>
-  <aside class="sticky top-0 flex w-56 shrink-0 flex-col gap-1 self-start">
+  <aside data-no-marquee class="sticky top-0 flex w-56 shrink-0 flex-col gap-1 self-start">
     <template v-for="(a, i) in [...actions, ...(footer ?? [])]" :key="a.label">
       <div v-if="a.separatorBefore || (footer?.length && i === actions.length)" class="my-1 h-px bg-line" />
       <button :class="a.primary ? 'btn btn-primary justify-start' : 'btn justify-start'" :disabled="a.disabled" :title="a.title ?? a.label" @click="a.action">

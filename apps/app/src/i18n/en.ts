@@ -138,6 +138,7 @@ export const en = {
     text: (version: string) => `The mods below say they are not meant for this instance (Minecraft ${version}). The game may crash or ignore them.`,
     needsVersion: (needs: string) => `needs Minecraft ${needs}`,
     needsLoader: (loaders: string) => `needs ${loaders}`,
+    addedMismatch: (file: string, needs: string, have: string) => `${file}: ${needs}, but this instance has ${have}`,
     allFit: (version: string) => `All mods fit Minecraft ${version}`,
     someMismatch: (n: number) => `Mods made for another version or loader: ${n}`,
     launchAnyway: 'Launch anyway',

@@ -24,7 +24,7 @@ export function useSelection(selected: Ref<Set<string>>) {
 
   /** Handles Ctrl+A and Esc; returns true when the key was used. */
   function onKey(e: KeyboardEvent, order: string[]): boolean {
-    if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+    if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       selected.value = new Set(order)
       return true

@@ -32,18 +32,18 @@ import {
   Wrench,
 } from '@lucide/vue'
 import { open } from '@tauri-apps/plugin-dialog'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
 import { isTauri } from '../../api/commands'
 import type { BlockedFile, JarScan, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n'
 import { useInstancesStore } from '../../stores/instances'
 import { usePacksStore, type PackResult } from '../../stores/packs'
-import { useModCompatStore } from '../../stores/modCompat'
+import { needsOf, useModCompatStore } from '../../stores/modCompat'
 import { badgeOf, useRatscanStore } from '../../stores/ratscan'
 import { useTasksStore } from '../../stores/tasks'
 import { openExternal } from '../../utils/external'
-import { errorMessage, formatBytes, minecraftVersionOf, formatRelative, originProject, plainText, PLATFORM_LABELS } from '../../utils/format'
+import { errorMessage, formatBytes, loaderOf, minecraftVersionOf, formatRelative, originProject, plainText, PLATFORM_LABELS } from '../../utils/format'
 import { addFilesToInstance } from '../../utils/addFiles'
 import { useMarquee } from '../../utils/useMarquee'
 import { useViewMode } from '../../utils/useViewMode'
@@ -105,7 +105,8 @@ const visible = computed(() => {
 
 const selected = ref(new Set<string>())
 let anchor: string | null = null
-const { box, onPointerDown } = useMarquee(selected)
+const listRoot = ref<HTMLElement | null>(null)
+const { box } = useMarquee(selected, listRoot, onKey)
 const selectedItems = computed(() => resources.value.filter((r) => selected.value.has(r.fileName)))
 const single = computed(() => (selectedItems.value.length === 1 ? selectedItems.value[0]! : null))
 
@@ -124,7 +125,7 @@ function select(r: LocalResource, e: MouseEvent) {
   selected.value = next
 }
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+  if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault()
     selected.value = new Set(visible.value.map((r) => r.fileName))
   } else if (e.key === 'Delete' && selectedItems.value.length) {
@@ -134,8 +135,8 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
+/** Reloads the list in place: `loading` stays false, so the list is not replaced by a placeholder and keeps its scroll position. */
 async function load() {
-  loading.value = true
   resources.value = (await tasks.guard(() => api.listLocalResources(props.instanceId, props.kind))) ?? []
   // Keep the selection of files that still exist (a toggle renames `x` to `x.disabled`, so match the base name too).
   const base = (name: string) => name.replace(/\.disabled$/, '')
@@ -146,10 +147,12 @@ async function load() {
   loading.value = false
   // Badges are an extra: a failure to read them must not hide the list.
   const extras = props.kind === 'mod' ? Promise.all([ratscan.refresh(props.instanceId), modCompat.refresh(props.instanceId)]) : props.kind === 'resourcePack' ? packs.refresh(props.instanceId) : undefined
-  extras?.catch((e: unknown) => console.warn('cannot read the plugin results', e))
+  extrasDone = extras?.catch((e: unknown) => console.warn('cannot read the plugin results', e))
 }
+let extrasDone: Promise<unknown> | undefined
 async function openTab() {
   updates.value = new Map()
+  loading.value = true
   await load()
   const cached = updateCache.get(cacheKey())
   if (cached && Date.now() - cached.at < UPDATE_CHECK_TTL_MS) updates.value = new Map(cached.updates.map((u) => [u.fileName, u]))
@@ -158,6 +161,36 @@ async function openTab() {
 onMounted(openTab)
 watch(() => [props.instanceId, props.kind], openTab)
 watch(() => packs.changed, load)
+
+// There is no file watcher: files copied in with the file manager show up when the launcher window gets focus again.
+let syncing = false
+async function syncWithDisk() {
+  if (syncing || loading.value || document.visibilityState === 'hidden') return
+  syncing = true
+  try {
+    const before = new Set(resources.value.map((r) => r.fileName))
+    await load()
+    await extrasDone
+    if (props.kind !== 'mod') return
+    const instance = instances.instances.find((i) => i.id === props.instanceId)
+    const have = instance ? (loaderOf(instance)?.label ?? minecraftVersionOf(instance)) : '?'
+    for (const mod of Object.values(modCompat.byFile[props.instanceId] ?? {})) {
+      if (before.has(mod.fileName) || !mod.enabled) continue
+      const here = mod.loaderMismatch || !instance ? have : minecraftVersionOf(instance)
+      tasks.toast(t.modCompat.addedMismatch(mod.fileName, needsOf(mod), here), 'error')
+    }
+  } finally {
+    syncing = false
+  }
+}
+onMounted(() => {
+  window.addEventListener('focus', syncWithDisk)
+  document.addEventListener('visibilitychange', syncWithDisk)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', syncWithDisk)
+  document.removeEventListener('visibilitychange', syncWithDisk)
+})
 
 // ---- RatScan (mods) ----
 const modCompat = useModCompatStore()
@@ -220,7 +253,10 @@ async function forEach(items: LocalResource[], action: (r: LocalResource) => Pro
 const setEnabled = (items: LocalResource[], enabled: boolean) =>
   forEach(
     items.filter((r) => r.enabled !== enabled),
-    (r) => api.toggleResource(props.instanceId, props.kind, r.fileName, enabled),
+    async (r) => {
+      await api.toggleResource(props.instanceId, props.kind, r.fileName, enabled)
+      r.enabled = enabled
+    },
   )
 
 async function confirmDelete() {
@@ -427,7 +463,7 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
+  <div ref="listRoot" class="flex flex-col gap-3">
     <p v-if="sharedNote" class="flex items-center gap-2 text-muted">
       <span class="badge badge-accent">{{ t.sharedFolder.badge }}</span>{{ sharedNote }}
     </p>
@@ -448,14 +484,10 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
         <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.instance.noResources }}</p>
         <div
           v-else
-          class="!outline-none"
           :class="view === 'list' ? 'overflow-hidden rounded-xl border border-line' : ''"
-          tabindex="0"
           role="listbox"
           aria-multiselectable="true"
-          @pointerdown="onPointerDown"
           @dragstart.prevent
-          @keydown="onKey"
         >
           <div v-if="view === 'list'" class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-9 shrink-0" />

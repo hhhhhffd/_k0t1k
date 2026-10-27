@@ -138,6 +138,7 @@ export const ru: Dictionary = {
     text: (version: string) => `Эти моды сами заявляют, что делались не для этой сборки (Minecraft ${version}). Игра может вылететь или проигнорировать их.`,
     needsVersion: (needs: string) => `нужен Minecraft ${needs}`,
     needsLoader: (loaders: string) => `нужен ${loaders}`,
+    addedMismatch: (file: string, needs: string, have: string) => `${file}: ${needs}, а у вас ${have}`,
     allFit: (version: string) => `Все моды подходят к ${version}`,
     someMismatch: (n: number) => `Модов для другой версии или загрузчика: ${n}`,
     launchAnyway: 'Всё равно запустить',

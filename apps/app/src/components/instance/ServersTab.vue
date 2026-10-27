@@ -34,7 +34,6 @@ const deleting = ref<number[]>([])
 /** Indexes of the selected servers, as strings: a server has no id of its own. */
 const selected = ref(new Set<string>())
 const selection = useSelection(selected)
-const { box, onPointerDown } = useMarquee(selected)
 const selectedIndexes = computed(() => [...selected.value].map(Number).sort((a, b) => a - b))
 /** The server the single-server actions apply to: only when exactly one is selected. */
 const current = computed(() => (selectedIndexes.value.length === 1 ? selectedIndexes.value[0]! : null))
@@ -43,6 +42,8 @@ function onKey(e: KeyboardEvent) {
   if (selection.onKey(e, order())) return
   if (e.key === 'Delete' && selectedIndexes.value.length) deleting.value = selectedIndexes.value
 }
+const tabRoot = ref<HTMLElement | null>(null)
+const { box } = useMarquee(selected, tabRoot, onKey)
 
 const policyOptions = (Object.keys(t.servers.policies) as ResourcePackPolicy[]).map((value) => ({ value, label: t.servers.policies[value] }))
 
@@ -145,12 +146,12 @@ function openMenu(e: MouseEvent, index: number) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
+  <div ref="tabRoot" class="flex flex-col gap-3">
     <div class="flex items-start gap-3">
       <div class="min-w-0 flex-1">
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!servers.length" class="py-10 text-center text-faint">{{ t.servers.empty }}</p>
-        <div v-else class="overflow-hidden rounded-xl border border-line !outline-none" tabindex="-1" @pointerdown="onPointerDown" @dragstart.prevent @keydown="onKey">
+        <div v-else class="overflow-hidden rounded-xl border border-line !outline-none" @dragstart.prevent>
           <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-10 shrink-0" />
             <span class="min-w-0 flex-1">{{ t.servers.name }} · {{ servers.length }}</span>
