@@ -29,7 +29,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <button class="btn btn-ghost btn-icon" :aria-label="t.common.closeLabel" @click="emit('close')"><X :size="16" /></button>
         </header>
         <div class="min-h-0 flex-1" :class="large ? 'flex flex-col' : 'overflow-y-auto p-4'"><slot /></div>
-        <footer v-if="$slots.footer" class="flex justify-end gap-2 border-t border-line px-4 py-3"><slot name="footer" /></footer>
+        <footer v-if="$slots.footer" class="flex flex-wrap justify-end gap-2 border-t border-line px-4 py-3"><slot name="footer" /></footer>
       </div>
     </div>
   </Teleport>
