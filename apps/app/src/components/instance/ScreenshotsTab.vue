@@ -5,9 +5,12 @@ import * as api from '../../api/commands'
 import type { Screenshot } from '../../api/types'
 import { t } from '../../i18n'
 import { useTasksStore } from '../../stores/tasks'
+import { formatBytes, formatRelative } from '../../utils/format'
 import { useMarquee } from '../../utils/useMarquee'
+import { useViewMode } from '../../utils/useViewMode'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import MarqueeBox from '../MarqueeBox.vue'
+import ViewToggle from '../ViewToggle.vue'
 import ScreenshotViewer from './ScreenshotViewer.vue'
 
 const props = defineProps<{ instanceId: string; shared: boolean }>()
@@ -17,6 +20,7 @@ const shots = ref<Screenshot[]>([])
 const loading = ref(true)
 const viewing = ref<number | null>(null)
 const deleting = ref<Screenshot[]>([])
+const view = useViewMode('screenshots', 'tiles')
 const selected = ref(new Set<string>())
 const { box, onPointerDown } = useMarquee(selected)
 const selectedShots = computed(() => shots.value.filter((s) => selected.value.has(s.fileName)))
@@ -68,11 +72,10 @@ async function confirmDelete() {
   const doomed = deleting.value
   deleting.value = []
   if (!doomed.length) return
-  const done = await tasks.guard(async () => {
+  await tasks.guard(async () => {
     for (const shot of doomed) await api.deleteScreenshot(props.instanceId, shot.fileName)
-    return true
   })
-  if (!done) return
+  // Reload even after a failure: the shots deleted before it must leave the grid and the selection.
   await load()
   if (viewing.value !== null) viewing.value = shots.value.length ? Math.min(viewing.value, shots.value.length - 1) : null
 }
@@ -88,25 +91,38 @@ async function confirmDelete() {
       <button v-if="selectedShots.length" class="btn btn-danger" @click="deleting = selectedShots">
         <Trash2 :size="15" />{{ t.common.delete }} ({{ selectedShots.length }})
       </button>
+      <ViewToggle v-model="view" />
       <button class="btn" @click="openFolder"><FolderOpen :size="15" />{{ t.shots.openFolder }}</button>
     </div>
 
     <div class="flex min-h-[40vh] flex-col outline-none" tabindex="-1" @pointerdown="onPointerDown" @dragstart.prevent @keydown="onKey">
       <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
       <p v-else-if="!shots.length" class="py-10 text-center text-faint">{{ t.shots.empty }}</p>
-      <ul v-else class="grid grid-cols-[repeat(auto-fill,minmax(clamp(190px,15vw,340px),1fr))] gap-2.5">
+      <ul
+        v-else
+        :class="view === 'tiles' ? 'grid grid-cols-[repeat(auto-fill,minmax(clamp(190px,15vw,340px),1fr))] gap-2.5' : 'flex flex-col gap-1.5'"
+      >
         <li v-for="(s, i) in shots" :key="s.fileName">
           <div
             role="button"
             tabindex="0"
             :data-select-key="s.fileName"
-            class="card group block w-full cursor-pointer overflow-hidden text-left transition-colors hover:border-accent/60"
+            class="card group w-full cursor-pointer overflow-hidden text-left transition-colors hover:border-accent/60"
+            :class="view === 'tiles' ? 'block' : 'flex items-center gap-3 p-1.5'"
             :class="selected.has(s.fileName) ? '!border-accent !bg-accent/15' : ''"
             @click="onShotClick(i, $event)"
             @keydown.enter.self="viewing = i"
           >
-            <img :src="api.fileUrl(s.path)" :alt="s.fileName" loading="lazy" decoding="async" class="aspect-video w-full bg-raised object-cover" />
-            <span class="block truncate px-2 py-1.5 text-[12px] text-muted">{{ s.fileName }}</span>
+            <template v-if="view === 'tiles'">
+              <img :src="api.fileUrl(s.path)" :alt="s.fileName" loading="lazy" decoding="async" class="aspect-video w-full bg-raised object-cover" />
+              <span class="block truncate px-2 py-1.5 text-[12px] text-muted">{{ s.fileName }}</span>
+            </template>
+            <template v-else>
+              <img :src="api.fileUrl(s.path)" :alt="s.fileName" loading="lazy" decoding="async" class="aspect-video h-12 shrink-0 rounded-md bg-raised object-cover" />
+              <span class="min-w-0 flex-1 truncate text-[12.5px]">{{ s.fileName }}</span>
+              <span class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(new Date(s.modified).toISOString()) }}</span>
+              <span class="w-20 shrink-0 pr-2 text-right text-[12.5px] text-faint">{{ formatBytes(s.size) }}</span>
+            </template>
           </div>
         </li>
       </ul>
