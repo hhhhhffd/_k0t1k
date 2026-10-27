@@ -13,7 +13,7 @@ use crate::state::AppState;
 const JAR: &[u8] = include_bytes!(env!("K0T1K_OVERLAY_JAR"));
 const VERSION: &str = env!("K0T1K_OVERLAY_VERSION");
 
-/// JVM arguments that load the overlay into a launch; none when it is off or the game predates LWJGL 3.
+/// JVM arguments that load the overlay into a launch; none when it is off or the game is older than the overlay supports.
 /// A failure to place the jar is logged and the game starts without the overlay.
 pub async fn agent_args(state: &AppState, instance: &Instance, settings: &EffectiveSettings, log: &GameLog) -> Vec<String> {
     if !settings.overlay {
@@ -21,7 +21,7 @@ pub async fn agent_args(state: &AppState, instance: &Instance, settings: &Effect
     }
     let minecraft = instance.components.iter().find(|component| component.uid == MINECRAFT_UID).map_or("", |component| component.version.as_str());
     if !overlay::supports(minecraft) {
-        log.line("launcher", tr("The overlay needs Minecraft 1.13 or newer; starting without it", "Оверлею нужен Minecraft 1.13 или новее; запуск без него"));
+        log.line("launcher", tr("The overlay needs Minecraft 1.8 or newer; starting without it", "Оверлею нужен Minecraft 1.8 или новее; запуск без него"));
         return Vec::new();
     }
     let dir = state.paths.overlay_dir();

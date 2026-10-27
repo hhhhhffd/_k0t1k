@@ -598,7 +598,7 @@ export const en = {
     onCloseOptions: { tray: 'Minimize to tray', exit: 'Quit the launcher' },
     discord: 'Show the game in Discord',
     overlay: 'In-game overlay',
-    overlayHint: 'Shift+Tab in game: chat history, notes and an FPS counter. Minecraft 1.13 and newer; applies on the next game launch.',
+    overlayHint: 'Shift+Tab in game: chat history, notes and an FPS counter. Minecraft 1.8 and newer; applies on the next game launch.',
     overlayPrivacy: 'The overlay keeps the whole chat history, private messages included, as plain text with no size limit. It is shared by all instances.',
     overlayClear: 'Clear chat history',
     overlayCleared: 'Chat history deleted',

@@ -46,15 +46,16 @@ pub fn remove_old_jars(dir: &Path, keep_version: &str) -> Result<()> {
     Ok(())
 }
 
-/// The agent hooks LWJGL 3, which Minecraft uses from 1.13 on.
+/// The agent hooks LWJGL 3 (Minecraft 1.13 on) and LWJGL 2 (1.8 to 1.12.2, tested on 1.8.9 and 1.12.2).
+/// Older versions are left out: 1.7 and before were not tried and some run on Java 7, which cannot load the agent.
 pub fn supports(minecraft_version: &str) -> bool {
     let number = |text: &str| text.split(['.', '-', ' ']).next().and_then(|part| part.parse::<u32>().ok());
     if let Some(rest) = minecraft_version.strip_prefix("1.") {
-        return number(rest).is_some_and(|minor| minor >= 13);
+        return number(rest).is_some_and(|minor| minor >= 8);
     }
-    // weekly snapshots, `18w01a`: 2018 and later
+    // weekly snapshots, `18w01a`: 1.9 snapshots (`15w31a`) and later
     if let Some((year, _)) = minecraft_version.split_once('w') {
-        return year.parse::<u32>().is_ok_and(|year| year >= 18);
+        return year.parse::<u32>().is_ok_and(|year| year >= 15);
     }
     // year-based versions such as 26.2 or 26.3-snapshot-1
     number(minecraft_version).is_some_and(|major| major >= 25)
@@ -100,10 +101,10 @@ mod tests {
 
     #[test]
     fn supported_minecraft_versions() {
-        for version in ["1.13", "1.16.5", "1.21.11", "26.2", "26.3-snapshot-1", "24w14a"] {
+        for version in ["1.8", "1.8.9", "1.12.2", "1.13", "1.16.5", "1.21.11", "26.2", "26.3-snapshot-1", "24w14a", "15w31a"] {
             assert!(supports(version), "{version}");
         }
-        for version in ["1.12.2", "1.8.9", "b1.7.3", "rd-132211", "17w45a", ""] {
+        for version in ["1.7.10", "1.6.4", "b1.7.3", "rd-132211", "14w34d", ""] {
             assert!(!supports(version), "{version}");
         }
     }
