@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 
+use k0t1k_core::error::IoContext;
 use k0t1k_core::tr_fmt;
 use k0t1k_core::content::{
     BlockedFile, BlockedScan, HashCache, PackExportReport, PackExportRequest, ResourceKind, add_local_files, collect_blocked,
@@ -150,6 +151,13 @@ pub async fn scan_blocked_files(
 pub fn get_downloads_dir(app: AppHandle) -> CommandResult<String> {
     let dir = app.path().download_dir().map_err(|error| AppError::new(format!("cannot find the Downloads folder: {error}")))?;
     Ok(dir.display().to_string())
+}
+
+/// Writes a text export (the mod list) to the file the user picked in the save dialog.
+#[tauri::command]
+pub async fn save_text_file(path: String, contents: String) -> CommandResult<()> {
+    let path = PathBuf::from(path);
+    blocking(move || std::fs::write(&path, contents).at(&path)).await
 }
 
 /// Locks or unlocks bulk updates of one installed file (packwiz `x-prismlauncher-lock-update`).

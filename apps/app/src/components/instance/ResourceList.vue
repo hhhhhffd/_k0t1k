@@ -1,21 +1,29 @@
 <script setup lang="ts">
-import { ArrowUpCircle, ArrowUpFromLine, Lock, LockOpen, Plus, RefreshCw, Search, ShieldCheck, Trash2, Wrench } from '@lucide/vue'
+import { ArrowUpCircle, ArrowUpFromLine, Download, ExternalLink, FilePlus, FolderOpen, History, ListOrdered, Lock, LockOpen, RefreshCw, Search, ShieldCheck, Trash2, Wrench } from '@lucide/vue'
+import { open } from '@tauri-apps/plugin-dialog'
 import { computed, onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
+import { isTauri } from '../../api/commands'
 import type { AvailableUpdate, BlockedFile, JarScan, LocalResource, LocalResourceKind } from '../../api/types'
 import { t } from '../../i18n'
 import { usePacksStore, type PackResult } from '../../stores/packs'
 import { badgeOf, useRatscanStore } from '../../stores/ratscan'
 import { useTasksStore } from '../../stores/tasks'
-import { errorMessage, formatBytes, originPlatform } from '../../utils/format'
+import { openExternal } from '../../utils/external'
+import { errorMessage, formatBytes, originProject, PLATFORM_LABELS } from '../../utils/format'
+import { baseName } from '../../utils/useFileDrop'
+import ChangeVersionDialog from '../ChangeVersionDialog.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContentDialog from '../ContentDialog.vue'
 import ModalDialog from '../ModalDialog.vue'
+import ModListDialog from '../ModListDialog.vue'
 import ScanDetailsDialog from '../ScanDetailsDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
 const props = defineProps<{ instanceId: string; kind: LocalResourceKind; sharedNote?: string }>()
 const showContent = ref(false)
+const showList = ref(false)
+const changingVersion = ref<LocalResource | null>(null)
 const tasks = useTasksStore()
 const ratscan = useRatscanStore()
 const packs = usePacksStore()
@@ -159,6 +167,41 @@ function noteAdded(fileNames: string[]) {
   else if (props.kind === 'resourcePack') void packs.offerConversion(props.instanceId, fileNames)
 }
 
+const openFolder = () => tasks.guard(() => api.openContentFolder(props.instanceId, props.kind))
+
+/** Files the game reads from the folder; the backend checks each picked file the same way as a dropped one. */
+const fileExtensions: Record<LocalResourceKind, string[]> = {
+  mod: ['jar', 'litemod', 'zip'],
+  resourcePack: ['zip'],
+  shaderPack: ['zip'],
+  dataPack: ['zip'],
+}
+async function addFiles() {
+  const picked = isTauri
+    ? await open({ multiple: true, filters: [{ name: t.instance.fileFilter, extensions: fileExtensions[props.kind] }] })
+    : ['C:\\Downloads\\sodium-fabric-0.6.0.jar']
+  const paths = Array.isArray(picked) ? picked : picked ? [picked] : []
+  if (!paths.length) return
+  const report = await tasks.guard(() => api.addLocalFiles(props.instanceId, props.kind, paths))
+  if (!report) return
+  if (report.added.length) tasks.toast(t.transfer.addedFiles(report.added.length), 'ok')
+  for (const skipped of report.skipped) {
+    tasks.toast(t.transfer.skippedFile(baseName(skipped.path), t.transfer.skipped[skipped.reason]), 'error')
+  }
+  noteAdded(report.added.map((a) => a.fileName))
+  await load()
+}
+
+const projectOf = (r: LocalResource) => (r.origin ? originProject(r.origin) : undefined)
+const openHomepage = (r: LocalResource) => {
+  const url = projectOf(r)?.url
+  if (url) void tasks.guard(() => openExternal(url))
+}
+async function versionChanged(fileNames: string[]) {
+  noteAdded(fileNames)
+  await load()
+}
+
 const isLocked = (r: LocalResource) => r.origin?.['x-prismlauncher-lock-update'] === true
 
 async function toggleLock(r: LocalResource) {
@@ -187,8 +230,8 @@ function closeContent() {
     <p v-if="sharedNote" class="flex items-center gap-2 text-muted">
       <span class="badge badge-accent">{{ t.sharedFolder.badge }}</span>{{ sharedNote }}
     </p>
-    <div class="flex items-center gap-2">
-      <div class="relative max-w-xs flex-1">
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="relative max-w-xs min-w-40 flex-1">
         <Search :size="15" class="pointer-events-none absolute top-2.5 left-2.5 text-faint" />
         <input v-model="filter" class="input !pl-8" :placeholder="t.instance.filterPlaceholder" :aria-label="t.instance.filterPlaceholder" />
       </div>
@@ -202,7 +245,10 @@ function closeContent() {
       <button class="btn" :disabled="checking || !!bulk || !resources.length" @click="checkUpdates">
         <RefreshCw :size="15" :class="checking ? 'animate-spin' : ''" />{{ checking ? t.instance.checking : t.instance.checkUpdates }}
       </button>
-      <button class="btn btn-primary" @click="showContent = true"><Plus :size="16" />{{ t.instance.addContent }}</button>
+      <button class="btn btn-icon" :title="t.instance.folderOf[kind]" :aria-label="t.instance.folderOf[kind]" @click="openFolder"><FolderOpen :size="15" /></button>
+      <button class="btn btn-icon" :disabled="!resources.length" :title="t.instance.exportList" :aria-label="t.instance.exportList" @click="showList = true"><ListOrdered :size="15" /></button>
+      <button class="btn" :title="t.instance.addFileHint" @click="addFiles"><FilePlus :size="15" />{{ t.instance.addFile }}</button>
+      <button class="btn btn-primary" @click="showContent = true"><Download :size="16" />{{ t.instance.download[kind] }}</button>
     </div>
 
     <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
@@ -219,7 +265,7 @@ function closeContent() {
             <span class="truncate font-semibold">{{ r.metadata?.name ?? r.fileName }}</span>
             <span v-if="r.metadata?.version" class="badge">{{ r.metadata.version }}</span>
             <span v-if="!r.origin" class="badge" :title="t.instance.unknownOrigin">?</span>
-            <span v-else class="badge badge-accent">{{ originPlatform(r.origin) === 'modrinth' ? 'Modrinth' : 'CurseForge' }}</span>
+            <span v-else-if="projectOf(r)" class="badge badge-accent">{{ PLATFORM_LABELS[projectOf(r)!.platform] }}</span>
             <button
               v-if="kind === 'mod' && jarsByName.get(r.fileName)?.scan"
               class="badge cursor-pointer"
@@ -235,6 +281,19 @@ function closeContent() {
           </div>
           <div class="truncate text-[12px] text-faint">{{ r.fileName }} · {{ formatBytes(r.size) }}<template v-if="r.metadata?.authors"> · {{ r.metadata.authors.join(', ') }}</template></div>
         </div>
+        <template v-if="projectOf(r)">
+          <button class="btn btn-ghost btn-icon text-muted" :title="t.instance.changeVersion" :aria-label="t.instance.changeVersion" @click="changingVersion = r">
+            <History :size="15" />
+          </button>
+          <button
+            class="btn btn-ghost btn-icon text-muted"
+            :title="t.instance.homepage(PLATFORM_LABELS[projectOf(r)!.platform])"
+            :aria-label="t.instance.homepage(PLATFORM_LABELS[projectOf(r)!.platform])"
+            @click="openHomepage(r)"
+          >
+            <ExternalLink :size="15" />
+          </button>
+        </template>
         <button
           v-if="r.origin"
           class="btn btn-ghost btn-icon"
@@ -283,5 +342,14 @@ function closeContent() {
       <template #footer><button class="btn btn-primary" @click="packResult = null">{{ t.common.close }}</button></template>
     </ModalDialog>
     <ContentDialog v-if="showContent" :instance-id="instanceId" :kind="kind" @close="closeContent" />
+    <ModListDialog v-if="showList" :resources="resources" :title="t.instance.exportList" :file-name="`${instanceId}-${kind}`" @close="showList = false" />
+    <ChangeVersionDialog
+      v-if="changingVersion"
+      :instance-id="instanceId"
+      :kind="kind"
+      :resource="changingVersion"
+      @changed="versionChanged"
+      @close="changingVersion = null"
+    />
   </div>
 </template>

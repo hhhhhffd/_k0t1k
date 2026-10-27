@@ -38,6 +38,23 @@ export function originPlatform(origin: PwMod): Platform | undefined {
   return undefined
 }
 
+/** Catalog project of a local file and its web page, according to its packwiz entry. */
+export function originProject(origin: PwMod): { platform: Platform; projectId: string; versionId: string; url: string } | undefined {
+  const { modrinth, curseforge } = origin.update
+  if (modrinth) {
+    const projectId = modrinth['mod-id']
+    return { platform: 'modrinth', projectId, versionId: modrinth.version, url: `https://modrinth.com/project/${projectId}` }
+  }
+  if (curseforge) {
+    // CurseForge redirects /projects/<id> to the project's page.
+    const projectId = String(curseforge['project-id'])
+    return { platform: 'curseForge', projectId, versionId: String(curseforge['file-id']), url: `https://www.curseforge.com/projects/${projectId}` }
+  }
+  return undefined
+}
+
+export const PLATFORM_LABELS: Record<Platform, string> = { modrinth: 'Modrinth', curseForge: 'CurseForge' }
+
 const dateLocale = () => (language.value === 'ru' ? 'ru-RU' : 'en-US')
 
 export function formatPlaytime(secs: number): string {

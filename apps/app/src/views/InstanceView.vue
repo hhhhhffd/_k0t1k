@@ -115,7 +115,7 @@ const { dragging } = useFileDrop(async (paths) => {
       </div>
       <button v-if="instance.managedPack" class="tool shrink-0" @click="showPackUpdate = true"><RefreshCw :size="15" class="text-ok" />{{ t.pack.check }}</button>
       <button class="tool shrink-0" @click="openExportMenu"><Upload :size="15" class="text-ok" />{{ t.transfer.export }}</button>
-      <button class="tool shrink-0" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="15" class="text-warn" />{{ t.panel.folder }}</button>
+      <button class="tool shrink-0" :title="t.instance.instanceFolderHint" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="15" class="text-warn" />{{ t.instance.instanceFolder }}</button>
       <PlayButton :instance-id="instance.id" />
     </header>
 

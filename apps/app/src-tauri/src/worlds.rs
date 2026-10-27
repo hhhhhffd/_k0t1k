@@ -127,6 +127,13 @@ pub async fn open_world_folder(app: AppHandle, state: State<'_, AppState>, insta
     Ok(())
 }
 
+#[tauri::command]
+pub async fn reset_world_icon(state: State<'_, AppState>, instance_id: String, dir_name: String) -> CommandResult<()> {
+    ensure_stopped(&state, &instance_id)?;
+    let game_dir = game_dir(&state, &instance_id).await?;
+    blocking(move || worlds::reset_icon(&game_dir, &dir_name)).await
+}
+
 /// Imports a world from a `.zip`; returns the folder name it got.
 #[tauri::command]
 pub async fn import_world(state: State<'_, AppState>, instance_id: String, path: String) -> CommandResult<String> {

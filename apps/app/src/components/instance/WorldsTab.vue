@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { Archive, Copy, FolderOpen, Globe, Pencil, Trash2, Upload } from '@lucide/vue'
+import { Archive, Copy, Ellipsis, FolderOpen, Globe, ImageOff, Layers, Pencil, Play, RefreshCw, Sprout, Trash2, Upload } from '@lucide/vue'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { onMounted, ref, watch } from 'vue'
 import * as api from '../../api/commands'
 import { isTauri } from '../../api/commands'
 import type { World } from '../../api/types'
 import { t } from '../../i18n'
+import { useInstancesStore } from '../../stores/instances'
+import { useSettingsStore } from '../../stores/settings'
 import { useTasksStore } from '../../stores/tasks'
 import { formatBytes, formatRelative } from '../../utils/format'
 import ConfirmDialog from '../ConfirmDialog.vue'
+import ContextMenu from '../ContextMenu.vue'
+import type { MenuItem } from '../ContextMenu.vue'
 import ModalDialog from '../ModalDialog.vue'
 import PromptDialog from '../PromptDialog.vue'
 import ToggleSwitch from '../ToggleSwitch.vue'
@@ -16,6 +20,8 @@ import WorldDetail from './WorldDetail.vue'
 
 const props = defineProps<{ instanceId: string }>()
 const tasks = useTasksStore()
+const instances = useInstancesStore()
+const settings = useSettingsStore()
 
 const worlds = ref<World[]>([])
 const loading = ref(true)
@@ -53,6 +59,44 @@ async function importZip() {
 }
 
 const openFolder = (world: World) => tasks.guard(() => api.openWorldFolder(props.instanceId, world.dirName))
+const openSaves = () => tasks.guard(() => api.openContentFolder(props.instanceId, 'world'))
+
+const play = (world: World) =>
+  void tasks.guard(() => instances.launch(props.instanceId, settings.settings?.selectedAccountId ?? undefined, undefined, world.dirName))
+
+async function copySeed(world: World) {
+  if (!world.seed) return
+  try {
+    await navigator.clipboard.writeText(world.seed)
+    tasks.toast(t.worlds.seedCopied, 'ok')
+  } catch {
+    tasks.toast(world.seed)
+  }
+}
+
+async function resetIcon(world: World) {
+  const done = await change(async () => {
+    await api.resetWorldIcon(props.instanceId, world.dirName)
+    return true
+  })
+  if (done) tasks.toast(t.worlds.iconReset, 'ok')
+}
+
+const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+function openMenu(e: MouseEvent, world: World) {
+  const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  menu.value = {
+    x: box.right - 220,
+    y: box.bottom + 4,
+    items: [
+      { label: t.worlds.manageDatapacks, icon: Layers, action: () => (opened.value = world.dirName) },
+      { label: t.worlds.copySeed, icon: Sprout, disabled: !world.seed, action: () => void copySeed(world) },
+      { label: t.worlds.resetIcon, icon: ImageOff, disabled: !world.icon, action: () => void resetIcon(world) },
+      { label: t.worlds.backup, icon: Archive, separatorBefore: true, action: () => (backingUp.value = world) },
+      { label: t.worlds.copy, icon: Copy, action: () => (copying.value = world) },
+    ],
+  }
+}
 
 function startRename(world: World) {
   renaming.value = world
@@ -117,7 +161,9 @@ async function confirmDelete() {
   <div v-else class="flex flex-col gap-3">
     <div class="flex items-center gap-2">
       <span class="mr-auto text-faint">{{ worlds.length }}</span>
-      <button class="btn" @click="importZip"><Upload :size="15" />{{ t.worlds.import }}</button>
+      <button class="btn btn-icon" :disabled="loading" :title="t.worlds.refresh" :aria-label="t.worlds.refresh" @click="load"><RefreshCw :size="15" /></button>
+      <button class="btn" @click="openSaves"><FolderOpen :size="15" />{{ t.worlds.openSaves }}</button>
+      <button class="btn btn-primary" @click="importZip"><Upload :size="15" />{{ t.worlds.import }}</button>
     </div>
 
     <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
@@ -138,10 +184,10 @@ async function confirmDelete() {
             <span class="block truncate text-[12px] text-faint">{{ w.dirName }} · {{ formatBytes(w.size) }} · {{ formatRelative(w.lastPlayed) }}</span>
           </span>
         </button>
+        <button class="btn" :title="t.worlds.playHint" @click="play(w)"><Play :size="13" fill="currentColor" />{{ t.worlds.play }}</button>
         <button class="btn btn-ghost btn-icon text-muted" :title="t.worlds.openFolder" :aria-label="t.worlds.openFolder" @click="openFolder(w)"><FolderOpen :size="15" /></button>
-        <button class="btn btn-ghost btn-icon text-muted" :title="t.worlds.backup" :aria-label="t.worlds.backup" @click="backingUp = w"><Archive :size="15" /></button>
-        <button class="btn btn-ghost btn-icon text-muted" :title="t.worlds.copy" :aria-label="t.worlds.copy" @click="copying = w"><Copy :size="15" /></button>
         <button class="btn btn-ghost btn-icon text-muted" :title="t.worlds.rename" :aria-label="t.worlds.rename" @click="startRename(w)"><Pencil :size="15" /></button>
+        <button class="btn btn-ghost btn-icon text-muted" :title="t.worlds.more" :aria-label="t.worlds.more" @click="openMenu($event, w)"><Ellipsis :size="15" /></button>
         <button class="btn btn-ghost btn-icon text-muted hover:!text-danger" :title="t.worlds.delete" :aria-label="t.worlds.delete" @click="deleting = w"><Trash2 :size="15" /></button>
       </li>
     </ul>
@@ -179,6 +225,8 @@ async function confirmDelete() {
         <button class="btn btn-primary" @click="backup(false)">{{ t.worlds.backupDefault }}</button>
       </template>
     </ModalDialog>
+
+    <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
 
     <ConfirmDialog
       v-if="deleting"

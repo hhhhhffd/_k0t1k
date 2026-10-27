@@ -43,6 +43,7 @@ pub async fn launch_instance(
     instance_id: String,
     account_id: Option<String>,
     server: Option<String>,
+    world: Option<String>,
 ) -> CommandResult<SessionId> {
     let state = state.inner().clone();
     let manager = state.instances.clone();
@@ -55,8 +56,8 @@ pub async fn launch_instance(
     }
     .ok_or_else(|| AppError::new("no account selected: add an account in the settings"))?
     .clone();
-    // An explicit server wins over the one stored with the instance.
-    let join_server = server.or_else(|| instance.join_server.clone());
+    // An explicit server wins over the one stored with the instance; opening a world joins no server.
+    let join_server = if world.is_some() { None } else { server.or_else(|| instance.join_server.clone()) };
     let settings = instance.effective_settings(&global);
 
     // Every launch is its own session: the instance may already be running, and concurrent
@@ -72,6 +73,7 @@ pub async fn launch_instance(
         settings,
         account,
         join_server,
+        world,
         global.behavior.on_game_launch,
         global.discord.enabled,
         kill_requests,
@@ -248,6 +250,7 @@ async fn run_session(
     settings: EffectiveSettings,
     account: Account,
     join_server: Option<String>,
+    join_world: Option<String>,
     on_game_launch: OnGameLaunch,
     show_in_discord: bool,
     mut kill_requests: watch::Receiver<bool>,
@@ -273,7 +276,7 @@ async fn run_session(
     // Dropping `prepare` on a kill also stops its downloads and kills a running pre-launch hook.
     let preparation = async {
         tokio::select! {
-            prepared = prepare(&state, &log, &instance, &settings, account, join_server, &dir, &task, &progress) => prepared,
+            prepared = prepare(&state, &log, &instance, &settings, account, join_server, join_world, &dir, &task, &progress) => prepared,
             () = wait_killed(&mut kill_requests) => Err(AppError::new(tr("launch cancelled", "запуск отменён"))),
         }
     };
@@ -412,6 +415,7 @@ async fn prepare(
     settings: &EffectiveSettings,
     account: Account,
     join_server: Option<String>,
+    join_world: Option<String>,
     session_dir: &Path,
     task: &str,
     progress: &ProgressFn,
@@ -497,6 +501,7 @@ async fn prepare(
         env: settings.env.clone(),
         wrapper: cmdline::split(&settings.commands.wrapper)?,
         join_server,
+        join_world,
     };
     let command = build_command(paths, &profile, &assets, &options).await?;
     log.line("launcher", &tr_fmt!("Launch command: {}", "Команда запуска: {}", command.display_redacted()));

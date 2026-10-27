@@ -86,6 +86,7 @@ async fn main() -> Result<()> {
         env: BTreeMap::new(),
         wrapper: Vec::new(),
         join_server: None,
+        join_world: None,
     };
     let command = build_command(&paths, &profile, &assets, &options).await?;
     println!("command: {}", command.display_redacted());

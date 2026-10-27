@@ -15,6 +15,7 @@ use k0t1k_core::content::{
     update_modpack as update_installed_modpack,
 };
 use k0t1k_core::download::{Checksum, download_checked};
+use k0t1k_core::error::IoContext;
 use k0t1k_core::instance::archive::read_custom_icon;
 use k0t1k_core::instance::icon::custom_file_name;
 use k0t1k_core::instance::{Instance, ManagedPack, ManagedPlatform, NewInstance};
@@ -22,6 +23,7 @@ use k0t1k_core::launch::tuning::cap_recommended_ram;
 use k0t1k_core::settings::{MemorySettings, total_memory_mib};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{AppError, CommandResult, blocking, run_unsend};
 use crate::events::{progress_fn, progress_step, tracked};
@@ -203,6 +205,18 @@ pub async fn list_local_resources(state: State<'_, AppState>, instance_id: Strin
     let game_dir = instance.game_dir(&state.paths);
     let resources = blocking(move || core_content::scan_resources(&game_dir, kind)).await?;
     Ok(resources.into_iter().map(Into::into).collect())
+}
+
+/// Opens the folder of a content kind (`mods`, `resourcepacks`, `shaderpacks`, `saves`) in the file
+/// manager, creating it first: the game creates most of them only when it needs them.
+#[tauri::command]
+pub async fn open_content_folder(app: AppHandle, state: State<'_, AppState>, instance_id: String, kind: ResourceKind) -> CommandResult<()> {
+    let instance = instance_of(&state, &instance_id).await?;
+    let folder = instance.game_dir(&state.paths).join(kind.folder());
+    let target = folder.clone();
+    blocking(move || std::fs::create_dir_all(&target).at(&target)).await?;
+    app.opener().open_path(folder.display().to_string(), None::<&str>)?;
+    Ok(())
 }
 
 #[tauri::command]

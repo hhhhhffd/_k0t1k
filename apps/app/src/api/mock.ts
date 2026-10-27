@@ -793,6 +793,13 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       return (a.destination as string | undefined) ?? `C:\\_k0t1k\\instances\\${String(a.instanceId)}\\backups\\${String(a.dirName)} 2026-01-01_12-00-00.zip`
     }
     case 'open_world_folder': return undefined
+    case 'open_content_folder': return undefined
+    case 'reset_world_icon': {
+      notRunning(a.instanceId)
+      const world = worldsFor(a.instanceId as string).find((w) => w.dirName === a.dirName)
+      if (world) world.icon = null
+      return undefined
+    }
     case 'import_world': {
       notRunning(a.instanceId)
       const list = worldsFor(a.instanceId as string)
@@ -958,6 +965,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       return (polls >= 3 ? { found: paths, missing: [] } : { found: paths.slice(0, polls - 1), missing: paths.slice(polls - 1) }) satisfies BlockedScan
     }
     case 'get_downloads_dir': return 'C:\\Users\\Player\\Downloads'
+    case 'save_text_file': return undefined
     case 'set_update_lock': {
       const r = resourcesFor(a.instanceId as string, a.kind as LocalResourceKind).find((x) => x.fileName === a.fileName)
       if (!r?.origin) throw new Error('У файла нет метаданных')

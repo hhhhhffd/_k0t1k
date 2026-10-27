@@ -47,6 +47,7 @@ fn options(root: &std::path::Path) -> LaunchOptions {
         env: BTreeMap::new(),
         wrapper: Vec::new(),
         join_server: None,
+        join_world: None,
     }
 }
 
@@ -336,6 +337,23 @@ fn quick_play_trait_selects_quick_play_multiplayer() {
     assert_eq!(&game[game.len() - 2..], ["--quickPlayMultiplayer", "play.example.org:25565"]);
     let game = game_args_with_server(extra, Some("::1"));
     assert_eq!(&game[game.len() - 2..], ["--quickPlayMultiplayer", "[::1]:25565"]);
+}
+
+#[test]
+fn quick_play_singleplayer_opens_the_world_and_wins_over_the_server() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = Paths::new(root.path().join("data"));
+    let mut options = options(root.path());
+    options.join_server = Some("play.example.org".to_owned());
+    options.join_world = Some("New World".to_owned());
+    let extra = r#","+traits":["feature:is_quick_play_singleplayer","feature:is_quick_play_multiplayer"]"#;
+    let game = launch_args(&paths, &profile("linux", extra), &assets(), &options).game;
+    assert_eq!(&game[game.len() - 2..], ["--quickPlaySingleplayer", "New World"]);
+    assert!(!game.iter().any(|arg| arg == "--quickPlayMultiplayer"));
+
+    // Without the trait the game starts in the menu.
+    let game = launch_args(&paths, &profile("linux", ""), &assets(), &options).game;
+    assert!(!game.iter().any(|arg| arg == "--quickPlaySingleplayer" || arg == "--server"));
 }
 
 #[test]

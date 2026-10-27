@@ -125,10 +125,11 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   /** Resolves to undefined when the user cancels at the mod scan questions (unscanned or dangerous mods). */
-  async function launch(id: string, accountId?: string, server?: string) {
+  /** `world` opens that saves folder on start (Quick Play) instead of joining a server. */
+  async function launch(id: string, accountId?: string, server?: string, world?: string) {
     if (!(await ratscan.confirmLaunch(id))) return undefined
     const alreadyRunning = liveSessionsOf(id).length > 0
-    const sessionId = await api.launchInstance(id, accountId, server)
+    const sessionId = await api.launchInstance(id, accountId, server, world)
     // Minecraft locks a world while it is open, so a second copy cannot open the same one.
     if (alreadyRunning && !localStorage.getItem(MULTI_LAUNCH_HINT_KEY)) {
       localStorage.setItem(MULTI_LAUNCH_HINT_KEY, '1')

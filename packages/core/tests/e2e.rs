@@ -68,6 +68,7 @@ async fn install_vanilla_and_fabric_and_build_commands() {
             env: BTreeMap::new(),
             wrapper: Vec::new(),
             join_server: None,
+            join_world: None,
         };
         let command = build_command(&paths, &profile, &assets, &options).await.unwrap();
         assert!(command.args[0].starts_with('@'));

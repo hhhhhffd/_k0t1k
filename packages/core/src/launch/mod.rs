@@ -59,6 +59,8 @@ pub struct LaunchOptions {
     pub wrapper: Vec<String>,
     /// Server to connect to on start, `host` or `host:port`; blank for none.
     pub join_server: Option<String>,
+    /// Folder name under `saves/` to open on start (Quick Play, Minecraft 1.20+); wins over `join_server`.
+    pub join_world: Option<String>,
 }
 
 #[derive(Clone)]
@@ -193,7 +195,13 @@ fn launch_args(paths: &Paths, profile: &LaunchProfile, assets: &AssetIndex, opti
     if let Some(window) = options.window {
         game.extend(["--width".to_owned(), window.width.to_string(), "--height".to_owned(), window.height.to_string()]);
     }
-    if let Some((host, port)) = options.join_server.as_deref().and_then(split_server_address) {
+    let join_world = options.join_world.as_deref().map(str::trim).filter(|world| !world.is_empty());
+    if let Some(world) = join_world {
+        // Older versions have no way to open a world from the command line; they start in the menu.
+        if profile.has_trait("feature:is_quick_play_singleplayer") {
+            game.extend(["--quickPlaySingleplayer".to_owned(), world.to_owned()]);
+        }
+    } else if let Some((host, port)) = options.join_server.as_deref().and_then(split_server_address) {
         // Minecraft 1.20+ (the meta marks it with a trait) has Quick Play; older versions only know `--server`.
         if profile.has_trait("feature:is_quick_play_multiplayer") {
             let host = if host.contains(':') { format!("[{host}]") } else { host };

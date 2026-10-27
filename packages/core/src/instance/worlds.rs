@@ -216,6 +216,15 @@ pub fn copy(game_dir: &Path, dir_name: &str, new_name: &str) -> Result<String> {
     Ok(target.file_name().unwrap_or_default().to_string_lossy().into_owned())
 }
 
+/// Removes the world's `icon.png`; the game takes a new one the next time the world is played.
+pub fn reset_icon(game_dir: &Path, dir_name: &str) -> Result<()> {
+    let icon = world_dir(game_dir, dir_name)?.join(ICON_FILE);
+    match std::fs::remove_file(&icon) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error).at(&icon),
+        _ => Ok(()),
+    }
+}
+
 /// Deletes the world folder for good.
 pub fn delete(game_dir: &Path, dir_name: &str) -> Result<()> {
     let path = world_dir(game_dir, dir_name)?;
@@ -407,6 +416,16 @@ mod tests {
         std::fs::write(path.join("session.lock"), "lock").unwrap();
         std::fs::write(path.join("icon.png"), [0x89, b'P']).unwrap();
         path
+    }
+
+    #[test]
+    fn reset_icon_removes_it_and_is_harmless_without_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let world = make_world(dir.path(), "w1", "World");
+        reset_icon(dir.path(), "w1").unwrap();
+        assert!(!world.join("icon.png").exists());
+        reset_icon(dir.path(), "w1").unwrap();
+        assert!(reset_icon(dir.path(), "../w1").is_err());
     }
 
     #[test]

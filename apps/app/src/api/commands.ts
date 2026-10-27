@@ -17,9 +17,10 @@
  *   reset_instance_icon(instanceId)                          -> Instance  (back to a built-in icon, removes the file)
  *   open_instance_folder(instanceId)                         -> void
  * Launch
- *   launch_instance(instanceId, accountId?, server?)         -> SessionId     (always starts a NEW session, also when the instance already
+ *   launch_instance(instanceId, accountId?, server?, world?) -> SessionId     (always starts a NEW session, also when the instance already
  *                                                                              runs; state via `instance-state`, output via `game-log`;
- *                                                                              `server` = host[:port] to join, else the instance's joinServer)
+ *                                                                              `server` = host[:port] to join, else the instance's joinServer;
+ *                                                                              `world` = saves folder to open via Quick Play, joins no server)
  *   kill_session(sessionId)                                  -> void          (stops the game or cancels its preparation; errors when the session is gone)
  *   kill_instance(instanceId)                                -> void          (= kill_session for every live session; errors when none)
  *   list_run_states()                                        -> RunSession[]  (live sessions + up to 3 finished ones per instance, `state: 'stopped'`,
@@ -80,6 +81,7 @@
  *   list_local_resources(instanceId, kind: LocalResourceKind) -> LocalResource[]
  *   toggle_resource(instanceId, kind, fileName, enabled)     -> void
  *   delete_resource(instanceId, kind, fileName)              -> void
+ *   open_content_folder(instanceId, kind: ResourceKind)      -> void     (mods/resourcepacks/shaderpacks/saves; created when missing)
  *   check_updates(instanceId, kind: LocalResourceKind)       -> AvailableUpdate[]
  *   import_modpack_file(path, name?)                         -> ModpackImport (.mrpack / CurseForge .zip; emits `progress`)
  *   install_modpack_version(platform, projectId, versionId, name?) -> ModpackImport (emits `progress`)
@@ -91,6 +93,7 @@
  *   backup_world(instanceId, dirName, destination?)          -> string   (zip path; default <instance>/backups/)
  *   open_world_folder(instanceId, dirName)                   -> void
  *   import_world(instanceId, path)                           -> string   (.zip; folder name it got)
+ *   reset_world_icon(instanceId, dirName)                    -> void     (removes icon.png; the game takes a new one)
  *   list_datapacks(instanceId, world)                        -> LocalResource[]  (world = dirName)
  *   toggle_datapack(instanceId, world, fileName, enabled)    -> void
  *   delete_datapack(instanceId, world, fileName)             -> void
@@ -115,6 +118,7 @@
  *   add_local_files_to_instance(instanceId, kind: LocalResourceKind | null, paths) -> AddFilesReport (null kind = identify each file)
  *   scan_blocked_files(instanceId, files: BlockedFile[], folder: string | null) -> BlockedScan (copies matches by SHA-1; null folder = Downloads)
  *   get_downloads_dir()                                      -> string
+ *   save_text_file(path, contents)                           -> void     (a path from the save dialog, e.g. the exported mod list)
  *   set_update_lock(instanceId, kind, fileName, locked)      -> void
  * Launcher update (GitHub Releases, Ed25519-signed exe)
  *   check_for_update(force)                                  -> UpdateStatus   (also installs newer plugins; without force, the result of the earlier check of this run; failures are logged by the backend)
@@ -277,8 +281,8 @@ export const openInstanceFolder = (instanceId: string) =>
   call<void>('open_instance_folder', { instanceId })
 
 // ---- launch ----
-export const launchInstance = (instanceId: string, accountId?: string, server?: string) =>
-  call<SessionId>('launch_instance', { instanceId, accountId, server })
+export const launchInstance = (instanceId: string, accountId?: string, server?: string, world?: string) =>
+  call<SessionId>('launch_instance', { instanceId, accountId, server, world })
 export const killSession = (sessionId: SessionId) => call<void>('kill_session', { sessionId })
 export const killInstance = (instanceId: string) => call<void>('kill_instance', { instanceId })
 export const listRunStates = () => call<RunSession[]>('list_run_states')
@@ -362,6 +366,8 @@ export const toggleResource = (
 ) => call<void>('toggle_resource', { instanceId, kind, fileName, enabled })
 export const deleteResource = (instanceId: string, kind: LocalResourceKind, fileName: string) =>
   call<void>('delete_resource', { instanceId, kind, fileName })
+export const openContentFolder = (instanceId: string, kind: LocalResourceKind | 'world') =>
+  call<void>('open_content_folder', { instanceId, kind })
 export const checkUpdates = (instanceId: string, kind: LocalResourceKind) =>
   call<AvailableUpdate[]>('check_updates', { instanceId, kind })
 export const importModpackFile = (path: string, name?: string) =>
@@ -391,6 +397,8 @@ export const backupWorld = (instanceId: string, dirName: string, destination?: s
   call<string>('backup_world', { instanceId, dirName, destination })
 export const openWorldFolder = (instanceId: string, dirName: string) =>
   call<void>('open_world_folder', { instanceId, dirName })
+export const resetWorldIcon = (instanceId: string, dirName: string) =>
+  call<void>('reset_world_icon', { instanceId, dirName })
 export const importWorld = (instanceId: string, path: string) =>
   call<string>('import_world', { instanceId, path })
 export const listDatapacks = (instanceId: string, world: string) =>
@@ -444,6 +452,7 @@ export const addLocalFiles = (instanceId: string, kind: LocalResourceKind | null
 export const scanBlockedFiles = (instanceId: string, files: BlockedFile[], folder: string | null) =>
   call<BlockedScan>('scan_blocked_files', { instanceId, files, folder })
 export const getDownloadsDir = () => call<string>('get_downloads_dir')
+export const saveTextFile = (path: string, contents: string) => call<void>('save_text_file', { path, contents })
 export const setUpdateLock = (instanceId: string, kind: LocalResourceKind, fileName: string, locked: boolean) =>
   call<void>('set_update_lock', { instanceId, kind, fileName, locked })
 
