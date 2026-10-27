@@ -8,10 +8,13 @@ import { useInstancesStore } from '../../stores/instances'
 import { useSettingsStore } from '../../stores/settings'
 import { useTasksStore } from '../../stores/tasks'
 import { errorMessage } from '../../utils/format'
+import { useMarquee } from '../../utils/useMarquee'
+import { useSelection } from '../../utils/useSelection'
 import ActionPanel from '../ActionPanel.vue'
 import type { PanelAction } from '../ActionPanel.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContextMenu from '../ContextMenu.vue'
+import MarqueeBox from '../MarqueeBox.vue'
 import ModalDialog from '../ModalDialog.vue'
 import SelectMenu from '../SelectMenu.vue'
 
@@ -27,8 +30,19 @@ const pings = reactive<Record<number, Ping>>({})
 const loading = ref(true)
 /** `index` null adds a new server. */
 const editing = ref<{ index: number | null; server: Server } | null>(null)
-const deleting = ref<number | null>(null)
-const selected = ref<number | null>(null)
+const deleting = ref<number[]>([])
+/** Indexes of the selected servers, as strings: a server has no id of its own. */
+const selected = ref(new Set<string>())
+const selection = useSelection(selected)
+const { box, onPointerDown } = useMarquee(selected)
+const selectedIndexes = computed(() => [...selected.value].map(Number).sort((a, b) => a - b))
+/** The server the single-server actions apply to: only when exactly one is selected. */
+const current = computed(() => (selectedIndexes.value.length === 1 ? selectedIndexes.value[0]! : null))
+const order = () => servers.value.map((_, i) => String(i))
+function onKey(e: KeyboardEvent) {
+  if (selection.onKey(e, order())) return
+  if (e.key === 'Delete' && selectedIndexes.value.length) deleting.value = selectedIndexes.value
+}
 
 const policyOptions = (Object.keys(t.servers.policies) as ResourcePackPolicy[]).map((value) => ({ value, label: t.servers.policies[value] }))
 
@@ -53,6 +67,7 @@ function pingAll() {
 async function load() {
   loading.value = true
   servers.value = (await tasks.guard(() => api.listServers(props.instanceId))) ?? []
+  selected.value = new Set([...selected.value].filter((i) => Number(i) < servers.value.length))
   loading.value = false
   pingAll()
 }
@@ -72,7 +87,7 @@ const play = (address: string) =>
 
 async function move(from: number, to: number) {
   await change(() => api.moveServer(props.instanceId, from, to))
-  selected.value = to
+  selected.value = new Set([String(to)])
 }
 
 function startEdit(index: number | null) {
@@ -87,19 +102,24 @@ async function saveEdit() {
 }
 
 async function confirmDelete() {
-  const index = deleting.value
-  deleting.value = null
-  if (index === null) return
-  selected.value = null
-  await change(() => api.removeServer(props.instanceId, index))
+  // From the last to the first, so the indexes still to delete stay valid.
+  const doomed = [...deleting.value].sort((a, b) => b - a)
+  deleting.value = []
+  if (!doomed.length) return
+  selected.value = new Set()
+  await tasks.guard(async () => {
+    for (const index of doomed) await api.removeServer(props.instanceId, index)
+  })
+  // Reload even after a failure: the servers removed before it must leave the list.
+  await load()
 }
 
-function serverActions(index: number | null): PanelAction[] {
+function serverActions(index: number | null, doomed: number[]): PanelAction[] {
   const server = index === null ? undefined : servers.value[index]
   return [
     { label: t.servers.play, icon: Play, title: t.servers.playOn, disabled: !server, action: () => server && play(server.address) },
     { label: t.servers.edit, icon: Pencil, disabled: index === null, action: () => index !== null && startEdit(index) },
-    { label: t.common.delete, icon: Trash2, danger: true, disabled: index === null, action: () => (deleting.value = index) },
+    { label: t.common.delete, icon: Trash2, danger: true, disabled: !doomed.length, action: () => (deleting.value = doomed) },
     { label: t.servers.moveUp, icon: ArrowUp, separatorBefore: true, disabled: !index, action: () => index && void move(index, index - 1) },
     {
       label: t.servers.moveDown,
@@ -111,14 +131,16 @@ function serverActions(index: number | null): PanelAction[] {
 }
 const panelActions = computed<PanelAction[]>(() => [
   { label: t.servers.add, icon: Plus, primary: true, action: () => startEdit(null) },
-  ...serverActions(selected.value),
+  ...serverActions(current.value, selectedIndexes.value),
 ])
 const footerActions = computed<PanelAction[]>(() => [{ label: t.servers.refresh, icon: RefreshCw, disabled: !servers.value.length, action: pingAll }])
 
 const menu = ref<{ x: number; y: number; items: PanelAction[] } | null>(null)
 function openMenu(e: MouseEvent, index: number) {
-  selected.value = index
-  menu.value = { x: e.clientX, y: e.clientY, items: serverActions(index) }
+  if (!selected.value.has(String(index))) selected.value = new Set([String(index)])
+  // Only deleting makes sense for several servers at once.
+  const items = selectedIndexes.value.length > 1 ? serverActions(null, selectedIndexes.value).filter((a) => a.danger) : serverActions(index, [index])
+  menu.value = { x: e.clientX, y: e.clientY, items }
 }
 </script>
 
@@ -128,7 +150,7 @@ function openMenu(e: MouseEvent, index: number) {
       <div class="min-w-0 flex-1">
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
         <p v-else-if="!servers.length" class="py-10 text-center text-faint">{{ t.servers.empty }}</p>
-        <div v-else class="overflow-hidden rounded-xl border border-line">
+        <div v-else class="overflow-hidden rounded-xl border border-line !outline-none" tabindex="-1" @pointerdown="onPointerDown" @dragstart.prevent @keydown="onKey">
           <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-10 shrink-0" />
             <span class="min-w-0 flex-1">{{ t.servers.name }} · {{ servers.length }}</span>
@@ -136,15 +158,16 @@ function openMenu(e: MouseEvent, index: number) {
             <span class="w-32 shrink-0">{{ t.servers.versionColumn }}</span>
             <span class="w-16 shrink-0 text-right">{{ t.servers.pingColumn }}</span>
           </div>
-          <ul role="listbox">
+          <ul role="listbox" aria-multiselectable="true">
             <li
               v-for="(s, i) in servers"
               :key="`${i}-${s.address}`"
               role="option"
-              :aria-selected="selected === i"
+              :data-select-key="String(i)"
+              :aria-selected="selected.has(String(i))"
               class="flex cursor-default items-center gap-3 border-b border-line/60 px-3 py-2 last:border-b-0"
-              :class="selected === i ? 'bg-accent/12' : 'hover:bg-hover'"
-              @click="selected = i"
+              :class="selected.has(String(i)) ? 'bg-accent/12' : 'hover:bg-hover'"
+              @click="selection.click(String(i), $event, order())"
               @dblclick="play(s.address)"
               @contextmenu.prevent="openMenu($event, i)"
             >
@@ -176,6 +199,7 @@ function openMenu(e: MouseEvent, index: number) {
         </div>
         <p v-if="servers.length" class="mt-2 text-[12px] text-faint">{{ t.servers.selectionHint }}</p>
       </div>
+      <MarqueeBox :box="box" />
       <ActionPanel :actions="panelActions" :footer="footerActions" />
     </div>
 
@@ -202,6 +226,12 @@ function openMenu(e: MouseEvent, index: number) {
       </template>
     </ModalDialog>
 
-    <ConfirmDialog v-if="deleting !== null" :title="t.servers.delete" :text="servers[deleting]?.name ?? ''" @confirm="confirmDelete" @close="deleting = null" />
+    <ConfirmDialog
+      v-if="deleting.length"
+      :title="deleting.length > 1 ? t.servers.deleteMany(deleting.length) : t.servers.delete"
+      :text="deleting.map((i) => servers[i]?.name ?? '').join(', ')"
+      @confirm="confirmDelete"
+      @close="deleting = []"
+    />
   </div>
 </template>
