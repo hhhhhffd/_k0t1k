@@ -46,7 +46,7 @@ pub use install::{
     install_version,
 };
 pub use local::{
-    LocalResource, fix_nested_pack, folder_declared_range, ResourceMetadata, delete_resource, parse_mod_jar, read_resource, scan_resources, set_enabled,
+    FolderZip, LocalResource, compress_folder_pack, fix_nested_pack, replace_folder_with_zip, folder_declared_range, ResourceMetadata, delete_resource, parse_mod_jar, read_resource, scan_resources, set_enabled,
     write_resource_new,
 };
 pub(crate) use modpack::safe_join;

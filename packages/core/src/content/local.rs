@@ -172,12 +172,13 @@ const MAX_PACK_DEPTH: usize = 32;
 
 /// Zips a folder pack in memory. A disabled pack's `pack.mcmeta.disabled` is stored as `pack.mcmeta`.
 /// Symbolic links are skipped; the sum of the file sizes may not exceed `max_bytes`.
-fn zip_folder_pack(root: &Path, max_bytes: u64) -> Result<Vec<u8>> {
+fn zip_folder_pack(root: &Path, max_bytes: u64) -> Result<FolderZip> {
     use std::io::Write;
     let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     let has_active_mcmeta = root.join(PACK_MCMETA).is_file();
     let mut total = 0u64;
+    let mut file_count = 0usize;
     let mut pending = vec![(root.to_path_buf(), String::new(), 0usize)];
     while let Some((dir, prefix, depth)) = pending.pop() {
         if depth > MAX_PACK_DEPTH {
@@ -204,10 +205,27 @@ fn zip_folder_pack(root: &Path, max_bytes: u64) -> Result<Vec<u8>> {
                 let bytes = std::fs::read(&path).at(&path)?;
                 writer.start_file(name, options)?;
                 writer.write_all(&bytes).at(&path)?;
+                file_count += 1;
             }
         }
     }
-    Ok(writer.finish()?.into_inner())
+    Ok(FolderZip { bytes: writer.finish()?.into_inner(), source_bytes: total, file_count })
+}
+
+/// A folder pack zipped in memory, with the size and file count of the folder it came from.
+pub struct FolderZip {
+    pub bytes: Vec<u8>,
+    pub source_bytes: u64,
+    pub file_count: usize,
+}
+
+/// Zips a resource or data pack folder in memory without touching it.
+pub fn compress_folder_pack(game_dir: &Path, kind: ResourceKind, file_name: &str, max_bytes: u64) -> Result<FolderZip> {
+    let path = resource_path(game_dir, kind, file_name)?;
+    if !is_pack_kind(kind) || !path.is_dir() {
+        return Err(Error::Other(format!("{file_name} is not a pack folder")));
+    }
+    zip_folder_pack(&path, max_bytes)
 }
 
 /// The format range declared by a folder pack's `pack.mcmeta` (or `pack.mcmeta.disabled`); `None`
@@ -222,7 +240,7 @@ pub fn folder_declared_range(folder: &Path) -> Option<(crate::packformat::PackFo
 pub fn read_resource(game_dir: &Path, kind: ResourceKind, file_name: &str, max_bytes: u64) -> Result<Vec<u8>> {
     let path = resource_path(game_dir, kind, file_name)?;
     if path.is_dir() && is_pack_kind(kind) {
-        return zip_folder_pack(&path, max_bytes);
+        return zip_folder_pack(&path, max_bytes).map(|zipped| zipped.bytes);
     }
     let size = std::fs::metadata(&path).at(&path)?.len();
     if !path.is_file() || size > max_bytes {
@@ -232,15 +250,18 @@ pub fn read_resource(game_dir: &Path, kind: ResourceKind, file_name: &str, max_b
 }
 
 /// Saves `bytes` as `file_name` in the resource folder without replacing anything: when the name is
-/// taken, ` (2)`, ` (3)`... is inserted before the extension. Returns the name used.
+/// taken, ` (2)`, ` (3)`... is inserted before the extension (a trailing `.disabled` stays last).
+/// Returns the name used.
 pub fn write_resource_new(game_dir: &Path, kind: ResourceKind, file_name: &str, bytes: &[u8]) -> Result<String> {
     use std::io::Write;
-    let (stem, extension) = file_name.rsplit_once('.').map_or((file_name, ""), |(stem, extension)| (stem, extension));
+    let base = base_name(file_name);
+    let suffix = &file_name[base.len()..];
+    let (stem, extension) = base.rsplit_once('.').map_or((base, ""), |(stem, extension)| (stem, extension));
     for attempt in 1..100 {
         let candidate = match (attempt, extension) {
             (1, _) => file_name.to_owned(),
-            (_, "") => format!("{stem} ({attempt})"),
-            _ => format!("{stem} ({attempt}).{extension}"),
+            (_, "") => format!("{stem} ({attempt}){suffix}"),
+            _ => format!("{stem} ({attempt}).{extension}{suffix}"),
         };
         let path = resource_path(game_dir, kind, &candidate)?;
         match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
@@ -257,6 +278,74 @@ pub fn write_resource_new(game_dir: &Path, kind: ResourceKind, file_name: &str, 
         }
     }
     Err(Error::Other(format!("too many files named like {file_name}")))
+}
+
+/// Rewrites `"file/<from>"` to `"file/<to>"` in the pack lists of `options.txt`, leaving every other
+/// byte of the file alone. Returns the original text when something changed, so the caller can undo it.
+fn rename_pack_in_options(game_dir: &Path, from: &str, to: &str) -> Result<Option<String>> {
+    let path = game_dir.join("options.txt");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error).at(&path),
+    };
+    let quote = |name: &str| Value::String(format!("file/{name}")).to_string();
+    let (old, new) = (quote(from), quote(to));
+    let mut rewritten = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        if line.starts_with("resourcePacks:") || line.starts_with("incompatibleResourcePacks:") {
+            rewritten.push_str(&line.replace(&old, &new));
+        } else {
+            rewritten.push_str(line);
+        }
+    }
+    if rewritten == text {
+        return Ok(None);
+    }
+    std::fs::write(&path, rewritten).at(&path)?;
+    Ok(Some(text))
+}
+
+/// Replaces a resource or data pack folder with `zip` (the result of [`compress_folder_pack`]) saved
+/// next to it as `<name>.zip`, or `<name>.zip.disabled` when the folder pack is disabled. A resource
+/// pack listed in `options.txt` stays enabled under its new name. The folder is only removed after the
+/// zip is on disk and `options.txt` is updated; on failure everything is put back. Returns the zip's name.
+pub fn replace_folder_with_zip(game_dir: &Path, kind: ResourceKind, folder_name: &str, zip: &[u8]) -> Result<String> {
+    let folder = resource_path(game_dir, kind, folder_name)?;
+    if !is_pack_kind(kind) || !folder.is_dir() {
+        return Err(Error::Other(format!("{folder_name} is not a pack folder")));
+    }
+    let disabled = !folder.join(PACK_MCMETA).is_file() && disabled_pack_marker(&folder).is_file();
+    let wanted = format!("{folder_name}.zip{}", if disabled { DISABLED_SUFFIX } else { "" });
+    let zip_name = write_resource_new(game_dir, kind, &wanted, zip)?;
+    let zip_path = resource_path(game_dir, kind, &zip_name)?;
+    let undo_zip = |error: Error| {
+        if let Err(cleanup) = std::fs::remove_file(&zip_path) {
+            tracing::warn!("cannot remove {}: {cleanup}", zip_path.display());
+        }
+        error
+    };
+
+    let old_options = if kind == ResourceKind::ResourcePack {
+        rename_pack_in_options(game_dir, folder_name, base_name(&zip_name)).map_err(undo_zip)?
+    } else {
+        None
+    };
+    // Renaming is atomic, so a failure here leaves the folder exactly as it was.
+    let aside = folder.with_file_name(format!(".{folder_name}.k0t1k-old"));
+    if let Err(error) = std::fs::rename(&folder, &aside).at(&aside) {
+        if let Some(text) = old_options {
+            let options = game_dir.join("options.txt");
+            if let Err(restore) = std::fs::write(&options, text) {
+                tracing::warn!("cannot restore {}: {restore}", options.display());
+            }
+        }
+        return Err(undo_zip(error));
+    }
+    if let Err(error) = std::fs::remove_dir_all(&aside) {
+        tracing::warn!("cannot remove {}: {error}", aside.display());
+    }
+    Ok(zip_name)
 }
 
 /// Renames to or from the `.disabled` suffix and returns the new file name. A resource or data pack
@@ -845,6 +934,71 @@ authors = "mezz, others"
         assert_eq!(read_resource(dir.path(), kind, "a (1.21) (2).zip", 10).unwrap(), b"2");
         assert!(read_resource(dir.path(), kind, "a (1.21) (2).zip", 0).is_err());
         assert!(write_resource_new(dir.path(), kind, "../x.zip", b"3").is_err());
+    }
+
+    #[test]
+    fn folder_pack_is_replaced_by_a_zip_and_options_follow() {
+        let dir = tempfile::tempdir().unwrap();
+        let kind = ResourceKind::ResourcePack;
+        let packs = dir.path().join("resourcepacks");
+        std::fs::create_dir_all(packs.join("Fancy/assets")).unwrap();
+        std::fs::write(packs.join("Fancy/pack.mcmeta"), b"{}").unwrap();
+        std::fs::write(packs.join("Fancy/assets/a.png"), b"AAAA").unwrap();
+        let options = "fov:90.0\r\nresourcePacks:[\"vanilla\",\"file/Fancy\",\"file/Fancy2\"]\r\nincompatibleResourcePacks:[\"file/Fancy\"]\r\nlang:ru_ru";
+        std::fs::write(dir.path().join("options.txt"), options).unwrap();
+        // A taken name makes the zip get a number, and options follow the name actually used.
+        std::fs::write(packs.join("Fancy.zip"), b"other").unwrap();
+
+        let zipped = compress_folder_pack(dir.path(), kind, "Fancy", 1000).unwrap();
+        assert_eq!((zipped.source_bytes, zipped.file_count), (6, 2));
+        assert!(compress_folder_pack(dir.path(), kind, "Fancy", 3).is_err());
+        assert!(packs.join("Fancy").is_dir());
+
+        assert_eq!(replace_folder_with_zip(dir.path(), kind, "Fancy", &zipped.bytes).unwrap(), "Fancy (2).zip");
+        assert!(!packs.join("Fancy").exists());
+        assert!(std::fs::read_dir(&packs).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with('.')));
+        assert_eq!(std::fs::read(packs.join("Fancy.zip")).unwrap(), b"other");
+        assert_eq!(std::fs::read(packs.join("Fancy (2).zip")).unwrap(), zipped.bytes);
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("options.txt")).unwrap(),
+            "fov:90.0\r\nresourcePacks:[\"vanilla\",\"file/Fancy (2).zip\",\"file/Fancy2\"]\r\nincompatibleResourcePacks:[\"file/Fancy (2).zip\"]\r\nlang:ru_ru"
+        );
+        let found = scan_resources(dir.path(), kind).unwrap();
+        assert!(found.iter().any(|resource| resource.file_name == "Fancy (2).zip" && resource.enabled));
+    }
+
+    #[test]
+    fn disabled_folder_pack_becomes_a_disabled_zip() {
+        let dir = tempfile::tempdir().unwrap();
+        let kind = ResourceKind::ResourcePack;
+        let packs = dir.path().join("resourcepacks");
+        std::fs::create_dir_all(packs.join("Off")).unwrap();
+        std::fs::write(packs.join("Off/pack.mcmeta.disabled"), b"{}").unwrap();
+        let zipped = compress_folder_pack(dir.path(), kind, "Off", 1000).unwrap();
+        assert_eq!(replace_folder_with_zip(dir.path(), kind, "Off", &zipped.bytes).unwrap(), "Off.zip.disabled");
+        // a second one with the same name keeps `.disabled` last, after the number and extension
+        std::fs::create_dir_all(packs.join("Off")).unwrap();
+        std::fs::write(packs.join("Off/pack.mcmeta.disabled"), b"{}").unwrap();
+        assert_eq!(replace_folder_with_zip(dir.path(), kind, "Off", &zipped.bytes).unwrap(), "Off (2).zip.disabled");
+        assert!(!packs.join("Off").exists());
+        let found = scan_resources(dir.path(), kind).unwrap();
+        assert!(found.iter().all(|resource| !resource.enabled));
+    }
+
+    #[test]
+    fn failed_replace_keeps_the_folder_and_options() {
+        let dir = tempfile::tempdir().unwrap();
+        let kind = ResourceKind::ResourcePack;
+        let packs = dir.path().join("resourcepacks");
+        std::fs::create_dir_all(packs.join("Keep")).unwrap();
+        std::fs::write(packs.join("Keep/pack.mcmeta"), b"{}").unwrap();
+        // options.txt that cannot be read as text makes the replace fail after the zip was written
+        std::fs::write(dir.path().join("options.txt"), [0xff, 0xfe]).unwrap();
+        assert!(replace_folder_with_zip(dir.path(), kind, "Keep", b"zip").is_err());
+        assert!(packs.join("Keep/pack.mcmeta").is_file());
+        assert!(!packs.join("Keep.zip").exists());
+        assert!(replace_folder_with_zip(dir.path(), kind, "../Keep", b"zip").is_err());
+        assert!(replace_folder_with_zip(dir.path(), ResourceKind::Mod, "Keep", b"zip").is_err());
     }
 
     #[test]
