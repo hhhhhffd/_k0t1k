@@ -27,3 +27,8 @@ pub async fn list_loader_versions(
 ) -> CommandResult<Vec<VersionEntry>> {
     Ok(MetaClient::new(&state.paths, false).loader_versions(meta_loader(loader), &minecraft_version).await?)
 }
+
+#[tauri::command]
+pub async fn version_artwork(state: State<'_, AppState>, minecraft_version: String) -> CommandResult<Option<String>> {
+    Ok(MetaClient::new(&state.paths, false).version_artwork(&minecraft_version).await?)
+}
