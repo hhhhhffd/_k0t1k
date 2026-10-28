@@ -239,6 +239,28 @@ mod tests {
         assert!(!dir.path().join(".p.zip.fixing").exists());
     }
 
+    /// Info-ZIP "ux" (0x7875) is written by `zip` on Linux/macOS; copying such entries must not fail.
+    #[test]
+    fn zip_with_unix_uid_gid_extra_field_is_detected_fixed_and_readable() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p.zip");
+        let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let mut options = zip::write::FullFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        // version 1, uid size 4 = 1000, gid size 4 = 1000
+        let ux = [1u8, 4, 0xE8, 3, 0, 0, 4, 0xE8, 3, 0, 0];
+        options.add_extra_data(0x7875, &ux, false).unwrap();
+        for (name, bytes) in [("Pack/pack.mcmeta", b"{}".as_slice()), ("Pack/assets/a.png", b"png")] {
+            writer.start_file(name, options.clone()).unwrap();
+            writer.write_all(bytes).unwrap();
+        }
+        writer.finish().unwrap();
+
+        assert_eq!(nested_root_of(&path), Some("Pack/".into()));
+        assert!(fix_zip(&path).unwrap());
+        assert_eq!(nested_root_of(&path), None);
+        assert_eq!(read_all(&path), [("assets/a.png".to_owned(), b"png".to_vec()), ("pack.mcmeta".to_owned(), b"{}".to_vec())]);
+    }
+
     #[test]
     fn failed_rewrite_leaves_the_original() {
         let dir = tempfile::tempdir().unwrap();

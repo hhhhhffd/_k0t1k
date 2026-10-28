@@ -14,7 +14,7 @@ tracing.workspace = true
 futures = "0.3"
 sha1 = "0.11"
 hex = "0.4"
-zip = { version = "9", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate", "unreserved"] }
 uuid = { version = "1", features = ["v3", "v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "7"
