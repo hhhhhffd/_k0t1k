@@ -18,6 +18,7 @@ mod overlay;
 mod platform;
 mod plugins;
 mod screenshots;
+mod options;
 mod servers;
 mod settings;
 mod state;
@@ -171,6 +172,8 @@ pub fn run() {
             screenshots::open_screenshot,
             screenshots::delete_screenshot,
             screenshots::open_screenshots_folder,
+            options::game_options,
+            options::set_game_options,
             servers::list_servers,
             servers::add_server,
             servers::update_server,
