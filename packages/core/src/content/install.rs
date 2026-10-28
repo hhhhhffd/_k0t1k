@@ -124,9 +124,9 @@ pub async fn install_version(
     let mut report = InstallReport::default();
     let mut handled: HashSet<(Platform, String)> =
         HashSet::from([(version.platform, version.project_id.clone())]);
-    let mut queue = VecDeque::from([(version.clone(), 0_usize)]);
+    let mut queue = VecDeque::from([(version.clone(), kind, 0_usize)]);
 
-    while let Some((version, depth)) = queue.pop_front() {
+    while let Some((version, kind, depth)) = queue.pop_front() {
         install_one(
             clients,
             ctx,
@@ -156,19 +156,26 @@ pub async fn install_version(
                 (None, Some(version_id)) => clients.modrinth.version(version_id).await?.project_id,
                 (None, None) => continue,
             };
-            if !handled.insert((platform, project_id.clone()))
-                || is_installed(ctx, kind, platform, &project_id)?
-            {
+            if !handled.insert((platform, project_id.clone())) {
+                continue;
+            }
+            // A dependency goes into the folder of its own project type, not its parent's.
+            let dependency_kind = clients.project(platform, &project_id).await?.kind;
+            let Some(dependency_kind) = dependency_kind.filter(|dependency_kind| can_depend_on(kind, *dependency_kind)) else {
+                report.unresolved_dependencies.push(format!("{platform:?}:{project_id}"));
+                continue;
+            };
+            if is_installed(ctx, dependency_kind, platform, &project_id)? {
                 continue;
             }
             let resolved = match pinned_id {
                 Some(version_id) => Some(clients.modrinth.version(version_id).await?),
-                None => latest_compatible(clients, ctx, kind, platform, &project_id).await?,
+                None => latest_compatible(clients, ctx, dependency_kind, platform, &project_id).await?,
             };
             match resolved {
                 Some(dependency_version) => {
                     handled.insert((platform, dependency_version.project_id.clone()));
-                    queue.push_back((dependency_version, depth + 1));
+                    queue.push_back((dependency_version, dependency_kind, depth + 1));
                 }
                 None => report
                     .unresolved_dependencies
@@ -177,6 +184,14 @@ pub async fn install_version(
         }
     }
     Ok(report)
+}
+
+/// Whether a required dependency of type `dependency` can be installed next to a `parent` resource.
+/// Data packs are installed into a world folder, which has no `mods`, `resourcepacks` or `shaderpacks`.
+fn can_depend_on(parent: ResourceKind, dependency: ResourceKind) -> bool {
+    dependency == parent
+        || (parent != ResourceKind::DataPack
+            && matches!(dependency, ResourceKind::Mod | ResourceKind::ResourcePack | ResourceKind::ShaderPack))
 }
 
 /// True when the project or, for Fabric-to-Quilt substitutes, its replacement is already installed.
@@ -409,7 +424,7 @@ async fn fetch_projects(
     Ok(projects.into_iter().map(|project| ((platform, project.id.clone()), project)).collect())
 }
 
-/// Runs [`identify_local_files`], then checks every installed resource of `kind` that has a packwiz index
+/// Drops mis-filed index entries ([`packwiz::remove_misfiled`]), runs [`identify_local_files`], then checks every installed resource of `kind` that has a packwiz index
 /// (and no update lock) for a newer version. Modrinth entries are checked in one batch per hash type,
 /// CurseForge ones per project. CurseForge entries are skipped when `clients` has no CurseForge client.
 pub async fn check_updates(
@@ -417,6 +432,7 @@ pub async fn check_updates(
     ctx: &InstallContext,
     kind: ResourceKind,
 ) -> Result<Vec<AvailableUpdate>> {
+    packwiz::remove_misfiled(&ctx.game_dir, kind)?;
     identify_local_files(clients, &ctx.game_dir, kind).await?;
     let entries = packwiz::list(&packwiz::index_dir(&ctx.game_dir, kind))?;
     let loaders = ctx.loaders_for(kind);
@@ -517,6 +533,15 @@ mod tests {
             game_version: "1.21.4".into(),
             loaders: loaders.to_vec(),
         }
+    }
+
+    #[test]
+    fn dependencies_keep_their_own_kind_and_never_enter_a_world() {
+        use ResourceKind::*;
+        assert!(can_depend_on(ResourcePack, Mod), "a pack's mod dependency goes to mods");
+        assert!(can_depend_on(Mod, Mod) && can_depend_on(ResourcePack, ResourcePack));
+        assert!(!can_depend_on(DataPack, Mod), "a world folder has no mods");
+        assert!(!can_depend_on(Mod, Modpack) && !can_depend_on(Mod, World));
     }
 
     #[test]

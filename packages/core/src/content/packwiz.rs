@@ -317,6 +317,35 @@ pub fn find_by_project(
     }))
 }
 
+/// Whether `filename` cannot belong to a resource of `kind`: jars are mods, zips are packs.
+fn is_foreign_file(kind: ResourceKind, filename: &str) -> bool {
+    let lower = filename.to_ascii_lowercase();
+    let lower = lower.strip_suffix(".disabled").unwrap_or(&lower);
+    match kind {
+        ResourceKind::Mod => lower.ends_with(".zip"),
+        ResourceKind::ResourcePack | ResourceKind::DataPack | ResourceKind::ShaderPack => lower.ends_with(".jar"),
+        ResourceKind::Modpack | ResourceKind::World => false,
+    }
+}
+
+/// Removes index entries filed under the wrong resource kind by an old dependency install (a mod's
+/// `.pw.toml` in `resourcepacks/.index`): the file is absent and its name does not fit the kind.
+/// Only metadata is deleted, never a resource file. Returns how many entries were removed.
+pub fn remove_misfiled(game_dir: &Path, kind: ResourceKind) -> Result<usize> {
+    let folder = game_dir.join(kind.folder());
+    let mut removed = 0;
+    for entry in list(&index_dir(game_dir, kind))? {
+        let filename = &entry.data.filename;
+        let is_plain_name = !filename.is_empty() && !filename.contains(['/', '\\']);
+        let file_exists = folder.join(filename).exists() || folder.join(format!("{filename}.disabled")).exists();
+        if is_plain_name && !file_exists && is_foreign_file(kind, filename) {
+            std::fs::remove_file(&entry.path).at(&entry.path)?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,6 +433,26 @@ version = "OihdIimA"
         set_lock_update(dir.path(), "sodium.jar", false).unwrap();
         assert_eq!(read(&path).unwrap(), data);
         assert!(set_lock_update(dir.path(), "other.jar", true).is_err());
+    }
+
+    #[test]
+    fn misfiled_entries_are_removed_only_when_file_is_absent_and_type_mismatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let index = index_dir(dir.path(), ResourceKind::ResourcePack);
+        let entry = |filename: &str| PwMod { name: filename.into(), filename: filename.into(), ..PwMod::default() };
+        write(&index, "ghost", &entry("Catharsis.jar")).unwrap();
+        write(&index, "present-jar", &entry("odd.jar")).unwrap();
+        write(&index, "missing-zip", &entry("gone.zip")).unwrap();
+        write(&index, "pack", &entry("pack.zip")).unwrap();
+        std::fs::write(dir.path().join("resourcepacks/odd.jar"), b"x").unwrap();
+        std::fs::write(dir.path().join("resourcepacks/pack.zip"), b"x").unwrap();
+
+        assert_eq!(remove_misfiled(dir.path(), ResourceKind::ResourcePack).unwrap(), 1);
+        let left: Vec<String> = list(&index).unwrap().into_iter().map(|e| e.data.filename).collect();
+        assert_eq!(left, ["gone.zip", "pack.zip", "odd.jar"]);
+        assert!(dir.path().join("resourcepacks/odd.jar").exists());
+        assert_eq!(remove_misfiled(dir.path(), ResourceKind::ResourcePack).unwrap(), 0);
+        assert_eq!(remove_misfiled(dir.path(), ResourceKind::DataPack).unwrap(), 0);
     }
 
     #[test]
