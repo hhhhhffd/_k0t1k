@@ -6,6 +6,7 @@ pub mod icon;
 mod links;
 mod manager;
 mod nbt;
+pub mod options;
 pub mod servers;
 pub mod worlds;
 
