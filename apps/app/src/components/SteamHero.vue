@@ -1,22 +1,3 @@
-<script lang="ts">
-import { versionArtwork } from '../api/commands'
-
-// One lookup per version and app run; a failed one is forgotten so the next visit tries again.
-const artworkCache = new Map<string, Promise<string | null>>()
-function artworkOf(version: string): Promise<string | null> {
-  let pending = artworkCache.get(version)
-  if (!pending) {
-    pending = versionArtwork(version).catch((e: unknown) => {
-      console.warn(`no artwork for Minecraft ${version}`, e)
-      artworkCache.delete(version)
-      return null
-    })
-    artworkCache.set(version, pending)
-  }
-  return pending
-}
-</script>
-
 <script setup lang="ts">
 import { Clock, FolderOpen, History, Layers, RefreshCw, Settings, Upload } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
@@ -24,38 +5,30 @@ import type { Instance } from '../api/types'
 import { t } from '../i18n'
 import { formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'
 import InstanceIcon from './InstanceIcon.vue'
+import PanoramaView from './PanoramaView.vue'
 import PlayButton from './PlayButton.vue'
 import UiIcon from './UiIcon.vue'
 
-/** The top of an instance page in the Steam-like mode: the official art of its version and the play bar. */
+/** The top of an instance page in the Steam-like mode: its version's title-screen panorama and the play bar. */
 const props = defineProps<{ instance: Instance }>()
 const emit = defineEmits<{ export: [e: MouseEvent]; update: []; folder: []; settings: [] }>()
 
 const version = computed(() => minecraftVersionOf(props.instance))
 const loader = computed(() => loaderOf(props.instance))
-const artwork = ref<string | null>(null)
-const loaded = ref(false)
-watch(
-  version,
-  async (v) => {
-    artwork.value = null
-    loaded.value = false
-    const url = await artworkOf(v)
-    if (v === version.value) artwork.value = url
-  },
-  { immediate: true },
-)
+/** Versions without a panorama (or offline) get a gradient instead. */
+const failed = ref(false)
+watch(version, () => (failed.value = false))
 </script>
 
 <template>
-  <div class="hero relative h-72 shrink-0 overflow-hidden">
-    <img v-if="artwork" :src="artwork" alt="" class="absolute inset-0 size-full object-cover transition-opacity duration-500" :class="loaded ? 'opacity-100' : 'opacity-0'" @load="loaded = true" @error="artwork = null" />
+  <div class="hero relative h-[62vh] min-h-80 shrink-0 overflow-hidden">
+    <PanoramaView v-if="!failed" :version="version" @failed="failed = true" />
     <div v-else class="hero-fallback absolute inset-0 flex items-center justify-end pr-16">
       <InstanceIcon :icon="instance.icon" :instance-id="instance.id" :size="140" class="opacity-40" />
     </div>
     <div class="hero-shade absolute inset-0" />
     <span v-if="instance.group" class="absolute top-4 right-4 rounded-sm bg-black/55 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-white/85 uppercase">{{ instance.group }}</span>
-    <h1 class="hero-title absolute right-6 bottom-6 left-6 line-clamp-2 text-[42px] leading-none font-black tracking-tight text-white">{{ instance.name }}</h1>
+    <h1 class="hero-title absolute right-6 bottom-6 left-6 line-clamp-2 text-[52px] leading-none font-black tracking-tight text-white">{{ instance.name }}</h1>
   </div>
 
   <div class="flex flex-wrap items-center gap-x-8 gap-y-3 px-6 py-4">

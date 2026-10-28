@@ -643,7 +643,6 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     }
     case 'get_game_logs': return clone(sessionLogs.get(a.sessionId as SessionId) ?? [])
     case 'list_minecraft_versions': return minecraftVersions
-    case 'version_artwork': return 'https://launchercontent.mojang.com/v2/images/1.21.4540x540.jpg'
     case 'list_loader_versions': { await sleep(250); return loaderVersions(a.minecraftVersion as string, a.loader as LoaderId) }
     case 'list_client_versions': await sleep(200); return [...clientVersions]
     case 'get_client_terms':

@@ -110,7 +110,6 @@ pub fn run() {
             clients::get_client_terms,
             clients::accept_client_terms,
             versions::list_loader_versions,
-            versions::version_artwork,
             java::detect_java,
             java::list_managed_java,
             java::list_managed_java_usage,

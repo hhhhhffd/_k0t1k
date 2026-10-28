@@ -31,11 +31,6 @@ const META_URL: &str = "https://meta.prismlauncher.org/v1/";
 
 const MOJANG_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 
-/// The patch notes Mojang's own launcher shows, each with the official image of its version.
-const PATCH_NOTES_HOST: &str = "https://launchercontent.mojang.com";
-const PATCH_NOTES_URL: &str = "https://launchercontent.mojang.com/v2/javaPatchNotes.json";
-const PATCH_NOTES_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Loader {
     Fabric,
@@ -61,33 +56,6 @@ pub struct MetaClient {
     offline: bool,
     /// Fetched once per client; create a new client to refresh it.
     packages: OnceCell<PackageIndex>,
-}
-
-#[derive(Deserialize)]
-struct PatchNotes {
-    entries: Vec<PatchNote>,
-}
-
-#[derive(Deserialize)]
-struct PatchNote {
-    version: String,
-    image: PatchNoteImage,
-}
-
-#[derive(Deserialize)]
-struct PatchNoteImage {
-    url: String,
-}
-
-/// Path of the image for `version`: its own patch note, else the newest one of its release line
-/// (`1.20.1` falls back to `1.20.6`, `1.20.5`, ... `1.20`). Old versions without patch notes get none.
-fn patch_note_image<'a>(notes: &'a [PatchNote], version: &str) -> Option<&'a str> {
-    let exact = notes.iter().find(|note| note.version == version);
-    let line = version.split('.').take(2).collect::<Vec<_>>().join(".");
-    let same_line = || {
-        notes.iter().find(|note| note.version == line || note.version.strip_prefix(&line).is_some_and(|rest| rest.starts_with('.')))
-    };
-    exact.or_else(same_line).map(|note| note.image.url.as_str())
 }
 
 #[derive(Deserialize)]
@@ -295,13 +263,6 @@ impl MetaClient {
         Ok(launch)
     }
 
-    /// URL of the official image Mojang's launcher shows for `version`, if it has one.
-    pub async fn version_artwork(&self, version: &str) -> Result<Option<String>> {
-        let bytes = self.fetch_url(PATCH_NOTES_URL, "mojang/javaPatchNotes.json", PATCH_NOTES_MAX_AGE).await?;
-        let notes: PatchNotes = serde_json::from_slice(&bytes)?;
-        Ok(patch_note_image(&notes.entries, version).map(|path| format!("{PATCH_NOTES_HOST}{path}")))
-    }
-
     /// Loader versions usable with `mc_version`, best default first: recommended, then releases
     /// newest first, then the rest. Forge and NeoForge are pinned to one Minecraft version through
     /// `requires`; Fabric and Quilt work with every version.
@@ -393,25 +354,6 @@ mod tests {
         let versions = client.loader_versions(Loader::Fabric, "1.21.4").await.unwrap();
         let names: Vec<_> = versions.iter().map(|entry| entry.version.as_str()).collect();
         assert_eq!(names, ["0.19.0", "0.20.1", "0.20.0", "0.20.2-beta"]);
-    }
-
-    #[tokio::test]
-    async fn version_artwork_falls_back_to_the_release_line() {
-        let root = tempfile::tempdir().unwrap();
-        let paths = Paths::new(root.path());
-        let notes = r#"{"version":1,"entries":[
-            {"version":"1.21.10","image":{"url":"/v2/images/a.jpg"}},
-            {"version":"1.21","image":{"url":"/v2/images/b.jpg"}},
-            {"version":"1.20.6","image":{"url":"/v2/images/c.jpg"}},
-            {"version":"1.20","image":{"url":"/v2/images/d.jpg"}}]}"#;
-        write_cached(&paths.meta_dir().join("mojang/javaPatchNotes.json"), notes.as_bytes()).await.unwrap();
-        let client = MetaClient::new(&paths, true);
-
-        let artwork = |version: &'static str| client.version_artwork(version);
-        assert_eq!(artwork("1.21").await.unwrap().as_deref(), Some("https://launchercontent.mojang.com/v2/images/b.jpg"));
-        assert_eq!(artwork("1.20.1").await.unwrap().as_deref(), Some("https://launchercontent.mojang.com/v2/images/c.jpg"));
-        assert_eq!(artwork("1.2.5").await.unwrap(), None);
-        assert_eq!(artwork("1.12.2").await.unwrap(), None);
     }
 
     #[tokio::test]
