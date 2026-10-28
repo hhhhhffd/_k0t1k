@@ -248,7 +248,7 @@ mod tests {
         let mut options = zip::write::FullFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         // version 1, uid size 4 = 1000, gid size 4 = 1000
         let ux = [1u8, 4, 0xE8, 3, 0, 0, 4, 0xE8, 3, 0, 0];
-        options.add_extra_data(0x7875, &ux, false).unwrap();
+        options.add_extra_field(0x7875, ux, false).unwrap();
         for (name, bytes) in [("Pack/pack.mcmeta", b"{}".as_slice()), ("Pack/assets/a.png", b"png")] {
             writer.start_file(name, options.clone()).unwrap();
             writer.write_all(bytes).unwrap();
