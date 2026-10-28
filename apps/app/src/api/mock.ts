@@ -781,6 +781,21 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       if (r) r.nestedRoot = null
       return had
     }
+    case 'compress_pack':
+      await sleep(400)
+      return { token: 1, folderBytes: 48_000_000, zipBytes: 21_500_000, fileCount: 312 }
+    case 'replace_pack_with_zip': {
+      const list = resourcesFor(a.instanceId as string, a.kind as LocalResourceKind)
+      const r = list.find((x) => x.fileName === a.fileName)
+      if (!r) throw new Error('not found')
+      r.fileName = `${r.fileName}.zip`
+      r.isDir = false
+      r.size = 21_500_000
+      return r.fileName
+    }
+    case 'save_compressed_pack':
+    case 'discard_compressed_pack':
+      return undefined
     case 'check_updates': {
       await sleep(700)
       return resourcesFor(a.instanceId as string, a.kind as LocalResourceKind)

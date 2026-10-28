@@ -8,6 +8,7 @@ const UPDATE_CHECK_TTL_MS = 10 * 60 * 1000
 
 <script setup lang="ts">
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   ArrowUpCircle,
@@ -51,6 +52,7 @@ import { useViewMode } from '../../utils/useViewMode'
 import ActionPanel from '../ActionPanel.vue'
 import type { PanelAction } from '../ActionPanel.vue'
 import ChangeVersionDialog from '../ChangeVersionDialog.vue'
+import CompressPackDialog from './CompressPackDialog.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContentDialog from '../ContentDialog.vue'
 import ContextMenu from '../ContextMenu.vue'
@@ -244,6 +246,12 @@ async function fixNested(items: LocalResource[]) {
   })
   if (fixed) tasks.toast(t.packs.fixedCount(fixed), 'ok')
 }
+const compressing = ref<LocalResource | null>(null)
+async function packCompressed(zipName: string) {
+  compressing.value = null
+  tasks.toast(t.compress.done(zipName), 'ok')
+  await load()
+}
 const targetVersion = ref<string | null>(null)
 watch(
   () => [props.instanceId, props.kind],
@@ -408,6 +416,9 @@ const selectionActions = computed<PanelAction[]>(() => {
       action: () => void setLocked(fromCatalog, !allLocked),
     },
   ]
+  if (props.kind === 'resourcePack' || props.kind === 'dataPack') {
+    list.push({ label: t.compress.action, icon: Archive, disabled: !one?.isDir, title: t.compress.actionHint, action: () => (compressing.value = one) })
+  }
   if (props.kind === 'resourcePack') {
     const zip = one && isZipPack(one) ? one : null
     list.push(
@@ -610,6 +621,7 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
       </div>
       <template #footer><button class="btn btn-primary" @click="packResult = null">{{ t.common.close }}</button></template>
     </ModalDialog>
+    <CompressPackDialog v-if="compressing" :instance-id="instanceId" :kind="kind" :resource="compressing" @replaced="packCompressed" @close="compressing = null" />
     <ContentDialog v-if="showContent" :instance-id="instanceId" :kind="kind" @close="closeContent" />
     <ModListDialog v-if="showList" :resources="resources" :title="t.instance.exportList" :file-name="`${instanceId}-${kind}`" @close="showList = false" />
     <ChangeVersionDialog

@@ -29,7 +29,7 @@ use crate::error::{AppError, CommandResult, blocking, run_unsend};
 use crate::events::{progress_fn, progress_step, tracked};
 use crate::game;
 use crate::instances::InstanceView;
-use crate::state::AppState;
+use crate::state::{AppState, CompressedPack};
 use crate::versions::meta_loader;
 
 #[derive(Deserialize)]
@@ -251,6 +251,71 @@ pub async fn toggle_resource(
 pub async fn fix_nested_pack(state: State<'_, AppState>, instance_id: String, kind: ResourceKind, file_name: String) -> CommandResult<bool> {
     let game_dir = instance_of(&state, &instance_id).await?.game_dir(&state.paths);
     blocking(move || core_content::fix_nested_pack(&game_dir, kind, &file_name)).await
+}
+
+/// Largest folder pack "compress" accepts. The zip is built and kept in memory, so this bounds the
+/// memory use; it is far above any real resource pack and above the 256 MiB plugins may read.
+const MAX_COMPRESS_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressedPackInfo {
+    token: u64,
+    folder_bytes: u64,
+    zip_bytes: u64,
+    file_count: usize,
+}
+
+/// Zips a folder pack in memory and keeps the bytes for [`replace_pack_with_zip`] / [`save_compressed_pack`].
+#[tauri::command]
+pub async fn compress_pack(state: State<'_, AppState>, instance_id: String, kind: ResourceKind, file_name: String) -> CommandResult<CompressedPackInfo> {
+    let game_dir = instance_of(&state, &instance_id).await?.game_dir(&state.paths);
+    // Free the previous result first so two big zips are not in memory at once.
+    *state.compressed_pack.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    let name = file_name.clone();
+    let zipped = blocking(move || core_content::compress_folder_pack(&game_dir, kind, &name, MAX_COMPRESS_BYTES)).await?;
+    let token = state.next_pack_token();
+    let info = CompressedPackInfo { token, folder_bytes: zipped.source_bytes, zip_bytes: zipped.bytes.len() as u64, file_count: zipped.file_count };
+    *state.compressed_pack.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) =
+        Some(CompressedPack { token, instance_id, kind, file_name, bytes: zipped.bytes });
+    Ok(info)
+}
+
+/// Replaces the folder pack with the zip made by [`compress_pack`]; returns the zip's file name.
+#[tauri::command]
+pub async fn replace_pack_with_zip(state: State<'_, AppState>, instance_id: String, kind: ResourceKind, file_name: String, token: u64) -> CommandResult<String> {
+    let game_dir = instance_of(&state, &instance_id).await?.game_dir(&state.paths);
+    let pack = {
+        let mut slot = state.compressed_pack.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        match slot.take() {
+            Some(pack) if pack.token == token && pack.instance_id == instance_id && pack.kind == kind && pack.file_name == file_name => pack,
+            other => {
+                *slot = other;
+                return Err(AppError::new("the compressed pack is gone, compress it again"));
+            }
+        }
+    };
+    blocking(move || core_content::replace_folder_with_zip(&game_dir, kind, &file_name, &pack.bytes)).await
+}
+
+/// Writes the zip made by [`compress_pack`] to a path the user picked in the save dialog.
+#[tauri::command]
+pub async fn save_compressed_pack(state: State<'_, AppState>, token: u64, path: String) -> CommandResult<()> {
+    let bytes = {
+        let slot = state.compressed_pack.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        match slot.as_ref() {
+            Some(pack) if pack.token == token => pack.bytes.clone(),
+            _ => return Err(AppError::new("the compressed pack is gone, compress it again")),
+        }
+    };
+    let target = PathBuf::from(path);
+    blocking(move || std::fs::write(&target, bytes).at(&target)).await
+}
+
+/// Drops the zip kept by [`compress_pack`].
+#[tauri::command]
+pub fn discard_compressed_pack(state: State<'_, AppState>) {
+    *state.compressed_pack.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
 }
 
 #[tauri::command]

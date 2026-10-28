@@ -367,6 +367,14 @@ export interface PwMod {
   }
 }
 
+/** What `compress_pack` made: sizes of the folder and the zip, kept in the backend under `token`. */
+export interface CompressedPackInfo {
+  token: number
+  folderBytes: number
+  zipBytes: number
+  fileCount: number
+}
+
 export interface LocalResource {
   fileName: string
   enabled: boolean

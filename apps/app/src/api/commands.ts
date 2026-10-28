@@ -83,7 +83,11 @@
  *   toggle_resource(instanceId, kind, fileName, enabled)     -> void
  *   delete_resource(instanceId, kind, fileName)              -> void
  *   fix_nested_pack(instanceId, kind, fileName)              -> boolean  (moves a pack with an extra top folder to the root; false when nothing to fix)
- *   open_content_folder(instanceId, kind: ResourceKind)      -> void     (mods/resourcepacks/shaderpacks/saves; created when missing)
+ *   compress_pack(instanceId, kind, fileName)                -> CompressedPackInfo  (zips a folder pack in memory; the bytes stay in the backend)
+ *   replace_pack_with_zip(instanceId, kind, fileName, token) -> string   (writes <name>.zip[.disabled], removes the folder, updates options.txt; returns the zip's name)
+ *   save_compressed_pack(token, path)                        -> void
+ *   discard_compressed_pack()                                -> void
+ *   open_content_folder(instanceId, kind: ResourceKind)     -> void     (mods/resourcepacks/shaderpacks/saves; created when missing)
  *   open_config_folder(instanceId)                           -> void     (the game's config folder; created when missing)
  *   check_updates(instanceId, kind: LocalResourceKind)       -> AvailableUpdate[]
  *   import_modpack_file(path, name?)                         -> ModpackImport (.mrpack / CurseForge .zip; emits `progress`)
@@ -216,6 +220,7 @@ import type {
   UninstallPlan,
   UploadedLog,
   VersionFilter,
+  CompressedPackInfo,
   World,
 } from './types'
 
@@ -386,7 +391,13 @@ export const deleteResource = (instanceId: string, kind: LocalResourceKind, file
   call<void>('delete_resource', { instanceId, kind, fileName })
 export const fixNestedPack = (instanceId: string, kind: LocalResourceKind, fileName: string) =>
   call<boolean>('fix_nested_pack', { instanceId, kind, fileName })
-export const openContentFolder = (instanceId: string, kind: LocalResourceKind | 'world') =>
+export const compressPack = (instanceId: string, kind: LocalResourceKind, fileName: string) =>
+  call<CompressedPackInfo>('compress_pack', { instanceId, kind, fileName })
+export const replacePackWithZip = (instanceId: string, kind: LocalResourceKind, fileName: string, token: number) =>
+  call<string>('replace_pack_with_zip', { instanceId, kind, fileName, token })
+export const saveCompressedPack = (token: number, path: string) => call<void>('save_compressed_pack', { token, path })
+export const discardCompressedPack = () => call<void>('discard_compressed_pack')
+export const openContentFolder =(instanceId: string, kind: LocalResourceKind | 'world') =>
   call<void>('open_content_folder', { instanceId, kind })
 export const openConfigFolder = (instanceId: string) => call<void>('open_config_folder', { instanceId })
 export const checkUpdates = (instanceId: string, kind: LocalResourceKind) =>

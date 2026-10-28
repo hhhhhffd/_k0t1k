@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::{DateTime, Utc};
 use k0t1k_core::auth::DeviceCode;
-use k0t1k_core::content::{Clients, curseforge};
+use k0t1k_core::content::{Clients, ResourceKind, curseforge};
 use k0t1k_core::instance::InstanceManager;
 use k0t1k_core::launch::GameHandle;
 use k0t1k_core::mclogs::mask_secrets;
@@ -131,6 +131,19 @@ pub struct AppState {
     pub install_lock: Arc<tokio::sync::Mutex<()>>,
     /// The pending Microsoft sign-in, if any (one at a time).
     pub microsoft_login: Arc<Mutex<Option<MicrosoftLogin>>>,
+    /// The last zip made by "compress folder pack", kept here so its bytes never travel to the UI.
+    /// One slot: a new compress or a cancel replaces it.
+    pub compressed_pack: Arc<Mutex<Option<CompressedPack>>>,
+    next_pack_token: Arc<AtomicU64>,
+}
+
+/// A folder pack zipped in memory and waiting for the user to replace the folder or save the zip.
+pub struct CompressedPack {
+    pub token: u64,
+    pub instance_id: String,
+    pub kind: ResourceKind,
+    pub file_name: String,
+    pub bytes: Vec<u8>,
 }
 
 impl AppState {
@@ -155,6 +168,8 @@ impl AppState {
             window_released: Arc::default(),
             install_lock: Arc::default(),
             microsoft_login: Arc::default(),
+            compressed_pack: Arc::default(),
+            next_pack_token: Arc::new(AtomicU64::new(1)),
         })
     }
 
@@ -163,6 +178,10 @@ impl AppState {
             .curseforge
             .as_ref()
             .ok_or_else(|| AppError::new("CurseForge unavailable: this build has no CurseForge API key"))
+    }
+
+    pub fn next_pack_token(&self) -> u64 {
+        self.next_pack_token.fetch_add(1, Ordering::Relaxed)
     }
 
     pub fn running(&self) -> MutexGuard<'_, HashMap<SessionId, RunEntry>> {
