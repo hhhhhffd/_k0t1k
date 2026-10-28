@@ -885,6 +885,7 @@ export const ru: Dictionary = {
     'c-fg': 'Текст',
     'c-muted': 'Второстепенный текст',
     'c-accent': 'Акцент',
+    'c-icon': 'Иконки',
     'c-line': 'Границы',
     'c-danger': 'Ошибка',
     'c-ok': 'Успех',

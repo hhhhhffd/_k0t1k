@@ -43,16 +43,16 @@ const loader = computed(() => (instance.value ? loaderOf(instance.value) : undef
 type Tab = 'version' | 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'screenshots' | 'servers' | 'options' | 'logs' | 'settings'
 const tabs: Tab[] = ['version', 'mods', 'resourcepacks', 'shaders', 'worlds', 'screenshots', 'servers', 'options', 'logs', 'settings']
 const tabIcons = {
-  version: { icon: Layers, color: 'text-ok' },
-  mods: { icon: Puzzle, color: 'text-accent' },
-  resourcepacks: { icon: Image, color: 'text-warn' },
-  shaders: { icon: Sparkles, color: 'text-warn' },
-  worlds: { icon: Globe, color: 'text-ok' },
-  screenshots: { icon: Camera, color: 'text-muted' },
-  servers: { icon: Server, color: 'text-accent' },
-  options: { icon: SlidersHorizontal, color: 'text-ok' },
-  logs: { icon: ScrollText, color: 'text-muted' },
-  settings: { icon: Settings2, color: 'text-muted' },
+  version: Layers,
+  mods: Puzzle,
+  resourcepacks: Image,
+  shaders: Sparkles,
+  worlds: Globe,
+  screenshots: Camera,
+  servers: Server,
+  options: SlidersHorizontal,
+  logs: ScrollText,
+  settings: Settings2,
 } as const
 // `?tab=logs` opens a tab directly (the crash dialog does)
 const tabFromRoute = () => tabs.find((name) => name === route.query.tab) ?? 'mods'
@@ -104,9 +104,9 @@ const { dragging } = useFileDrop(async (paths) => {
           <span class="flex items-center gap-1 text-muted"><History :size="12" />{{ formatRelative(instance.lastPlayed) }}</span>
         </div>
       </div>
-      <button v-if="instance.managedPack" class="tool shrink-0" @click="showPackUpdate = true"><RefreshCw :size="15" class="text-ok" />{{ t.pack.check }}</button>
-      <button class="tool shrink-0" @click="openExportMenu"><Upload :size="15" class="text-ok" />{{ t.transfer.export }}</button>
-      <button class="tool shrink-0" :title="t.instance.instanceFolderHint" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="15" class="text-warn" />{{ t.instance.instanceFolder }}</button>
+      <button v-if="instance.managedPack" class="tool shrink-0" @click="showPackUpdate = true"><RefreshCw :size="15" class="text-icon" />{{ t.pack.check }}</button>
+      <button class="tool shrink-0" @click="openExportMenu"><Upload :size="15" class="text-icon" />{{ t.transfer.export }}</button>
+      <button class="tool shrink-0" :title="t.instance.instanceFolderHint" @click="tasks.guard(() => openInstanceFolder(instance!.id))"><FolderOpen :size="15" class="text-icon" />{{ t.instance.instanceFolder }}</button>
       <PlayButton :instance-id="instance.id" />
     </header>
 
@@ -121,7 +121,7 @@ const { dragging } = useFileDrop(async (paths) => {
           :class="tab === name ? 'tool-active text-accent' : ''"
           @click="tab = name"
         >
-          <UiIcon :name="`tab-${name}`" :icon="tabIcons[name].icon" :size="16" :class="tab === name ? '' : tabIcons[name].color" />
+          <UiIcon :name="`tab-${name}`" :icon="tabIcons[name]" :size="16" class="text-icon" />
           {{ t.instance.tabs[name] }}
         </button>
       </nav>

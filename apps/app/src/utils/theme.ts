@@ -10,7 +10,7 @@ export const THEMES: { id: ThemeId; label: string }[] = (['k0t1k', 'light', 'amo
 }))
 
 /** The colors a custom theme edits: CSS variable name (without `--`) and its label. */
-export const THEME_COLORS = (['c-base', 'c-surface', 'c-fg', 'c-muted', 'c-accent', 'c-line', 'c-danger', 'c-ok'] as const).map((key) => ({
+export const THEME_COLORS = (['c-base', 'c-surface', 'c-fg', 'c-muted', 'c-accent', 'c-icon', 'c-line', 'c-danger', 'c-ok'] as const).map((key) => ({
   key,
   get label() {
     return t.themeColors[key]

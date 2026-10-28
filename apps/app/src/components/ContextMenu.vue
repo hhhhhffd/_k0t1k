@@ -6,8 +6,6 @@ export interface MenuItem {
   icon?: Component
   /** Key under which an icon set can replace `icon`. */
   iconKey?: string
-  /** Colours the icon only, e.g. `text-ok`. */
-  iconClass?: string
   danger?: boolean
   disabled?: boolean
   separatorBefore?: boolean
@@ -53,7 +51,7 @@ function pick(item: MenuItem) {
             :disabled="item.disabled"
             @click="pick(item)"
           >
-            <UiIcon v-if="item.icon" :name="item.iconKey ?? ''" :icon="item.icon" :size="15" :class="item.iconClass" />
+            <UiIcon v-if="item.icon" :name="item.iconKey ?? ''" :icon="item.icon" :size="15" :class="item.danger ? '' : 'text-icon'" />
             {{ item.label }}
           </button>
         </template>

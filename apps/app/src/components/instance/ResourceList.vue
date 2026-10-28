@@ -471,8 +471,8 @@ const panelActions = computed<PanelAction[]>(() => {
   return list
 })
 const footerActions = computed<PanelAction[]>(() => [
-  { label: t.instance.openFolder, icon: FolderOpen, iconClass: 'text-warn', title: t.instance.folderOf[props.kind], action: () => void tasks.guard(() => api.openContentFolder(props.instanceId, props.kind)) },
-  ...(props.kind === 'mod' ? [{ label: t.instance.openConfigs, icon: FolderCog, iconClass: 'text-warn', action: () => void tasks.guard(() => api.openConfigFolder(props.instanceId)) }] : []),
+  { label: t.instance.openFolder, icon: FolderOpen, title: t.instance.folderOf[props.kind], action: () => void tasks.guard(() => api.openContentFolder(props.instanceId, props.kind)) },
+  ...(props.kind === 'mod' ? [{ label: t.instance.openConfigs, icon: FolderCog, action: () => void tasks.guard(() => api.openConfigFolder(props.instanceId)) }] : []),
 ])
 
 const menu = ref<{ x: number; y: number } | null>(null)

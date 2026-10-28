@@ -114,7 +114,7 @@ function worldActions(world: World | null, doomed: World[]): PanelAction[] {
     { label: t.worlds.backup, icon: Archive, disabled: none, action: () => (backingUp.value = world) },
     { label: t.worlds.copySeed, icon: Sprout, disabled: !world?.seed, action: () => world && void copySeed(world) },
     { label: t.worlds.resetIcon, icon: ImageOff, disabled: !world?.icon, action: () => world && void resetIcon(world) },
-    { label: t.worlds.openFolder, icon: FolderOpen, iconClass: 'text-warn', disabled: none, action: () => world && void openFolder(world) },
+    { label: t.worlds.openFolder, icon: FolderOpen, disabled: none, action: () => world && void openFolder(world) },
   ]
 }
 const panelActions = computed<PanelAction[]>(() => [
@@ -123,7 +123,7 @@ const panelActions = computed<PanelAction[]>(() => [
 ])
 const footerActions = computed<PanelAction[]>(() => [
   { label: t.worlds.refresh, icon: RefreshCw, disabled: loading.value, action: () => void load() },
-  { label: t.worlds.openSaves, icon: FolderOpen, iconClass: 'text-warn', action: () => void openSaves() },
+  { label: t.worlds.openSaves, icon: FolderOpen, action: () => void openSaves() },
 ])
 
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)

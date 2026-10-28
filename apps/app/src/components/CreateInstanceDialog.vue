@@ -176,7 +176,7 @@ function create() {
           @click="switchPage(p.id)"
         >
           <img v-if="p.logo" :src="p.logo" alt="" class="pixelated size-[18px] object-contain" />
-          <FolderInput v-else :size="18" class="text-warn" />
+          <FolderInput v-else :size="18" class="text-icon" />
           {{ t.create.pages[p.id] }}
         </button>
       </nav>

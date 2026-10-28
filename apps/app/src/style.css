@@ -67,6 +67,11 @@
   --c-accent-fg: #04140e;
   --glow: 0 0 24px rgb(52 211 153 / 0.22);
 }
+/* one colour for every icon; follows each theme's accent unless the theme sets its own */
+:root,
+[data-theme] {
+  --c-icon: var(--c-accent);
+}
 
 @theme inline {
   --color-base: var(--c-base);
@@ -82,6 +87,7 @@
   --color-ok: var(--c-ok);
   --color-warn: var(--c-warn);
   --color-danger: var(--c-danger);
+  --color-icon: var(--c-icon);
   --font-sans: 'Segoe UI Variable Text', 'Segoe UI', Inter, system-ui, sans-serif;
   --font-mono: 'Cascadia Mono', 'JetBrains Mono', ui-monospace, Consolas, monospace;
 }

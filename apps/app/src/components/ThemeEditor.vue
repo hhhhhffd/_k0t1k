@@ -21,7 +21,12 @@ const confirmDelete = ref(false)
 
 const themes = computed(() => store.settings?.ui.customThemes ?? [])
 const current = computed(() => themes.value.find((c) => c.id === store.settings?.ui.theme))
-const currentColors = computed(() => (current.value ? { ...builtinColors(current.value.base), ...current.value.colors } : {}))
+const currentColors = computed<Record<string, string>>(() => {
+  if (!current.value) return {}
+  const base = builtinColors(current.value.base)
+  // a theme saved before icons got their own colour keeps them in its own accent
+  return { ...base, 'c-icon': current.value.colors['c-accent'] ?? base['c-accent']!, ...current.value.colors }
+})
 
 function nextName(base: string): string {
   const names = new Set(themes.value.map((c) => c.name))

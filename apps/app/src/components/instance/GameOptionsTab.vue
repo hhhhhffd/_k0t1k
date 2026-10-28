@@ -177,7 +177,7 @@ const rawList = computed(() => {
             :disabled="running"
             @click="showPreset(id)"
           >
-            <component :is="PRESET_ICONS[id]" :size="18" class="mt-0.5 shrink-0 text-accent" />
+            <component :is="PRESET_ICONS[id]" :size="18" class="mt-0.5 shrink-0 text-icon" />
             <span class="flex flex-col gap-0.5">
               <span class="font-medium">{{ t.gopt.presetNames[id] }}</span>
               <span class="text-[12px] text-muted">{{ t.gopt.presetDescriptions[id] }}</span>

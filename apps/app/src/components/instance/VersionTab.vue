@@ -102,11 +102,11 @@ const actions = computed<PanelAction[]>(() => {
     { label: loader.value || client.value ? t.version.replaceLoader : t.version.installLoader, icon: Puzzle, disabled: locked, action: openEditor },
   ]
   if (loader.value && newestLoader.value) {
-    list.push({ label: t.version.updateLoader(newestLoader.value.version), icon: ArrowUpCircle, iconClass: 'text-ok', disabled: locked, action: updateLoader })
+    list.push({ label: t.version.updateLoader(newestLoader.value.version), icon: ArrowUpCircle, disabled: locked, action: updateLoader })
   }
   if (loader.value) {
     const off = loader.value.disabled
-    list.push({ label: off ? t.version.enableLoader : t.version.disableLoader, icon: Power, iconClass: off ? 'text-ok' : 'text-warn', disabled: locked, action: toggleLoader })
+    list.push({ label: off ? t.version.enableLoader : t.version.disableLoader, icon: Power, disabled: locked, action: toggleLoader })
   }
   if (loader.value || client.value) {
     list.push({ label: client.value ? t.version.removeClient : t.version.removeLoader, icon: Trash2, danger: true, disabled: locked, action: () => (confirmRemove.value = true) })
@@ -136,9 +136,9 @@ const actions = computed<PanelAction[]>(() => {
           @dblclick="openEditor"
         >
           <span class="flex min-w-0 items-center gap-2.5">
-            <Box v-if="row.kind === 'minecraft'" :size="16" class="shrink-0 text-ok" />
-            <Puzzle v-else-if="row.kind === 'loader'" :size="16" class="shrink-0 text-accent" />
-            <Wrench v-else :size="16" class="shrink-0 text-faint" />
+            <Box v-if="row.kind === 'minecraft'" :size="16" class="shrink-0 text-icon" />
+            <Puzzle v-else-if="row.kind === 'loader'" :size="16" class="shrink-0 text-icon" />
+            <Wrench v-else :size="16" class="shrink-0 text-icon" />
             <span class="truncate font-medium">{{ row.name }}</span>
             <span v-if="row.dependencyOnly" class="badge">{{ t.version.dependency }}</span>
             <span v-if="row.off" class="badge">{{ t.version.disabled }}</span>

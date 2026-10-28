@@ -10,7 +10,6 @@ export interface PanelAction {
   primary?: boolean
   danger?: boolean
   busy?: boolean
-  iconClass?: string
   separatorBefore?: boolean
 }
 </script>
@@ -18,7 +17,7 @@ export interface PanelAction {
 <script setup lang="ts">
 defineProps<{ actions: PanelAction[]; footer?: PanelAction[] }>()
 
-const iconColor = (a: PanelAction) => (a.primary ? '' : a.danger ? 'text-danger' : (a.iconClass ?? 'text-accent'))
+const iconColor = (a: PanelAction) => (a.primary ? '' : a.danger ? 'text-danger' : 'text-icon')
 </script>
 
 <template>

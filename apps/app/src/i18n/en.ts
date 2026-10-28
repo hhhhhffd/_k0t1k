@@ -884,6 +884,7 @@ export const en = {
     'c-fg': 'Text',
     'c-muted': 'Secondary text',
     'c-accent': 'Accent',
+    'c-icon': 'Icons',
     'c-line': 'Borders',
     'c-danger': 'Error',
     'c-ok': 'Success',

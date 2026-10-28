@@ -30,12 +30,12 @@ const launcherFolder = (folder: LauncherFolder, separatorBefore = false): MenuIt
   label: t.toolbar.folderNames[folder],
   icon: FolderOpen,
   iconKey: `folder-${folder}`,
-  iconClass: 'text-warn',
+  
   separatorBefore,
   action: () => void tasks.guard(() => openLauncherFolder(folder)),
 })
 const folderItems: MenuItem[] = [
-  { label: t.toolbar.folderNames.root, icon: FolderOpen, iconKey: 'folder-root', iconClass: 'text-warn', action: () => void tasks.guard(openDataDir) },
+  { label: t.toolbar.folderNames.root, icon: FolderOpen, iconKey: 'folder-root', action: () => void tasks.guard(openDataDir) },
   launcherFolder('instances', true),
   launcherFolder('java'),
   launcherFolder('cache'),
@@ -48,7 +48,7 @@ const folderItems: MenuItem[] = [
     label: t.toolbar.sharedFolder(t.sharedFolder.names[folder]),
     icon: FolderOpen,
     iconKey: `folder-shared-${folder}`,
-    iconClass: 'text-accent',
+    
     separatorBefore: i === 0,
     action: () => void tasks.guard(() => openSharedFolder(folder)),
   })),
@@ -88,11 +88,11 @@ async function pickAccount(id: string) {
 <template>
   <div class="relative z-30 flex h-11 shrink-0 items-center gap-0.5 bg-surface px-1.5" :class="layout.toolbar === 'top' ? 'border-b border-line' : 'border-t border-line'">
     <GripHandle axis="y" class="mx-1" @dock="layout.toolbar = $event === 'start' ? 'top' : 'bottom'" />
-    <button class="tool" :class="onLibrary ? 'tool-active' : ''" @click="router.push('/')"><UiIcon name="library" :icon="Library" :size="16" class="text-muted" />{{ t.nav.library }}</button>
+    <button class="tool" :class="onLibrary ? 'tool-active' : ''" @click="router.push('/')"><UiIcon name="library" :icon="Library" :size="16" class="text-icon" />{{ t.nav.library }}</button>
     <div class="mx-1 h-5 w-px bg-line" />
-    <button class="tool" @click="showCreate = true"><UiIcon name="add" :icon="Plus" :size="17" class="text-ok" />{{ t.toolbar.add }}</button>
-    <button class="tool" @click="folderMenu = menuBelow($event)"><UiIcon name="folders" :icon="FolderOpen" :size="16" class="text-warn" />{{ t.toolbar.folders }}<ChevronDown :size="13" class="text-faint" /></button>
-    <button class="tool" :class="route.name === 'settings' ? 'tool-active' : ''" @click="router.push('/settings')"><UiIcon name="settings" :icon="Settings" :size="16" class="text-muted" />{{ t.nav.settings }}</button>
+    <button class="tool" @click="showCreate = true"><UiIcon name="add" :icon="Plus" :size="17" class="text-icon" />{{ t.toolbar.add }}</button>
+    <button class="tool" @click="folderMenu = menuBelow($event)"><UiIcon name="folders" :icon="FolderOpen" :size="16" class="text-icon" />{{ t.toolbar.folders }}<ChevronDown :size="13" class="text-faint" /></button>
+    <button class="tool" :class="route.name === 'settings' ? 'tool-active' : ''" @click="router.push('/settings')"><UiIcon name="settings" :icon="Settings" :size="16" class="text-icon" />{{ t.nav.settings }}</button>
 
     <div class="flex-1" />
     <div v-if="onLibrary" class="relative mr-1 w-52">
@@ -122,7 +122,7 @@ async function pickAccount(id: string) {
           <button v-for="acc in accounts" :key="acc.id" class="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-hover" @click="pickAccount(acc.id)">
             <span class="flex-1 truncate">{{ acc.name }}</span>
             <span class="text-[11px] text-faint">{{ t.account.kinds[acc.kind] }}</span>
-            <Check v-if="acc.id === current?.id" :size="14" class="text-accent" />
+            <Check v-if="acc.id === current?.id" :size="14" class="text-icon" />
           </button>
           <div v-if="accounts.length" class="my-1 h-px bg-line" />
           <RouterLink to="/settings#accounts" class="flex h-8 items-center rounded-md px-2 text-faint hover:bg-hover" @click="accountsOpen = false">{{ t.account.add }}</RouterLink>

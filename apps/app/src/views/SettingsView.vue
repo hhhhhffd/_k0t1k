@@ -50,17 +50,17 @@ const router = useRouter()
 const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'behavior', 'sharedFolders', 'appearance', 'accounts', 'storage', 'about'] as const
 type Section = (typeof sectionIds)[number]
 const sectionIcons = {
-  java: { icon: Coffee, color: 'text-warn' },
-  memory: { icon: MemoryStick, color: 'text-ok' },
-  jvm: { icon: SlidersHorizontal, color: 'text-muted' },
-  window: { icon: AppWindow, color: 'text-accent' },
-  commands: { icon: Terminal, color: 'text-muted' },
-  behavior: { icon: Zap, color: 'text-warn' },
-  sharedFolders: { icon: FolderSync, color: 'text-warn' },
-  appearance: { icon: Palette, color: 'text-accent' },
-  accounts: { icon: Users, color: 'text-ok' },
-  storage: { icon: HardDrive, color: 'text-muted' },
-  about: { icon: Info, color: 'text-accent' },
+  java: Coffee,
+  memory: MemoryStick,
+  jvm: SlidersHorizontal,
+  window: AppWindow,
+  commands: Terminal,
+  behavior: Zap,
+  sharedFolders: FolderSync,
+  appearance: Palette,
+  accounts: Users,
+  storage: HardDrive,
+  about: Info,
 } as const
 const SECTION_KEY = 'k0t1k.settingsSection'
 const asSection = (v: string | null | undefined) => (sectionIds.includes(v as Section) ? (v as Section) : null)
@@ -223,7 +223,7 @@ async function addAccount() {
         :class="section === id ? 'bg-accent/15 text-accent' : 'text-fg hover:bg-hover'"
         @click="section = id"
       >
-        <component :is="sectionIcons[id].icon" :size="16" :class="section === id ? '' : sectionIcons[id].color" />
+        <component :is="sectionIcons[id]" :size="16" class="text-icon" />
         {{ t.settings.sections[id] }}
       </button>
     </nav>

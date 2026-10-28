@@ -36,7 +36,7 @@ const layout = useLayoutStore()
         <template v-for="item in actions" :key="item.label">
           <div v-if="item.separatorBefore" class="mx-1.5 my-1 h-px bg-line" />
           <button class="tool h-8 w-full justify-start" :class="item.danger ? 'text-danger' : ''" :disabled="item.disabled" @click="item.action()">
-            <UiIcon v-if="item.icon" :name="item.iconKey ?? ''" :icon="item.icon" :size="16" :class="item.iconClass" />
+            <UiIcon v-if="item.icon" :name="item.iconKey ?? ''" :icon="item.icon" :size="16" :class="item.danger ? '' : 'text-icon'" />
             <span class="truncate">{{ item.label }}</span>
           </button>
         </template>
