@@ -284,6 +284,8 @@ pub async fn compress_pack(state: State<'_, AppState>, instance_id: String, kind
 /// Replaces the folder pack with the zip made by [`compress_pack`]; returns the zip's file name.
 #[tauri::command]
 pub async fn replace_pack_with_zip(state: State<'_, AppState>, instance_id: String, kind: ResourceKind, file_name: String, token: u64) -> CommandResult<String> {
+    // The game rewrites options.txt on exit, which would undo the rename of the pack there.
+    crate::worlds::ensure_stopped(&state, &instance_id)?;
     let game_dir = instance_of(&state, &instance_id).await?.game_dir(&state.paths);
     let pack = {
         let mut slot = state.compressed_pack.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
