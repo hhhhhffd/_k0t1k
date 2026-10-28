@@ -38,6 +38,7 @@
  * Versions
  *   list_minecraft_versions()                                -> MinecraftVersion[]
  *   list_loader_versions(minecraftVersion, loader: LoaderId) -> LoaderVersion[]
+ *   version_artwork(minecraftVersion)                         -> string | null  (URL of the official image from Mojang's patch notes, or of its release line)
  *   list_client_versions(client: ClientId)                   -> string[]       (Minecraft versions the client supports; errors without network and cache)
  *   get_client_terms(client: ClientId)                       -> ClientTerms    (fetches the text; `accepted` = already accepted in settings)
  *   accept_client_terms(client: ClientId)                    -> void           (create_instance / change_instance_versions refuse a client until this was called)
@@ -318,6 +319,7 @@ export const dismissCrash = (sessionId: SessionId) => call<void>('dismiss_crash'
 export const listMinecraftVersions = () => call<MinecraftVersion[]>('list_minecraft_versions')
 export const listLoaderVersions = (minecraftVersion: string, loader: LoaderId) =>
   call<LoaderVersion[]>('list_loader_versions', { minecraftVersion, loader })
+export const versionArtwork = (minecraftVersion: string) => call<string | null>('version_artwork', { minecraftVersion })
 
 export const listClientVersions = (client: ClientId) => call<string[]>('list_client_versions', { client })
 export const getClientTerms = (client: ClientId) => call<ClientTerms>('get_client_terms', { client })

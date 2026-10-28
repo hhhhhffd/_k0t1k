@@ -25,7 +25,7 @@ export const ru: Dictionary = {
     ms: 'мс',
     closeLabel: 'Закрыть',
   },
-  nav: { library: 'Библиотека', settings: 'Настройки' },
+  nav: { library: 'Библиотека', settings: 'Настройки', back: 'Назад', forward: 'Вперёд' },
   account: {
     none: 'Нет аккаунта',
     kinds: { offline: 'офлайн', microsoft: 'Microsoft', elyby: 'ely.by' },
@@ -72,6 +72,12 @@ export const ru: Dictionary = {
     sharedFolder: (name: string) => `Общие: ${name.toLowerCase()}`,
   },
   layout: { move: 'Перетащите, чтобы переместить панель' },
+  steam: {
+    version: 'Версия',
+    lastPlayed: 'Последний запуск',
+    played: 'Вы играли',
+    pick: 'Выберите экземпляр слева',
+  },
   panel: {
     nothingSelected: 'Выберите экземпляр, чтобы увидеть действия',
     launch: 'Запустить',
@@ -715,6 +721,9 @@ export const ru: Dictionary = {
     windowControlsHint: 'С какой стороны заголовка кнопки закрыть, свернуть и развернуть.',
     windowControlsLeft: 'Слева',
     windowControlsRight: 'Справа',
+    uiMode: 'Интерфейс',
+    uiModeHint: 'Классический: плитки и боковая панель. Steam-like: список экземпляров и страница с официальным артом версии.',
+    uiModes: { classic: 'Классический', steam: 'Steam-like' },
     lite: 'Лёгкий режим',
     liteHint: 'Отключает размытие, тени и анимации — для слабых ПК.',
     onGameLaunch: 'Когда запускается игра',

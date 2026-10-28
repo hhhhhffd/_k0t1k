@@ -1,48 +1,36 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronRight, Copy, Loader, FileArchive, Flame, FolderOpen, Package, Pencil, Play, Puzzle, RefreshCw, Square, Tag, TextCursorInput, Trash2, Upload, X } from '@lucide/vue'
+import { ChevronDown, ChevronRight, Loader, Tag, Trash2, X } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { openInstanceFolder } from '../api/commands'
-import type { ExportFormat, Instance } from '../api/types'
+import type { Instance } from '../api/types'
 import mascot from '../assets/mascot.png'
 import CatBackdrop from '../components/CatBackdrop.vue'
-import ConfirmDialog from '../components/ConfirmDialog.vue'
 import ContextMenu from '../components/ContextMenu.vue'
-import type { MenuItem } from '../components/ContextMenu.vue'
 import DropOverlay from '../components/DropOverlay.vue'
-import ExportDialog from '../components/ExportDialog.vue'
+import InstanceActionDialogs from '../components/InstanceActionDialogs.vue'
 import InstanceIcon from '../components/InstanceIcon.vue'
 import InstancePanel from '../components/InstancePanel.vue'
 import MarqueeBox from '../components/MarqueeBox.vue'
-import PackUpdateDialog from '../components/PackUpdateDialog.vue'
-import PromptDialog from '../components/PromptDialog.vue'
 import ViewToggle from '../components/ViewToggle.vue'
 import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useLayoutStore } from '../stores/layout'
-import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
 import { addFilesToInstance } from '../utils/addFiles'
 import { loaderOf, minecraftVersionOf } from '../utils/format'
 import { baseName, useFileDrop } from '../utils/useFileDrop'
+import { useInstanceActions } from '../utils/useInstanceActions'
 import { useMarquee } from '../utils/useMarquee'
 import { useSelection } from '../utils/useSelection'
 import { useViewMode } from '../utils/useViewMode'
 
 const store = useInstancesStore()
-const settings = useSettingsStore()
 const tasks = useTasksStore()
 const layout = useLayoutStore()
 const router = useRouter()
 
 const collapsed = ref(new Set<string>())
 const menu = ref<{ x: number; y: number; instance: Instance } | null>(null)
-/** `targets`: all instances a group change applies to (several when picked together). */
-const dialog = ref<{ kind: 'rename' | 'copy' | 'group'; instance: Instance; targets?: Instance[] } | null>(null)
-const deleting = ref<Instance[]>([])
-const exportMenu = ref<{ x: number; y: number; instance: Instance } | null>(null)
-const exporting = ref<{ format: ExportFormat; instance: Instance } | null>(null)
-const packUpdate = ref<Instance | null>(null)
 
 const selected = computed(() => (layout.selectedId ? store.byId(layout.selectedId) : undefined))
 
@@ -78,6 +66,8 @@ const order = computed(() => sections.value.flatMap(([group, items]) => (collaps
 
 /** What an action started on `inst` applies to: all picked instances when it is one of them. */
 const targetsOf = (inst: Instance) => (picked.value.has(inst.id) && picked.value.size > 1 ? pickedInstances.value : [inst])
+const actions = useInstanceActions(targetsOf)
+const { dialog, deleting, launch, rememberPointer, actionsFor } = actions
 
 function onTileClick(inst: Instance, e: MouseEvent) {
   if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -117,71 +107,13 @@ function toggle(group: string) {
   collapsed.value = next
 }
 
-const launch = (inst: Instance) => void tasks.guard(() => store.launch(inst.id, settings.settings?.selectedAccountId ?? undefined))
-
-// The export formats open at the pointer, wherever "Export" was picked (panel or context menu).
-let lastPointer = { x: 0, y: 0 }
-const rememberPointer = (e: PointerEvent) => (lastPointer = { x: e.clientX, y: e.clientY })
-
-/** One action list for the side panel and the context menu, in Prism's order. */
-function actionsFor(inst: Instance): MenuItem[] {
-  const running = store.stateOf(inst.id) !== 'stopped'
-  return [
-    { label: running ? t.library.playAgain : t.panel.launch, icon: Play, iconKey: 'launch', action: () => launch(inst) },
-    { label: t.library.stop, icon: Square, iconKey: 'stop', disabled: !running, action: () => void tasks.guard(() => store.kill(inst.id)) },
-    { label: t.panel.edit, icon: Pencil, iconKey: 'edit', separatorBefore: true, action: () => router.push({ name: 'instance', params: { id: inst.id } }) },
-    { label: t.panel.versions, icon: Puzzle, iconKey: 'versions', action: () => router.push({ name: 'instance', params: { id: inst.id }, query: { tab: 'version' } }) },
-    { label: t.library.changeGroup, icon: Tag, iconKey: 'group', action: () => (dialog.value = { kind: 'group', instance: inst, targets: targetsOf(inst) }) },
-    { label: t.library.rename, icon: TextCursorInput, iconKey: 'rename', action: () => (dialog.value = { kind: 'rename', instance: inst }) },
-    { label: t.panel.folder, icon: FolderOpen, iconKey: 'folder', action: () => void tasks.guard(() => openInstanceFolder(inst.id)) },
-    { label: t.transfer.export, icon: Upload, iconKey: 'export', action: () => (exportMenu.value = { ...lastPointer, instance: inst }) },
-    ...(inst.managedPack ? [{ label: t.pack.check, icon: RefreshCw, iconKey: 'update', action: () => (packUpdate.value = inst) }] : []),
-    { label: t.library.copy, icon: Copy, iconKey: 'copy', action: () => (dialog.value = { kind: 'copy', instance: inst }) },
-    { label: t.library.delete, icon: Trash2, iconKey: 'delete', danger: true, separatorBefore: true, action: () => (deleting.value = targetsOf(inst)) },
-  ]
-}
 const panelActions = computed(() => (selected.value ? actionsFor(selected.value) : []))
 const menuItems = computed(() => (menu.value ? actionsFor(menu.value.instance) : []))
-const exportItems = computed<MenuItem[]>(() => {
-  const inst = exportMenu.value?.instance
-  if (!inst) return []
-  const pick = (format: ExportFormat) => () => (exporting.value = { format, instance: inst })
-  return [
-    { label: t.transfer.exportInstance, icon: FileArchive, iconKey: 'export-instance', action: pick('instance') },
-    { label: t.transfer.exportModrinth, icon: Package, iconKey: 'export-modrinth', action: pick('modrinth') },
-    { label: t.transfer.exportCurseForge, icon: Flame, iconKey: 'export-curseforge', action: pick('curseForge') },
-  ]
-})
 
 function openMenu(e: MouseEvent, inst: Instance) {
   if (!picked.value.has(inst.id)) picked.value = new Set()
   layout.selectedId = inst.id
   menu.value = { x: e.clientX, y: e.clientY, instance: inst }
-}
-
-async function submitPrompt(value: string) {
-  const d = dialog.value
-  if (!d) return
-  dialog.value = null
-  if (d.kind === 'rename') await tasks.guard(() => store.rename(d.instance.id, value))
-  else if (d.kind === 'group') {
-    await tasks.guard(async () => {
-      for (const target of d.targets ?? [d.instance]) await store.setGroup(target.id, value || null)
-    })
-  }
-  else {
-    const copy = await tasks.guard(() => store.copy(d.instance.id, value))
-    if (copy) layout.selectedId = copy.id
-  }
-}
-async function confirmDelete() {
-  const doomed = deleting.value
-  deleting.value = []
-  // The store drops each instance as it is deleted, so a failure midway leaves the list correct.
-  await tasks.guard(async () => {
-    for (const inst of doomed) await store.remove(inst.id)
-  })
-  picked.value = new Set([...picked.value].filter((id) => store.byId(id)))
 }
 
 // Tiles are dragged onto another group with pointer events: WebView2 gives HTML drag and drop to Tauri's file drop.
@@ -355,26 +287,7 @@ const { dragging, position: dragPosition } = useFileDrop(async (paths, at) => {
     <DropOverlay v-if="dragging" subtle :text="dropTarget ? t.transfer.dropOnInstance(dropTarget.name) : t.transfer.dropImport" />
     <MarqueeBox :box="box" />
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menuItems" @close="menu = null" />
-    <ContextMenu v-if="exportMenu" :x="exportMenu.x" :y="exportMenu.y" :items="exportItems" @close="exportMenu = null" />
-    <ExportDialog v-if="exporting" :instance="exporting.instance" :format="exporting.format" @close="exporting = null" />
-    <PackUpdateDialog v-if="packUpdate?.managedPack" :instance="packUpdate" @close="packUpdate = null" />
-    <PromptDialog
-      v-if="dialog"
-      :title="dialog.kind === 'rename' ? t.library.rename : dialog.kind === 'copy' ? t.library.copy : t.library.changeGroup"
-      :label="dialog.kind === 'rename' ? t.library.newName : dialog.kind === 'copy' ? t.library.copyName : t.library.groupName"
-      :initial="dialog.kind === 'rename' ? dialog.instance.name : dialog.kind === 'copy' ? `${dialog.instance.name} (${t.library.copySuffix})` : (dialog.instance.group ?? '')"
-      :allow-empty="dialog.kind === 'group'"
-      :suggestions="dialog.kind === 'group' ? store.groups : []"
-      @submit="submitPrompt"
-      @close="dialog = null"
-    />
-    <ConfirmDialog
-      v-if="deleting.length"
-      :title="deleting.length > 1 ? t.library.deleteMany(deleting.length) : t.library.deleteTitle"
-      :text="deleting.length > 1 ? deleting.map((i) => i.name).join(', ') : t.library.deleteText(deleting[0]!.name)"
-      @confirm="confirmDelete"
-      @close="deleting = []"
-    />
+    <InstanceActionDialogs :actions="actions" @deleted="picked = new Set([...picked].filter((id) => store.byId(id)))" />
   </div>
 </template>
 

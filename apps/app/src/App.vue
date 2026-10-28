@@ -11,6 +11,7 @@ import MainToolbar from './components/MainToolbar.vue'
 import RelocationNotice from './components/RelocationNotice.vue'
 import SizeGrip from './components/SizeGrip.vue'
 import StatusBar from './components/StatusBar.vue'
+import SteamNav from './components/SteamNav.vue'
 import TitleBar from './components/TitleBar.vue'
 import TaskBar from './components/TaskBar.vue'
 import ToastHost from './components/ToastHost.vue'
@@ -22,6 +23,7 @@ import { useSettingsStore } from './stores/settings'
 import { useTasksStore } from './stores/tasks'
 import { useUpdateStore } from './stores/update'
 import OnboardingView from './views/OnboardingView.vue'
+import SteamLibraryView from './views/SteamLibraryView.vue'
 
 const settings = useSettingsStore()
 const instances = useInstancesStore()
@@ -56,11 +58,16 @@ onMounted(async () => {
     <TitleBar />
     <OnboardingView v-if="onboarding" :info="onboarding" />
     <template v-else-if="onboarding === null">
-      <MainToolbar v-if="layout.toolbar === 'top'" />
+      <SteamNav v-if="layout.mode === 'steam'" />
+      <MainToolbar v-else-if="layout.toolbar === 'top'" />
       <main class="min-h-0 flex-1 overflow-y-auto">
-        <RouterView />
+        <RouterView v-slot="{ Component, route }">
+          <!-- the Steam-like library shows the instance pages inside itself -->
+          <SteamLibraryView v-if="layout.mode === 'steam' && route.name !== 'settings'" />
+          <component :is="Component" v-else />
+        </RouterView>
       </main>
-      <MainToolbar v-if="layout.toolbar === 'bottom'" />
+      <MainToolbar v-if="layout.mode !== 'steam' && layout.toolbar === 'bottom'" />
       <TaskBar />
       <StatusBar />
     </template>

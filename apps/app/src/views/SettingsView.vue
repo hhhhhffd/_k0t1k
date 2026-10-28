@@ -18,6 +18,7 @@ import ToggleSwitch from '../components/ToggleSwitch.vue'
 import { LANGUAGES, t } from '../i18n'
 import { useCustomizationStore } from '../stores/customization'
 import { useInstancesStore } from '../stores/instances'
+import { useLayoutStore } from '../stores/layout'
 import { usePluginsStore } from '../stores/plugins'
 import { autoScale, useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
@@ -31,6 +32,7 @@ const REPORT_URL = 'https://discord.gg/zxnMAfUvJ'
 const store = useSettingsStore()
 const tasks = useTasksStore()
 const instances = useInstancesStore()
+const layout = useLayoutStore()
 const update = useUpdateStore()
 const plugins = usePluginsStore()
 const pluginNames = { ratscan: 'RatScan', packconv: 'packconv', overlay: t.plugins.overlay } as const
@@ -288,6 +290,20 @@ async function addAccount() {
       <section v-else-if="section === 'commands'" class="card p-4"><CommandFields v-model="s.commands" /></section>
 
       <template v-else-if="section === 'appearance'">
+        <section class="card flex flex-col gap-2 p-4">
+          <span><span class="block font-medium">{{ t.settings.uiMode }}</span><span class="text-[12px] text-faint">{{ t.settings.uiModeHint }}</span></span>
+          <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.uiMode">
+            <button
+              v-for="mode in (['classic', 'steam'] as const)"
+              :key="mode"
+              role="radio"
+              :aria-checked="layout.mode === mode"
+              class="h-8 flex-1 rounded-md px-2 font-medium transition-colors"
+              :class="layout.mode === mode ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-hover hover:text-fg'"
+              @click="layout.mode = mode"
+            >{{ t.settings.uiModes[mode] }}</button>
+          </div>
+        </section>
         <section class="card flex flex-col gap-2 p-4">
           <span><span class="block font-medium">{{ t.settings.language }}</span><span class="text-[12px] text-faint">{{ t.settings.languageHint }}</span></span>
           <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.language">

@@ -24,7 +24,7 @@ export const en = {
     ms: 'ms',
     closeLabel: 'Close',
   },
-  nav: { library: 'Library', settings: 'Settings' },
+  nav: { library: 'Library', settings: 'Settings', back: 'Back', forward: 'Forward' },
   account: {
     none: 'No account',
     kinds: { offline: 'offline', microsoft: 'Microsoft', elyby: 'ely.by' },
@@ -71,6 +71,12 @@ export const en = {
     sharedFolder: (name: string) => `Shared: ${name.toLowerCase()}`,
   },
   layout: { move: 'Drag to move the panel' },
+  steam: {
+    version: 'Version',
+    lastPlayed: 'Last played',
+    played: 'Play time',
+    pick: 'Pick an instance on the left',
+  },
   panel: {
     nothingSelected: 'Select an instance to see its actions',
     launch: 'Launch',
@@ -714,6 +720,9 @@ export const en = {
     windowControlsHint: 'Which side of the title bar holds close, minimize and maximize.',
     windowControlsLeft: 'Left',
     windowControlsRight: 'Right',
+    uiMode: 'Interface',
+    uiModeHint: 'Classic: tiles and a side panel. Steam-like: a list of instances and a page with the official art of the version.',
+    uiModes: { classic: 'Classic', steam: 'Steam-like' },
     lite: 'Lite mode',
     liteHint: 'Turns off blur, shadows and animations, for weak PCs.',
     onGameLaunch: 'When the game launches',
