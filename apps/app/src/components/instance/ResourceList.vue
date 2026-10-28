@@ -177,8 +177,10 @@ async function syncWithDisk() {
     const have = instance ? (loaderOf(instance)?.label ?? minecraftVersionOf(instance)) : '?'
     for (const mod of Object.values(modCompat.byFile[props.instanceId] ?? {})) {
       if (before.has(mod.fileName) || !mod.enabled) continue
+      // only a loader or Minecraft version problem is compared with what the instance has
       const here = mod.loaderMismatch || !instance ? have : minecraftVersionOf(instance)
-      tasks.toast(t.modCompat.addedMismatch(mod.fileName, needsOf(mod), here), 'error')
+      const message = mod.loaderMismatch || mod.minecraftMismatch ? t.modCompat.addedMismatch(mod.fileName, needsOf(mod), here) : t.modCompat.addedProblem(mod.fileName, needsOf(mod))
+      tasks.toast(message, 'error')
     }
   } finally {
     syncing = false

@@ -719,16 +719,31 @@ export interface PackCompat {
   mismatch: boolean
 }
 
-/** A mod jar whose own descriptor names another Minecraft version or loader than the instance has. */
+/** A required mod that is not installed (`installed` null) or installed in a version that does not fit. */
+export interface MissingDependency {
+  id: string
+  /** The version the mod asks for, like `0.8.x`; null when any version would do. */
+  wanted: string | null
+  installed: string | null
+}
+
+/** Who says a mod is made for another Minecraft version: its own descriptor, Modrinth's data for the file, or only the file name. */
+export type ModCompatSource = 'descriptor' | 'modrinth' | 'filename'
+
+/** A mod jar that does not fit the instance: another Minecraft version or loader, or a required mod is missing. */
 export interface ModCompat {
   fileName: string
   enabled: boolean
   /** What the mod asks of Minecraft, like `>=1.20 <1.21`; null unless the version mismatches. */
   needs: string | null
   minecraftMismatch: boolean
+  /** Where `needs` comes from; null unless the version mismatches. */
+  source: ModCompatSource | null
   /** Loaders the jar is made for; empty unless the loader mismatches. */
   madeForLoaders: LoaderId[]
   loaderMismatch: boolean
+  /** Required mods that no enabled jar of the instance provides in a fitting version. */
+  dependencies: MissingDependency[]
 }
 
 export interface ConvertReport {

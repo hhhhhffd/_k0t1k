@@ -138,7 +138,7 @@
  *   read_resource_file(instanceId, kind, fileName)           -> ArrayBuffer   (binary IPC, up to 256 MiB)
  *   save_resource_file(raw body, header x-args)              -> string        (new file in the resource folder, never replaces; resolves to the name used)
  *   mod_compat_files(instanceId, paths)                     -> ModCompat[]   (the same check for jars about to be added)
- *   mod_compat(instanceId)                                  -> ModCompat[]   (mod jars whose own descriptor wants another Minecraft version or loader; unreadable ones are left out)
+ *   mod_compat(instanceId)                                  -> ModCompat[]   (mod jars made for another Minecraft version or loader, or missing a required mod; unreadable ones are left out)
  *   resourcepack_compat(instanceId)                          -> PackCompat[]  (zip packs: declared releases and whether they differ from the instance)
  * Events (backend -> frontend, via emit)
  *   microsoft-login-stage  LoginStage  (a step of finish_microsoft_login has started)

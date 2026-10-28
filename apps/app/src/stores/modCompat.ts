@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as api from '../api/commands'
-import type { ModCompat } from '../api/types'
+import type { MissingDependency, ModCompat } from '../api/types'
 import { t } from '../i18n'
 import { LOADER_LABELS, minecraftVersionOf } from '../utils/format'
 import { baseName } from '../utils/useFileDrop'
@@ -21,8 +21,18 @@ type Choice = 'launch' | 'disable' | 'cancel'
 
 const loaderNames = (mod: ModCompat) => mod.madeForLoaders.map((id) => LOADER_LABELS[id]).join(' / ')
 
-/** What the mod needs, in words. */
-export const needsOf = (mod: ModCompat) => (mod.loaderMismatch ? t.modCompat.needsLoader(loaderNames(mod)) : t.modCompat.needsVersion(mod.needs ?? '?'))
+const dependencyText = (dependency: MissingDependency) =>
+  dependency.installed
+    ? t.modCompat.depWrongVersion(dependency.id, dependency.wanted ?? '?', dependency.installed)
+    : dependency.wanted
+      ? t.modCompat.depMissingVersion(dependency.id, dependency.wanted)
+      : t.modCompat.depMissing(dependency.id)
+
+/** What the mod needs, in words: the loader or Minecraft version it is made for, then the mods it misses. */
+export const needsOf = (mod: ModCompat) =>
+  [mod.loaderMismatch ? t.modCompat.needsLoader(loaderNames(mod)) : mod.minecraftMismatch ? t.modCompat.needsVersion[mod.source ?? 'descriptor'](mod.needs ?? '?') : '', ...mod.dependencies.map(dependencyText)]
+    .filter(Boolean)
+    .join('; ')
 
 export const useModCompatStore = defineStore('modCompat', () => {
   /** Mismatched mods of every instance seen so far, by file name. */
@@ -35,8 +45,19 @@ export const useModCompatStore = defineStore('modCompat', () => {
     return found
   }
 
-  const label = (mod: ModCompat) => (mod.loaderMismatch ? t.modCompat.madeForLoader(loaderNames(mod)) : t.modCompat.madeFor(mod.needs ?? '?'))
-  const hint = (mod: ModCompat) => (mod.loaderMismatch ? t.modCompat.loaderHint(loaderNames(mod)) : t.modCompat.versionHint(mod.needs ?? '?'))
+  /** The badge text: the loader or version problem first, else the missing mod (or how many). */
+  const label = (mod: ModCompat) => {
+    if (mod.loaderMismatch) return t.modCompat.madeForLoader(loaderNames(mod))
+    if (mod.minecraftMismatch) return t.modCompat.madeFor[mod.source ?? 'descriptor'](mod.needs ?? '?')
+    return mod.dependencies.length === 1 ? dependencyText(mod.dependencies[0]) : t.modCompat.depsLabel(mod.dependencies.length)
+  }
+  /** The badge tooltip: every problem, and who says so. */
+  const hint = (mod: ModCompat) => {
+    if (mod.loaderMismatch) return t.modCompat.loaderHint(loaderNames(mod))
+    const parts = mod.dependencies.length ? [t.modCompat.depsHint(mod.dependencies.map(dependencyText).join('; '))] : []
+    if (mod.minecraftMismatch) parts.unshift(t.modCompat.versionHint[mod.source ?? 'descriptor'](mod.needs ?? '?'))
+    return parts.join(' ')
+  }
 
   async function ask(instanceId: string, mode: ModCompatPrompt['mode'], mods: ModCompat[]): Promise<Choice> {
     const instance = useInstancesStore().instances.find((i) => i.id === instanceId)
