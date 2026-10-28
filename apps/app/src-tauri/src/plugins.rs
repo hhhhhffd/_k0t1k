@@ -1,6 +1,7 @@
-//! Wasm plugins (RatScan, packconv): which copy runs, updates, and the file access the plugin
-//! features need. The plugins themselves run in a Web Worker of the UI, which has no Tauri IPC, so
-//! everything a plugin sees is passed to it as bytes by these commands.
+//! Plugins: which copy runs, updates, and the file access the plugin features need. The wasm plugins
+//! (RatScan, packconv) run in a Web Worker of the UI, which has no Tauri IPC, so everything a plugin
+//! sees is passed to it as bytes by these commands. The overlay agent (a jar for the game's JVM) is
+//! updated the same way, and `overlay` hands it to the launch.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -31,20 +32,36 @@ const LAUNCHER_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A mod or pack is read whole into memory for the plugin; anything bigger is not a normal jar.
 const MAX_READ_BYTES: u64 = 256 * 1024 * 1024;
 
-/// A known plugin and the manifest of the baseline shipped in the frontend assets.
+/// A known plugin and the manifest of the baseline shipped with the launcher.
 struct Entry {
     plugin: KnownPlugin,
     bundled_manifest: &'static str,
+    /// Where the baseline lives, relative to this crate (checked by the tests).
+    #[cfg_attr(not(test), allow(dead_code))]
+    bundled_dir: &'static str,
 }
 
-const ENTRIES: [Entry; 2] = [
+const OVERLAY_ID: &str = "overlay";
+/// The agent jar in a release of the overlay plugin.
+const OVERLAY_JAR: &str = "k0t1k-overlay.jar";
+/// The overlay's baseline is embedded here rather than in the frontend assets: only the launcher reads it.
+static BUNDLED_OVERLAY_JAR: &[u8] = include_bytes!("../plugins/overlay/k0t1k-overlay.jar");
+
+const ENTRIES: [Entry; 3] = [
     Entry {
         plugin: KnownPlugin { id: "ratscan", repo: "hhhhhffd/ratka_checker" },
         bundled_manifest: include_str!("../../public/plugins/ratscan/plugin.json"),
+        bundled_dir: "../public/plugins/ratscan",
     },
     Entry {
         plugin: KnownPlugin { id: "packconv", repo: "hhhhhffd/conventor-mc-rp" },
         bundled_manifest: include_str!("../../public/plugins/packconv/plugin.json"),
+        bundled_dir: "../public/plugins/packconv",
+    },
+    Entry {
+        plugin: KnownPlugin { id: OVERLAY_ID, repo: "hhhhhffd/_k0t1k-overlay" },
+        bundled_manifest: include_str!("../plugins/overlay/plugin.json"),
+        bundled_dir: "plugins/overlay",
     },
 ];
 
@@ -155,6 +172,18 @@ pub async fn check_all(state: &AppState) {
     if let Err(error) = plugins::save_states(&state.paths, &records) {
         tracing::warn!("cannot save the plugin state: {error}");
     }
+}
+
+/// The version and the jar of the overlay agent to launch: the installed release when it is valid and
+/// not older than the baseline, else the baseline embedded in the binary.
+pub fn overlay_jar(state: &AppState) -> k0t1k_core::Result<(String, Vec<u8>)> {
+    let entry = entry(OVERLAY_ID).map_err(|error| k0t1k_core::Error::Other(error.to_string()))?;
+    let (resolved, _) = resolve(state, entry);
+    let jar = match &resolved.installed {
+        Some(installed) => installed.read_file(OVERLAY_JAR)?,
+        None => BUNDLED_OVERLAY_JAR.to_vec(),
+    };
+    Ok((resolved.version, jar))
 }
 
 /// A file of the installed copy of a plugin (checked against the signed manifest again). The bundled
@@ -407,7 +436,7 @@ mod tests {
             assert_eq!(manifest.id, entry.plugin.id);
             assert_eq!(manifest.api, plugins::API);
             for name in manifest.files.keys() {
-                let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../public/plugins").join(entry.plugin.id).join(name);
+                let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(entry.bundled_dir).join(name);
                 let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
                 plugins::verify_file(&manifest, name, &bytes).unwrap();
             }

@@ -226,7 +226,7 @@ impl Default for DiscordSettings {
     }
 }
 
-/// The in-game overlay agent (`packages/overlay-agent`), shipped inside the launcher.
+/// The in-game overlay agent (repository `hhhhhffd/_k0t1k-overlay`), shipped inside the launcher.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct OverlaySettings {

@@ -1,5 +1,5 @@
-//! The in-game overlay agent (`packages/overlay-agent`): placing its jar and the JVM arguments that load it.
-//! The jar itself is embedded in the launcher binary. The JVM keeps an agent jar open (locked on Windows)
+//! The in-game overlay agent (repository `hhhhhffd/_k0t1k-overlay`): placing its jar and the JVM arguments
+//! that load it. The jar comes from the plugin system: a baseline in the launcher binary or a signed release. The JVM keeps an agent jar open (locked on Windows)
 //! for the whole session, so each version gets its own file name and old ones are removed only while no
 //! game runs.
 

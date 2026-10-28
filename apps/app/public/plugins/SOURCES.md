@@ -10,3 +10,7 @@ the signature of the launcher exe, so they carry no `plugin.json.sig`.
 |----------|-----------------------------|
 | ratscan  | hhhhhffd/ratka_checker      |
 | packconv | hhhhhffd/conventor-mc-rp    |
+| overlay  | hhhhhffd/_k0t1k-overlay     |
+
+The overlay agent's baseline lives in `src-tauri/plugins/overlay` instead: the launcher embeds the jar with
+`include_bytes!` and the frontend never reads it.

@@ -33,7 +33,7 @@ const tasks = useTasksStore()
 const instances = useInstancesStore()
 const update = useUpdateStore()
 const plugins = usePluginsStore()
-const pluginNames = { ratscan: 'RatScan', packconv: 'packconv' } as const
+const pluginNames = { ratscan: 'RatScan', packconv: 'packconv', overlay: t.plugins.overlay } as const
 const customization = useCustomizationStore()
 const catOptions = computed(() => [
   { value: '', label: t.settings.noCat },

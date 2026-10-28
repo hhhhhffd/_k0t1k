@@ -1,4 +1,5 @@
-// Replaces the bundled plugin baselines in public/plugins with the latest signed GitHub releases.
+// Replaces the bundled plugin baselines (public/plugins for the wasm plugins, src-tauri/plugins for the
+// overlay agent) with the latest signed GitHub releases.
 // Mirrors the launcher's checks in packages/core/src/plugins.rs. Never fails the build: on any problem
 // the existing bundled copy is kept and the reason is printed.
 // FETCH_PLUGINS_BASE overrides https://github.com (used to test the offline path).
@@ -7,9 +8,12 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const here = dirname(fileURLToPath(import.meta.url));
 const PLUGINS = [
-  { id: "ratscan", repo: "hhhhhffd/ratka_checker" },
-  { id: "packconv", repo: "hhhhhffd/conventor-mc-rp" },
+  { id: "ratscan", repo: "hhhhhffd/ratka_checker", dir: join(here, "..", "public", "plugins", "ratscan") },
+  { id: "packconv", repo: "hhhhhffd/conventor-mc-rp", dir: join(here, "..", "public", "plugins", "packconv") },
+  // Only the launcher reads the agent jar, so it stays out of the frontend assets.
+  { id: "overlay", repo: "hhhhhffd/_k0t1k-overlay", dir: join(here, "..", "src-tauri", "plugins", "overlay") },
 ];
 const API = 1;
 const PUBLIC_KEY = "b37Axim0D7VgDNWVIgvlnpdn2nVOMSLM/jIFbRFc/4k=";
@@ -19,9 +23,6 @@ const MAX_SIGNATURE_BYTES = 1024;
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_FILES = 8;
 const BASE = process.env.FETCH_PLUGINS_BASE ?? "https://github.com";
-
-const here = dirname(fileURLToPath(import.meta.url));
-const pluginsDir = join(here, "..", "public", "plugins");
 
 const key = createPublicKey({
   key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), Buffer.from(PUBLIC_KEY, "base64")]),
@@ -101,7 +102,7 @@ async function replaceFolder(dir, files) {
 }
 
 for (const plugin of PLUGINS) {
-  const dir = join(pluginsDir, plugin.id);
+  const dir = plugin.dir;
   let current = "unknown";
   try {
     current = JSON.parse(await readFile(join(dir, "plugin.json"), "utf8")).version;

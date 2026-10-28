@@ -658,7 +658,7 @@ export type DragDropEvent = { type: 'enter' | 'drop'; paths: string[]; x: number
 
 // ---- plugins (wasm, see docs/ARCHITECTURE.md) ----
 
-export type PluginId = 'ratscan' | 'packconv'
+export type PluginId = 'ratscan' | 'packconv' | 'overlay'
 
 export interface PluginInfo {
   id: PluginId

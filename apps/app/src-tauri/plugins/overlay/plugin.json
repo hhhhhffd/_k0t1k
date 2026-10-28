@@ -1,0 +1,9 @@
+{
+  "id": "overlay",
+  "version": "0.2.0",
+  "api": 1,
+  "minLauncher": "0.1.4",
+  "files": {
+    "k0t1k-overlay.jar": "1a09c32f40d12efb2eb8cbbefbd1eba8a5f06672f5d23c52e60167b73bce6493"
+  }
+}

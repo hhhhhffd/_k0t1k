@@ -187,7 +187,8 @@ export const en = {
   },
   plugins: {
     title: 'Plugins',
-    intro: 'RatScan (mod scanner) and packconv (resource pack converter) run in a sandbox without access to your files. Updates are signed.',
+    intro: 'RatScan (mod scanner) and packconv (resource pack converter) run in a sandbox without access to your files. The in-game overlay updates the same way. Updates are signed.',
+    overlay: 'In-game overlay',
     version: 'Version',
     source: 'Source',
     sources: { bundled: 'bundled with the launcher', installed: 'downloaded release' },
