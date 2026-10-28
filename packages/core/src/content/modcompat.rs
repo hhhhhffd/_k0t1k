@@ -1391,6 +1391,15 @@ type="incompatible"
         assert_eq!(found.len(), 1);
     }
 
+    /// Tauri commands must be `Send`; a generic `AsyncFnOnce` could silently break that.
+    #[test]
+    fn the_public_checks_are_send() {
+        fn assert_send<T: Send>(_: T) {}
+        let client = modrinth::Client::new(reqwest::Client::new());
+        assert_send(check_mods(&client, Path::new("."), Path::new("."), "1.20.1", None));
+        assert_send(check_new_jars(&client, Path::new("."), Path::new("."), Vec::new(), "1.20.1", None));
+    }
+
     #[tokio::test]
     async fn loaders_are_required_for_any_verdict() {
         let env = Env::new();

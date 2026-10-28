@@ -370,33 +370,30 @@ pub async fn resourcepack_compat(state: State<'_, AppState>, instance_id: String
     .await
 }
 
-/// Enabled and disabled mod jars that declare another Minecraft version or loader than the instance.
-/// Jars that state nothing, or something not understood, are left out.
+/// Mod jars that do not fit the instance: another Minecraft version or loader (by the jar's own descriptor,
+/// else by Modrinth's data for the file, else by an explicit version in the file name), or a required mod
+/// that is not installed. Jars that state nothing, or something not understood, are left out.
 #[tauri::command]
 pub async fn mod_compat(state: State<'_, AppState>, instance_id: String) -> CommandResult<Vec<ModCompat>> {
     let instance = instance_of(&state, &instance_id).await?;
     let (game_dir, instance_dir) = (instance.game_dir(&state.paths), instance.dir(&state.paths));
-    blocking(move || {
-        let Some(minecraft) = modcompat::minecraft_of_components(&instance.components) else {
-            return Ok(Vec::new());
-        };
-        modcompat::check_mods(&game_dir, &instance_dir, minecraft, modcompat::loader_of_components(&instance.components))
-    })
-    .await
+    let Some(minecraft) = modcompat::minecraft_of_components(&instance.components) else {
+        return Ok(Vec::new());
+    };
+    let loader = modcompat::loader_of_components(&instance.components);
+    Ok(modcompat::check_mods(&state.clients.modrinth, &game_dir, &instance_dir, minecraft, loader).await?)
 }
 
-/// Jars about to be added that declare another Minecraft version or loader than the instance.
+/// The same check for jars about to be added, together with the jars already installed.
 #[tauri::command]
 pub async fn mod_compat_files(state: State<'_, AppState>, instance_id: String, paths: Vec<PathBuf>) -> CommandResult<Vec<ModCompat>> {
     let instance = instance_of(&state, &instance_id).await?;
-    let game_dir = instance.game_dir(&state.paths);
-    blocking(move || {
-        let Some(minecraft) = modcompat::minecraft_of_components(&instance.components) else {
-            return Ok(Vec::new());
-        };
-        Ok(modcompat::check_new_jars(&game_dir, &paths, minecraft, modcompat::loader_of_components(&instance.components)))
-    })
-    .await
+    let (game_dir, instance_dir) = (instance.game_dir(&state.paths), instance.dir(&state.paths));
+    let Some(minecraft) = modcompat::minecraft_of_components(&instance.components) else {
+        return Ok(Vec::new());
+    };
+    let loader = modcompat::loader_of_components(&instance.components);
+    Ok(modcompat::check_new_jars(&state.clients.modrinth, &game_dir, &instance_dir, paths, minecraft, loader).await?)
 }
 
 #[cfg(test)]
