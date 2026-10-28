@@ -49,6 +49,7 @@ import type {
   SearchHit,
   SearchPage,
   SearchQuery,
+  GameOption,
   Server,
   ServerStatus,
   SessionId,
@@ -389,6 +390,18 @@ function screenshotsFor(instanceId: string): Screenshot[] {
     screenshotsByInstance.set(instanceId, list)
   }
   return list
+}
+
+const optionsByInstance = new Map<string, GameOption[] | null>()
+function optionsFor(instanceId: string): GameOption[] | null {
+  if (!optionsByInstance.has(instanceId)) {
+    const sample = 'version:4671\nao:true\nenableVsync:true\nfov:0.0\ngraphicsPreset:"fancy"\nfullscreen:false\ngamma:0.5\nguiScale:2\nmaxFps:120\nparticles:0\nrenderClouds:"true"\nrenderDistance:12\nsimulationDistance:10\nentityShadows:true\nbobView:true\nmouseSensitivity:0.5\nrawMouseInput:true\nautoJump:false\nsoundCategory_master:1.0\nsoundCategory_music:0.5\nlang:en_us\nkey_key.forward:key.keyboard.w\nkey_key.jump:key.keyboard.space\nresourcePacks:["vanilla"]'
+    optionsByInstance.set(instanceId, instanceId === 'inst-5' ? null : sample.split('\n').map((line) => {
+      const at = line.indexOf(':')
+      return { key: line.slice(0, at), value: line.slice(at + 1) }
+    }))
+  }
+  return optionsByInstance.get(instanceId) ?? null
 }
 
 const serversByInstance = new Map<string, Server[]>()
@@ -864,6 +877,18 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       const list = screenshotsFor(a.instanceId as string)
       const idx = list.findIndex((x) => x.fileName === a.fileName)
       if (idx >= 0) list.splice(idx, 1)
+      return undefined
+    }
+    case 'game_options': return clone(optionsFor(a.instanceId as string))
+    case 'set_game_options': {
+      notRunning(a.instanceId)
+      const list = optionsFor(a.instanceId as string) ?? []
+      for (const change of a.changes as GameOption[]) {
+        const existing = list.find((o) => o.key === change.key)
+        if (existing) existing.value = change.value
+        else list.push({ ...change })
+      }
+      optionsByInstance.set(a.instanceId as string, list)
       return undefined
     }
     case 'list_servers': return clone(serversFor(a.instanceId as string))

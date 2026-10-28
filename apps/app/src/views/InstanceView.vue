@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Camera, Clock, FileArchive, Flame, FolderOpen, Globe, History, Image, Layers, Package, Puzzle, RefreshCw, ScrollText, Server, Settings2, Sparkles, Upload } from '@lucide/vue'
+import { ArrowLeft, Camera, Clock, FileArchive, Flame, FolderOpen, Globe, History, Image, Layers, Package, Puzzle, RefreshCw, ScrollText, Server, Settings2, SlidersHorizontal, Sparkles, Upload } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { openInstanceFolder } from '../api/commands'
@@ -10,6 +10,7 @@ import DropOverlay from '../components/DropOverlay.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import PackUpdateDialog from '../components/PackUpdateDialog.vue'
 import InstanceIcon from '../components/InstanceIcon.vue'
+import GameOptionsTab from '../components/instance/GameOptionsTab.vue'
 import InstanceSettingsTab from '../components/instance/InstanceSettingsTab.vue'
 import LogsTab from '../components/instance/LogsTab.vue'
 import ResourceList from '../components/instance/ResourceList.vue'
@@ -39,8 +40,8 @@ const instance = computed(() => store.byId(props.id))
 watch(() => props.id, (id) => (layout.selectedId = id), { immediate: true })
 const loader = computed(() => (instance.value ? loaderOf(instance.value) : undefined))
 
-type Tab = 'version' | 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'screenshots' | 'servers' | 'logs' | 'settings'
-const tabs: Tab[] = ['version', 'mods', 'resourcepacks', 'shaders', 'worlds', 'screenshots', 'servers', 'logs', 'settings']
+type Tab = 'version' | 'mods' | 'resourcepacks' | 'shaders' | 'worlds' | 'screenshots' | 'servers' | 'options' | 'logs' | 'settings'
+const tabs: Tab[] = ['version', 'mods', 'resourcepacks', 'shaders', 'worlds', 'screenshots', 'servers', 'options', 'logs', 'settings']
 const tabIcons = {
   version: { icon: Layers, color: 'text-ok' },
   mods: { icon: Puzzle, color: 'text-accent' },
@@ -49,6 +50,7 @@ const tabIcons = {
   worlds: { icon: Globe, color: 'text-ok' },
   screenshots: { icon: Camera, color: 'text-muted' },
   servers: { icon: Server, color: 'text-accent' },
+  options: { icon: SlidersHorizontal, color: 'text-ok' },
   logs: { icon: ScrollText, color: 'text-muted' },
   settings: { icon: Settings2, color: 'text-muted' },
 } as const
@@ -140,6 +142,7 @@ const { dragging } = useFileDrop(async (paths) => {
         <WorldsTab v-else-if="tab === 'worlds'" :key="`${instance.id}-${listKey}`" :instance-id="instance.id" />
         <ScreenshotsTab v-else-if="tab === 'screenshots'" :key="instance.id" :instance-id="instance.id" :shared="instance.sharedFolders.includes('screenshots')" />
         <ServersTab v-else-if="tab === 'servers'" :key="instance.id" :instance-id="instance.id" />
+        <GameOptionsTab v-else-if="tab === 'options'" :key="instance.id" :instance-id="instance.id" />
         <LogsTab v-else-if="tab === 'logs'" :instance-id="instance.id" />
         <InstanceSettingsTab v-else :key="instance.id" :instance="instance" />
       </section>

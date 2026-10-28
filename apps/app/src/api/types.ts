@@ -423,6 +423,12 @@ export interface Server {
   resourcePack: ResourcePackPolicy
 }
 
+/** One `key:value` line of options.txt; the value is raw (strings keep their quotes). */
+export interface GameOption {
+  key: string
+  value: string
+}
+
 export interface ServerStatus {
   /** Plain text, formatting codes removed. */
   motd: string

@@ -107,6 +107,9 @@
  *   open_screenshot(instanceId, fileName)                    -> void
  *   delete_screenshot(instanceId, fileName)                  -> void
  *   open_screenshots_folder(instanceId)                      -> void
+ * Game options (options.txt; setting fails while the instance is running)
+ *   game_options(instanceId)                                 -> GameOption[] | null (no file yet)
+ *   set_game_options(instanceId, changes)                    -> void (replaces values in place, appends new keys)
  * Servers (servers.dat; the modifying commands fail while the instance is running)
  *   list_servers(instanceId)                                 -> Server[]
  *   add_server(instanceId, server: Server)                   -> void
@@ -160,6 +163,7 @@ import type {
   DragDropEvent,
   ExportEntry,
   ExportRequest,
+  GameOption,
   PackExportReport,
   ClientId,
   ClientTerms,
@@ -445,6 +449,12 @@ export const openScreenshotsFolder = (instanceId: string) =>
   call<void>('open_screenshots_folder', { instanceId })
 /** URL an <img> can load for a file the backend allowed (asset protocol); the mock hands out ready URLs. */
 export const fileUrl = (path: string) => (isTauri ? convertFileSrc(path) : path)
+
+// ---- game options (options.txt) ----
+export const gameOptions = (instanceId: string) => call<GameOption[] | null>('game_options', { instanceId })
+/** Fails while the instance is running: the game rewrites the file on exit. */
+export const setGameOptions = (instanceId: string, changes: GameOption[]) =>
+  call<void>('set_game_options', { instanceId, changes })
 
 // ---- servers ----
 export const listServers = (instanceId: string) => call<Server[]>('list_servers', { instanceId })
