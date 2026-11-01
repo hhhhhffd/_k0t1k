@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 
 const KEY = 'k0t1k.layout'
 
-/** `steam`: a library styled after Steam's, with the instance pages inside it. */
+/** `steam`: a library styled after Steam's, with the instance pages inside it. `classic` is the legacy interface, kept as is. */
 export type UiMode = 'classic' | 'steam'
 
 interface SavedLayout {
@@ -14,11 +14,11 @@ interface SavedLayout {
 }
 
 function read(): SavedLayout {
-  const fallback: SavedLayout = { mode: 'classic', toolbar: 'top', panel: 'right', selectedId: null }
+  const fallback: SavedLayout = { mode: 'steam', toolbar: 'top', panel: 'right', selectedId: null }
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<SavedLayout>
     return {
-      mode: raw.mode === 'steam' ? 'steam' : 'classic',
+      mode: raw.mode === 'classic' ? 'classic' : 'steam',
       toolbar: raw.toolbar === 'bottom' ? 'bottom' : 'top',
       panel: raw.panel === 'left' ? 'left' : 'right',
       selectedId: typeof raw.selectedId === 'string' ? raw.selectedId : null,
