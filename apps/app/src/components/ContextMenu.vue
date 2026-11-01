@@ -25,11 +25,11 @@ const props = defineProps<{ x: number; y: number; items: MenuItem[] }>()
 const emit = defineEmits<{ close: [] }>()
 
 const menu = ref<HTMLElement | null>(null)
-// keep the menu inside the viewport; the width is measured once the menu is laid out, because the labels set it
-const width = ref(208)
+// keep the menu inside the viewport; its size is measured once it is laid out, because the labels and separators set it
+const size = ref({ width: 208, height: props.items.length * 34 })
 const pos = computed(() => ({
-  left: `${Math.max(0, Math.min(props.x, window.innerWidth - width.value - 12))}px`,
-  top: `${Math.min(props.y, window.innerHeight - props.items.length * 34 - 16)}px`,
+  left: `${Math.max(0, Math.min(props.x, window.innerWidth - size.value.width - 12))}px`,
+  top: `${Math.max(0, Math.min(props.y, window.innerHeight - size.value.height - 12))}px`,
 }))
 
 function onKey(e: KeyboardEvent) {
@@ -37,7 +37,7 @@ function onKey(e: KeyboardEvent) {
 }
 onMounted(() => {
   window.addEventListener('keydown', onKey)
-  if (menu.value) width.value = menu.value.offsetWidth
+  if (menu.value) size.value = { width: menu.value.offsetWidth, height: menu.value.offsetHeight }
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
