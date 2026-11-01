@@ -82,6 +82,8 @@ pub struct EffectiveSettings {
     pub commands: CommandSettings,
     pub env: BTreeMap<String, String>,
     pub overlay: bool,
+    /// The launcher's interface zoom in percent, passed to the overlay; `None` lets it pick one itself.
+    pub overlay_scale: Option<u16>,
 }
 
 impl InstanceSettings {
@@ -94,6 +96,7 @@ impl InstanceSettings {
             commands: self.commands.clone().unwrap_or_else(|| global.commands.clone()),
             env: self.env.clone().unwrap_or_else(|| global.env.clone()),
             overlay: self.overlay.unwrap_or(global.overlay.enabled),
+            overlay_scale: global.ui.scale,
         }
     }
 }

@@ -62,12 +62,14 @@ pub fn supports(minecraft_version: &str) -> bool {
 }
 
 /// JVM arguments that load the agent. The launcher forces `user.language`, so the UI language is passed.
-pub fn agent_args(jar: &Path, data_dir: &Path, language: Language) -> Vec<String> {
+/// `scale` is the interface zoom in percent; without it the overlay picks one from the screen size.
+pub fn agent_args(jar: &Path, data_dir: &Path, language: Language, scale: Option<u16>) -> Vec<String> {
     let lang = match language {
         Language::Ru => "ru",
         Language::En => "en",
     };
-    vec![format!("-javaagent:{}=lang={lang}", jar.display()), format!("-Dk0t1k.overlay.dataDir={}", data_dir.display())]
+    let scale = scale.map_or_else(String::new, |percent| format!(",scale={percent}"));
+    vec![format!("-javaagent:{}=lang={lang}{scale}", jar.display()), format!("-Dk0t1k.overlay.dataDir={}", data_dir.display())]
 }
 
 /// Deletes the saved chat history. Call only while no game runs.
@@ -111,8 +113,14 @@ mod tests {
 
     #[test]
     fn arguments_carry_language_and_data_dir() {
-        let args = agent_args(Path::new("/d/k0t1k-overlay-0.1.0.jar"), Path::new("/d/my data"), Language::Ru);
+        let args = agent_args(Path::new("/d/k0t1k-overlay-0.1.0.jar"), Path::new("/d/my data"), Language::Ru, None);
         assert_eq!(args, ["-javaagent:/d/k0t1k-overlay-0.1.0.jar=lang=ru", "-Dk0t1k.overlay.dataDir=/d/my data"]);
+    }
+
+    #[test]
+    fn arguments_carry_the_interface_zoom() {
+        let args = agent_args(Path::new("/x.jar"), Path::new("/d"), Language::Ru, Some(125));
+        assert_eq!(args[0], "-javaagent:/x.jar=lang=ru,scale=125");
     }
 
     #[test]

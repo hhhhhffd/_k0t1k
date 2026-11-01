@@ -39,7 +39,7 @@ pub async fn agent_args(state: &AppState, instance: &Instance, settings: &Effect
             if let Some(error) = cleanup {
                 log.line("launcher", &tr_fmt!("Cannot remove an old overlay version: {error}", "Не удалось удалить старую версию оверлея: {error}"));
             }
-            overlay::agent_args(&jar, &dir, i18n::language())
+            overlay::agent_args(&jar, &dir, i18n::language(), settings.overlay_scale)
         }
         Err(error) => {
             log.line("launcher", &tr_fmt!("Cannot prepare the overlay, starting without it: {error}", "Не удалось подготовить оверлей, запуск без него: {error}"));
