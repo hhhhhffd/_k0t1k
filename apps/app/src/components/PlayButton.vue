@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronDown, Loader, Play, Plus, Square } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
 import { useSettingsStore } from '../stores/settings'
@@ -16,14 +16,24 @@ const state = computed(() => store.stateOf(props.instanceId))
 const live = computed(() => store.liveSessionsOf(props.instanceId))
 const stopMenu = ref<{ x: number; y: number } | null>(null)
 
+// Stopping one session keeps the menu open, so the rest can be stopped one by one; it goes away with the chevron.
 const stopItems = computed<MenuItem[]>(() => [
-  { label: t.library.stopAll, icon: Square, action: () => void tasks.guard(() => store.kill(props.instanceId)) },
+  { label: t.library.stopAll, hint: `${live.value.length}`, icon: Square, action: () => void tasks.guard(() => store.kill(props.instanceId)) },
   ...live.value.map((s) => ({
-    label: t.library.stopSession(s.number, t.library.sessionStates[s.state as 'preparing' | 'running' | 'stopping']),
+    label: t.library.stopSession(s.number),
+    hint: t.library.sessionStates[s.state as 'preparing' | 'running' | 'stopping'],
     separatorBefore: s.sessionId === live.value[0]?.sessionId,
+    disabled: s.state === 'stopping',
+    keepOpen: true,
     action: () => void tasks.guard(() => store.killSession(s.sessionId)),
   })),
 ])
+watch(
+  () => live.value.length,
+  (n) => {
+    if (n < 2) stopMenu.value = null
+  },
+)
 
 function launch() {
   void tasks.guard(() => store.launch(props.instanceId, settings.settings?.selectedAccountId ?? undefined))
