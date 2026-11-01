@@ -147,6 +147,14 @@ export interface CustomTheme {
   colors: Record<string, string>
 }
 
+/** The resolved colours of the current theme, as the in-game overlay reads them (`token` is a `--c-*` name without the prefix, values `#rrggbb`). */
+export interface OverlayTheme {
+  id: string
+  name: string
+  dark: boolean
+  colors: Record<string, string>
+}
+
 export type AccountKind = 'offline' | 'microsoft' | 'elyby'
 
 /** The public account list; tokens never reach the UI. */

@@ -57,3 +57,11 @@ pub async fn clear_overlay_history(state: State<'_, AppState>) -> CommandResult<
     let dir = state.paths.overlay_dir();
     blocking(move || overlay::clear_history(&dir)).await
 }
+
+/// Hands the launcher's resolved theme to the overlay: it is written at every theme change and read by the
+/// overlay at the start of a game and, while it runs, whenever the file changes.
+#[tauri::command]
+pub async fn set_overlay_theme(state: State<'_, AppState>, theme: overlay::OverlayTheme) -> CommandResult<()> {
+    let dir = state.paths.overlay_dir();
+    blocking(move || overlay::write_theme(&dir, &theme)).await
+}

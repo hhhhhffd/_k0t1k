@@ -1022,6 +1022,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     case 'get_downloads_dir': return 'C:\\Users\\Player\\Downloads'
     case 'save_text_file': return undefined
     case 'clear_overlay_history': return undefined
+    case 'set_overlay_theme': return undefined
     case 'set_update_lock': {
       const r = resourcesFor(a.instanceId as string, a.kind as LocalResourceKind).find((x) => x.fileName === a.fileName)
       if (!r?.origin) throw new Error('У файла нет метаданных')

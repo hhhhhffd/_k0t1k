@@ -4,7 +4,7 @@ import * as api from '../api/commands'
 import { isTauri } from '../api/commands'
 import type { CustomTheme, GlobalSettings, ThemeId } from '../api/types'
 import { setLanguage } from '../i18n'
-import { isBuiltinTheme, themeVars } from '../utils/theme'
+import { isBuiltinTheme, resolvedOverlayTheme, themeVars } from '../utils/theme'
 
 const THEME_CACHE = 'k0t1k.ui'
 
@@ -32,9 +32,21 @@ function applyResolved({ base, colors }: ResolvedTheme, lite: boolean) {
   appliedVars = Object.keys(vars)
 }
 
+let overlayThemeTimer: number | undefined
+
+/** Passes the applied theme to the overlay. Debounced: the theme editor applies on every colour drag. */
+function publishOverlayTheme(id: string, name: string) {
+  if (!isTauri) return
+  window.clearTimeout(overlayThemeTimer)
+  overlayThemeTimer = window.setTimeout(() => {
+    api.setOverlayTheme(resolvedOverlayTheme(id, name)).catch((e) => console.warn('cannot write the overlay theme', e))
+  }, 300)
+}
+
 function applyUi(theme: string, lite: boolean, custom: CustomTheme[]) {
   const resolved = resolveTheme(theme, custom)
   applyResolved(resolved, lite)
+  publishOverlayTheme(theme, custom.find((c) => c.id === theme)?.name ?? theme)
   try {
     localStorage.setItem(THEME_CACHE, JSON.stringify({ ...resolved, lite }))
   } catch {

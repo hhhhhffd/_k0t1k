@@ -3,13 +3,62 @@
 //! for the whole session, so each version gets its own file name and old ones are removed only while no
 //! game runs.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::error::{IoContext, Result};
+use serde::{Deserialize, Serialize};
+
+use crate::error::{Error, IoContext, Result};
 use crate::i18n::Language;
 
 const JAR_PREFIX: &str = "k0t1k-overlay-";
 const HISTORY_FILE: &str = "chat-history.tsv";
+const THEME_FILE: &str = "theme.json";
+const THEME_VERSION: u32 = 1;
+/// The colour tokens of the launcher UI (`--c-*` in style.css, without the prefix) that the overlay reads.
+const THEME_TOKENS: [&str; 14] =
+    ["base", "surface", "raised", "hover", "line", "fg", "muted", "faint", "accent", "accent-fg", "ok", "warn", "danger", "icon"];
+
+/// The launcher's resolved theme as the overlay reads it from `<dataDir>/theme.json`. The UI resolves
+/// built-in, custom and file themes into concrete colours (it owns the CSS), so the contract is the
+/// computed result and no copy of the built-in palettes is kept here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OverlayTheme {
+    pub id: String,
+    pub name: String,
+    /// Whether the theme is dark (its `color-scheme`).
+    pub dark: bool,
+    /// Token name without `--c-` mapped to `#rrggbb`.
+    pub colors: BTreeMap<String, String>,
+}
+
+#[derive(Serialize)]
+struct ThemeFile<'a> {
+    version: u32,
+    #[serde(flatten)]
+    theme: &'a OverlayTheme,
+}
+
+fn is_hex_color(value: &str) -> bool {
+    value.len() == 7 && value.starts_with('#') && value[1..].bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Writes the theme for the overlay (atomically, since a running game polls the file). The overlay
+/// copes with missing tokens, but a malformed colour means a bug in the caller, so it is refused.
+pub fn write_theme(data_dir: &Path, theme: &OverlayTheme) -> Result<()> {
+    for (token, value) in &theme.colors {
+        if !THEME_TOKENS.contains(&token.as_str()) || !is_hex_color(value) {
+            return Err(Error::Other(format!("invalid overlay theme color {token:?}: {value:?}")));
+        }
+    }
+    let json = serde_json::to_vec_pretty(&ThemeFile { version: THEME_VERSION, theme }).map_err(|error| Error::Other(error.to_string()))?;
+    std::fs::create_dir_all(data_dir).at(data_dir)?;
+    let path = data_dir.join(THEME_FILE);
+    let partial = data_dir.join(format!("{THEME_FILE}.part"));
+    std::fs::write(&partial, json).at(&partial)?;
+    std::fs::rename(&partial, &path).at(&path)?;
+    Ok(())
+}
 
 fn jar_path(dir: &Path, version: &str) -> PathBuf {
     dir.join(format!("{JAR_PREFIX}{version}.jar"))
@@ -99,6 +148,29 @@ mod tests {
         assert!(!first.exists());
         assert_eq!(std::fs::read(&second).unwrap(), b"two");
         assert!(dir.path().join("chat-history.tsv").exists());
+    }
+
+    #[test]
+    fn theme_is_written_atomically_and_validated() {
+        let dir = tempfile::tempdir().unwrap();
+        let colors = |pairs: &[(&str, &str)]| pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let mut theme = OverlayTheme { id: "light".into(), name: "Light".into(), dark: false, colors: colors(&[("base", "#f1eff7"), ("accent-fg", "#ffffff")]) };
+        write_theme(dir.path(), &theme).unwrap();
+        let path = dir.path().join("theme.json");
+        let written: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(written["version"], 1);
+        assert_eq!(written["id"], "light");
+        assert_eq!(written["dark"], false);
+        assert_eq!(written["colors"]["accent-fg"], "#ffffff");
+        assert!(!dir.path().join("theme.json.part").exists());
+
+        let before = std::fs::read(&path).unwrap();
+        for (token, value) in [("base", "red"), ("base", "#fff"), ("base", "#12345g"), ("bogus", "#000000")] {
+            theme.colors = colors(&[(token, value)]);
+            assert!(write_theme(dir.path(), &theme).is_err(), "{token} {value}");
+        }
+        // a refused theme leaves the previous file alone
+        assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 
     #[test]

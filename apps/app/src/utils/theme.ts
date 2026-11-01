@@ -1,5 +1,5 @@
 import { t } from '../i18n'
-import type { CustomTheme, ThemeId } from '../api/types'
+import type { CustomTheme, OverlayTheme, ThemeId } from '../api/types'
 
 /** Labels are getters so they follow the language when read while rendering. */
 export const THEMES: { id: ThemeId; label: string }[] = (['k0t1k', 'light', 'amoled', 'mint'] as const).map((id) => ({
@@ -49,6 +49,26 @@ export function builtinColors(id: ThemeId): Record<string, string> {
   const colors = Object.fromEntries(THEME_COLORS.map(({ key }) => [key, toHex(style.getPropertyValue(`--${key}`).trim())]))
   probe.remove()
   return colors
+}
+
+const OVERLAY_TOKENS = ['base', 'surface', 'raised', 'hover', 'line', 'fg', 'muted', 'faint', 'accent', 'accent-fg', 'ok', 'warn', 'danger', 'icon']
+
+/**
+ * The colours the page shows right now, for the in-game overlay. Read from the computed style (through a
+ * background, which resolves `color-mix` and `var()` to a plain color) so built-in, custom and file themes
+ * all come out the same way.
+ */
+export function resolvedOverlayTheme(id: string, name: string): OverlayTheme {
+  const probe = document.createElement('div')
+  probe.style.display = 'none'
+  document.body.appendChild(probe)
+  const colors: Record<string, string> = {}
+  for (const token of OVERLAY_TOKENS) {
+    probe.style.backgroundColor = `var(--c-${token})`
+    colors[token] = toHex(getComputedStyle(probe).backgroundColor)
+  }
+  probe.remove()
+  return { id, name, dark: getComputedStyle(document.documentElement).colorScheme.includes('dark'), colors }
 }
 
 /**

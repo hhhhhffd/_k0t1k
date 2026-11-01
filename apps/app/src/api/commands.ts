@@ -131,6 +131,7 @@
  *   save_text_file(path, contents)                           -> void     (a path from the save dialog, e.g. the exported mod list)
  * Overlay
  *   clear_overlay_history()                                  -> void     (deletes the chat history; refused while a game runs)
+ *   set_overlay_theme(theme: OverlayTheme)                   -> void     (writes the resolved theme colours to the overlay's theme.json)
  *   set_update_lock(instanceId, kind, fileName, locked)      -> void
  * Launcher update (GitHub Releases, Ed25519-signed exe)
  *   check_for_update(force)                                  -> UpdateStatus   (also installs newer plugins; without force, the result of the earlier check of this run; failures are logged by the backend)
@@ -165,6 +166,7 @@ import type {
   DeviceCodeInfo,
   ElybyLoginResult,
   DragDropEvent,
+  OverlayTheme,
   ExportEntry,
   ExportRequest,
   GameOption,
@@ -492,6 +494,7 @@ export const scanBlockedFiles = (instanceId: string, files: BlockedFile[], folde
 export const getDownloadsDir = () => call<string>('get_downloads_dir')
 export const saveTextFile = (path: string, contents: string) => call<void>('save_text_file', { path, contents })
 export const clearOverlayHistory = () => call<void>('clear_overlay_history')
+export const setOverlayTheme = (theme: OverlayTheme) => call<void>('set_overlay_theme', { theme })
 export const setUpdateLock = (instanceId: string, kind: LocalResourceKind, fileName: string, locked: boolean) =>
   call<void>('set_update_lock', { instanceId, kind, fileName, locked })
 

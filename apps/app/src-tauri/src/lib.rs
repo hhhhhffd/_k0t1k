@@ -192,6 +192,7 @@ pub fn run() {
             transfer::get_downloads_dir,
             transfer::save_text_file,
             overlay::clear_overlay_history,
+            overlay::set_overlay_theme,
             transfer::set_update_lock,
             plugins::list_plugins,
             plugins::read_plugin_file,
