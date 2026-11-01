@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, Clock, FileArchive, Flame, FolderOpen, History, Package, RefreshCw, Upload } from '@lucide/vue'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { openInstanceFolder } from '../api/commands'
 import type { ExportFormat } from '../api/types'
@@ -55,6 +55,40 @@ function openExportMenu(e: MouseEvent) {
   exportMenu.value = { x: box.left, y: box.bottom + 4 }
 }
 
+// Panels that stick inside a tab stay below the pinned play bar and tabs, and no taller than the room left under them.
+const page = ref<HTMLElement | null>(null)
+const pinned = ref<HTMLElement | null>(null)
+const pinnedHeight = ref(0)
+const pageHeight = ref(0)
+const resize = new ResizeObserver(() => {
+  pinnedHeight.value = pinned.value?.offsetHeight ?? 0
+  pageHeight.value = page.value?.clientHeight ?? 0
+  measureTabs()
+})
+watch([page, pinned], (now, before) => {
+  for (const el of before ?? []) if (el) resize.unobserve(el)
+  for (const el of now) if (el) resize.observe(el)
+})
+onBeforeUnmount(() => resize.disconnect())
+// 24px: the bottom padding of the tab content
+const stickyVars = computed(() => ({ '--sticky-top': `${pinnedHeight.value}px`, '--sticky-room': `${Math.max(0, pageHeight.value - pinnedHeight.value - 24)}px` }))
+
+// The tab row scrolls sideways without a scrollbar: the wheel scrolls it, and the chosen tab is brought into view.
+const tabRow = ref<HTMLElement | null>(null)
+/** Which ends of the tab row hide tabs; those ends fade out. */
+const tabsHidden = ref({ left: false, right: false })
+function measureTabs() {
+  const row = tabRow.value
+  if (row) tabsHidden.value = { left: row.scrollLeft > 1, right: row.scrollLeft + row.clientWidth < row.scrollWidth - 1 }
+}
+function wheelTabs(e: WheelEvent) {
+  const row = tabRow.value
+  if (!row || row.scrollWidth <= row.clientWidth || e.deltaX) return
+  e.preventDefault()
+  row.scrollLeft += e.deltaY
+}
+watch(tab, () => void nextTick(() => tabRow.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })))
+
 // Files dropped on a content tab go into its folder; elsewhere on the page each file's type is identified.
 const listKey = ref(0)
 const { dragging } = useFileDrop(async (paths) => {
@@ -64,21 +98,29 @@ const { dragging } = useFileDrop(async (paths) => {
 </script>
 
 <template>
-  <div v-if="instance && steam" class="h-full min-h-0 overflow-y-auto">
+  <div v-if="instance && steam" ref="page" class="h-full min-h-0 overflow-y-auto" :style="stickyVars">
     <SteamHero :instance="instance" />
     <!-- at least one screen tall, so the art can scroll away completely and the play bar stays pinned at the top;
          the logs tab takes exactly one screen, so its log box fills the window instead of growing past it -->
     <div class="flex flex-col" :class="tab === 'logs' ? 'h-full' : 'min-h-full'">
       <!-- the play bar and the tabs stay pinned at the top while the content scrolls -->
-      <div class="sticky top-0 z-[45] shrink-0 bg-base pb-3 shadow-[0_8px_12px_-8px_var(--c-base)]">
+      <div ref="pinned" data-no-marquee class="sticky top-0 z-[45] shrink-0 bg-base pb-3 shadow-[0_8px_12px_-8px_var(--c-base)]">
         <SteamPlayBar :instance="instance" @export="openExportMenu" @update="showPackUpdate = true" @folder="tasks.guard(() => openInstanceFolder(instance!.id))" />
-        <nav class="mx-6 flex flex-wrap rounded-sm bg-surface" role="tablist">
+        <!-- one row that scrolls sideways in a narrow window, so the pinned block keeps its height -->
+        <nav
+          ref="tabRow"
+          class="no-scrollbar mx-6 flex overflow-x-auto rounded-sm bg-surface"
+          :class="{ 'fade-left': tabsHidden.left, 'fade-right': tabsHidden.right }"
+          role="tablist"
+          @wheel="wheelTabs"
+          @scroll="measureTabs"
+        >
           <button
             v-for="name in INSTANCE_TABS"
             :key="name"
             role="tab"
             :aria-selected="tab === name"
-            class="steam-tab flex h-11 shrink-0 items-center gap-2 px-4 text-[13px] transition-colors"
+            class="steam-tab flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-[13px] transition-colors"
             :class="tab === name ? 'steam-tab-active text-fg' : 'text-muted hover:bg-hover hover:text-fg'"
             @click="tab = name"
           >
@@ -147,6 +189,22 @@ const { dragging } = useFileDrop(async (paths) => {
 <style scoped>
 .steam-tab {
   border-bottom: 2px solid transparent;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* tabs past an edge of the row fade out there, so the row reads as scrollable */
+.fade-right {
+  mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
+}
+.fade-left {
+  mask-image: linear-gradient(to left, black calc(100% - 48px), transparent);
+}
+.fade-left.fade-right {
+  mask-image: linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent);
 }
 .steam-tab-active {
   border-bottom-color: var(--c-accent);
