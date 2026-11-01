@@ -554,8 +554,9 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
                 {{ displayName(r).charAt(0).toUpperCase() }}
               </span>
               <div class="min-w-0 flex-1" :class="r.enabled ? '' : 'opacity-60'">
-                <div class="flex items-center gap-1.5" :class="view === 'tiles' ? 'flex-wrap' : ''">
-                  <span class="truncate font-semibold" :class="view === 'tiles' ? 'max-w-full' : ''">{{ displayName(r) }}</span>
+                <!-- the badges wrap instead of squeezing the name out or running into the next column -->
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="max-w-full truncate font-semibold">{{ displayName(r) }}</span>
                   <span v-if="r.metadata?.version" class="badge shrink-0">{{ r.metadata.version }}</span>
                   <span v-if="projectOf(r)" class="badge badge-accent shrink-0">{{ PLATFORM_LABELS[projectOf(r)!.platform] }}</span>
                   <span v-else class="badge shrink-0" :title="t.instance.localSourceHint">{{ t.instance.localSource }}</span>

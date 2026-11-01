@@ -205,8 +205,9 @@ async function confirmDelete() {
           <span class="mr-auto text-faint">{{ t.instance.counted(worlds.length) }}<template v-if="selected.size"> · {{ t.instance.selectedCount(selected.size) }}</template></span>
           <ViewToggle v-model="view" />
         </div>
+        <!-- a container: in a narrow list the version and last-played columns step aside for the name -->
         <div
-          class="!outline-none"
+          class="@container !outline-none"
           :class="view === 'list' ? 'overflow-hidden rounded-xl border border-line' : ''"
           @dragstart.prevent
         >
@@ -214,8 +215,8 @@ async function confirmDelete() {
             <span class="w-10 shrink-0" />
             <span class="min-w-0 flex-1">{{ t.worlds.name }} · {{ worlds.length }}</span>
             <span class="w-28 shrink-0">{{ t.worlds.mode }}</span>
-            <span class="w-24 shrink-0">{{ t.worlds.version }}</span>
-            <span class="w-28 shrink-0">{{ t.worlds.lastPlayed }}</span>
+            <span class="w-24 shrink-0 @max-2xl:hidden">{{ t.worlds.version }}</span>
+            <span class="w-28 shrink-0 @max-2xl:hidden">{{ t.worlds.lastPlayed }}</span>
             <span class="w-20 shrink-0 text-right">{{ t.worlds.size }}</span>
           </div>
           <ul role="listbox" aria-multiselectable="true" :class="view === 'tiles' ? 'grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-2.5' : ''">
@@ -258,16 +259,16 @@ async function confirmDelete() {
               <img v-if="w.icon" :src="w.icon" alt="" class="pixelated size-10 shrink-0 rounded-md" />
               <span v-else class="pix flex size-10 shrink-0 items-center justify-center bg-ok/15 text-ok"><Globe :size="18" /></span>
               <span class="min-w-0 flex-1">
-                <span class="flex items-center gap-2">
-                  <span class="truncate font-semibold">{{ w.name }}</span>
+                <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span class="max-w-full truncate font-semibold">{{ w.name }}</span>
                   <span v-if="w.hardcore" class="badge border-danger/50 bg-danger/15 text-danger">{{ t.worlds.hardcore }}</span>
                   <span v-if="w.gameMode === null" class="badge text-warn">{{ t.worlds.unreadable }}</span>
                 </span>
                 <span class="block truncate text-[12px] text-faint">{{ w.dirName }}</span>
               </span>
               <span class="w-28 shrink-0 truncate text-[12.5px] text-muted">{{ w.gameMode ? t.worlds.gameModes[w.gameMode] : '—' }}</span>
-              <span class="w-24 shrink-0 truncate text-[12.5px] text-muted">{{ w.versionName ?? '—' }}</span>
-              <span class="w-28 shrink-0 truncate text-[12.5px] text-faint">{{ formatRelative(w.lastPlayed) }}</span>
+              <span class="w-24 shrink-0 truncate text-[12.5px] text-muted @max-2xl:hidden">{{ w.versionName ?? '—' }}</span>
+              <span class="w-28 shrink-0 truncate text-[12.5px] text-faint @max-2xl:hidden">{{ formatRelative(w.lastPlayed) }}</span>
               <span class="w-20 shrink-0 text-right text-[12.5px] text-faint">{{ formatBytes(w.size) }}</span>
               </template>
             </li>
