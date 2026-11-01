@@ -63,7 +63,7 @@ onMounted(async () => {
       <main class="min-h-0 flex-1 overflow-y-auto">
         <RouterView v-slot="{ Component, route }">
           <!-- the Steam-like library shows the instance pages inside itself -->
-          <SteamLibraryView v-if="layout.mode === 'steam' && route.name !== 'settings'" />
+          <SteamLibraryView v-if="layout.mode === 'steam' && route.name !== 'settings' && route.name !== 'accounts'" />
           <component :is="Component" v-else />
         </RouterView>
       </main>

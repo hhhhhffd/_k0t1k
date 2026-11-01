@@ -13,8 +13,8 @@ const router = useRouter()
 const account = computed(() => settings.settings?.accounts.find((a) => a.id === settings.settings?.selectedAccountId))
 const links = computed(() => [
   { label: t.nav.library, active: route.name === 'library' || route.name === 'instance', go: () => router.push('/') },
-  { label: t.nav.settings, active: route.name === 'settings' && route.hash !== '#accounts', go: () => router.push('/settings') },
-  { label: account.value?.name ?? t.account.none, active: route.name === 'settings' && route.hash === '#accounts', go: () => router.push('/settings#accounts') },
+  { label: t.nav.settings, active: route.name === 'settings', go: () => router.push('/settings') },
+  { label: account.value?.name ?? t.account.none, active: route.name === 'accounts', go: () => router.push('/accounts') },
 ])
 </script>
 

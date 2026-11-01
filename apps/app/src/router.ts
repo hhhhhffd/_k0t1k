@@ -6,5 +6,6 @@ export const router = createRouter({
     { path: '/', name: 'library', component: () => import('./views/LibraryView.vue') },
     { path: '/instance/:id', name: 'instance', component: () => import('./views/InstanceView.vue'), props: true },
     { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue') },
+    { path: '/accounts', name: 'accounts', component: () => import('./views/AccountsView.vue') },
   ],
 })

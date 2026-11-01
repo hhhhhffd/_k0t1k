@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from '@tauri-apps/plugin-dialog'
-import { AppWindow, Bug, Check, Download, Coffee, ExternalLink, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, UserPlus, Users, Zap } from '@lucide/vue'
+import { AppWindow, Bug, Check, Download, Coffee, ExternalLink, FolderOpen, FolderSync, HardDrive, Info, Link, MemoryStick, Palette, RefreshCw, RotateCcw, SlidersHorizontal, Terminal, Trash2, Zap } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { clearOverlayHistory, createShortcuts, deleteManagedJava, getSystemInfo, getUninstallPlan, isTauri, listManagedJava, listManagedJavaUsage, openDataDir, openLauncherFolder, openSharedFolder, setDataDir, uninstall } from '../api/commands'
@@ -9,7 +9,6 @@ import mascot from '../assets/mascot.png'
 import CommandFields from '../components/fields/CommandFields.vue'
 import MemoryFields from '../components/fields/MemoryFields.vue'
 import WindowFields from '../components/fields/WindowFields.vue'
-import AccountLoginDialog from '../components/AccountLoginDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import SelectMenu from '../components/SelectMenu.vue'
 import ModalDialog from '../components/ModalDialog.vue'
@@ -49,7 +48,7 @@ const iconSetOptions = computed(() => [
 const route = useRoute()
 const router = useRouter()
 
-const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'behavior', 'sharedFolders', 'appearance', 'accounts', 'storage', 'about'] as const
+const sectionIds = ['java', 'memory', 'jvm', 'window', 'commands', 'behavior', 'sharedFolders', 'appearance', 'storage', 'about'] as const
 type Section = (typeof sectionIds)[number]
 const sectionIcons = {
   java: Coffee,
@@ -60,7 +59,6 @@ const sectionIcons = {
   behavior: Zap,
   sharedFolders: FolderSync,
   appearance: Palette,
-  accounts: Users,
   storage: HardDrive,
   about: Info,
 } as const
@@ -92,8 +90,6 @@ const system = ref<SystemInfo | null>(null)
 const managed = ref<JavaInstall[]>([])
 const javaUsage = ref<ManagedJavaUsage[]>([])
 const javaToDelete = ref<{ install: JavaInstall; usage: ManagedJavaUsage } | null>(null)
-const newName = ref('')
-const loginKind = ref<'microsoft' | 'elyby' | null>(null)
 const restartNeeded = ref(false)
 const uninstallPlan = ref<UninstallPlan | null>(null)
 
@@ -205,13 +201,6 @@ async function confirmUninstall() {
 function setSharedDefault(folder: SharedFolder, on: boolean) {
   if (s.value) s.value.sharedFoldersDefault = SHARED_FOLDERS.filter((f) => (f === folder ? on : s.value!.sharedFoldersDefault.includes(f)))
 }
-
-async function addAccount() {
-  const name = newName.value.trim()
-  if (!name) return
-  newName.value = ''
-  await tasks.guard(() => store.addAccount(name))
-}
 </script>
 
 <template>
@@ -294,7 +283,7 @@ async function addAccount() {
           <span><span class="block font-medium">{{ t.settings.uiMode }}</span><span class="text-[12px] text-faint">{{ t.settings.uiModeHint }}</span></span>
           <div class="flex gap-1 rounded-lg bg-raised p-1" role="radiogroup" :aria-label="t.settings.uiMode">
             <button
-              v-for="mode in (['classic', 'steam'] as const)"
+              v-for="mode in (['steam', 'classic'] as const)"
               :key="mode"
               role="radio"
               :aria-checked="layout.mode === mode"
@@ -465,28 +454,6 @@ async function addAccount() {
         </div>
       </section>
 
-      <template v-else-if="section === 'accounts'">
-        <section class="card p-4">
-          <ul class="flex flex-col gap-1.5">
-            <li v-for="acc in s.accounts" :key="acc.id" class="flex items-center gap-3 rounded-lg bg-raised px-3 py-2">
-              <span class="min-w-0 flex-1 truncate font-medium">{{ acc.name }}</span>
-              <span class="badge">{{ t.account.kinds[acc.kind] }}</span>
-              <span v-if="s.selectedAccountId === acc.id" class="badge badge-accent"><Check :size="12" />{{ t.settings.selected }}</span>
-              <button v-else class="btn h-7" @click="tasks.guard(() => store.selectAccount(acc.id))">{{ t.settings.select }}</button>
-              <button class="btn btn-ghost btn-icon h-7 text-muted hover:!text-danger" :aria-label="t.common.delete" @click="tasks.guard(() => store.removeAccount(acc.id))"><Trash2 :size="15" /></button>
-            </li>
-          </ul>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button class="btn" @click="loginKind = 'microsoft'"><UserPlus :size="15" />{{ t.account.signInMicrosoft }}</button>
-            <button class="btn" @click="loginKind = 'elyby'"><UserPlus :size="15" />{{ t.account.signInElyby }}</button>
-          </div>
-          <form class="mt-3 flex gap-2" @submit.prevent="addAccount">
-            <input v-model="newName" class="input" :placeholder="t.settings.nickname" maxlength="16" :aria-label="t.settings.nickname" />
-            <button class="btn btn-primary" type="submit" :disabled="!newName.trim()"><UserPlus :size="15" />{{ t.settings.addAccount }}</button>
-          </form>
-        </section>
-      </template>
-
       <template v-else-if="section === 'storage'">
         <section v-if="system" class="card flex flex-col gap-3 p-4">
           <dl class="grid grid-cols-[130px_1fr] items-baseline gap-y-2">
@@ -599,6 +566,5 @@ async function addAccount() {
         <button class="btn btn-danger" @click="confirmUninstall">{{ t.settings.uninstall }}</button>
       </template>
     </ModalDialog>
-    <AccountLoginDialog v-if="loginKind" :kind="loginKind" @close="loginKind = null" />
   </div>
 </template>

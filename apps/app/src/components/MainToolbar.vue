@@ -125,7 +125,7 @@ async function pickAccount(id: string) {
             <Check v-if="acc.id === current?.id" :size="14" class="text-icon" />
           </button>
           <div v-if="accounts.length" class="my-1 h-px bg-line" />
-          <RouterLink to="/settings#accounts" class="flex h-8 items-center rounded-md px-2 text-faint hover:bg-hover" @click="accountsOpen = false">{{ t.account.add }}</RouterLink>
+          <RouterLink to="/accounts" class="flex h-8 items-center rounded-md px-2 text-faint hover:bg-hover" @click="accountsOpen = false">{{ t.account.add }}</RouterLink>
         </div>
       </template>
     </div>
