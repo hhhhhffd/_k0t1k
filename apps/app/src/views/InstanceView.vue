@@ -13,6 +13,7 @@ import InstanceIcon from '../components/InstanceIcon.vue'
 import InstanceTabContent, { INSTANCE_TAB_ICONS, INSTANCE_TABS, type InstanceTab, kindOfTab } from '../components/instance/InstanceTabContent.vue'
 import PlayButton from '../components/PlayButton.vue'
 import SteamHero from '../components/SteamHero.vue'
+import SteamPlayBar from '../components/SteamPlayBar.vue'
 import UiIcon from '../components/UiIcon.vue'
 import { t } from '../i18n'
 import { useInstancesStore } from '../stores/instances'
@@ -64,31 +65,33 @@ const { dragging } = useFileDrop(async (paths) => {
 
 <template>
   <div v-if="instance && steam" class="h-full min-h-0 overflow-y-auto">
-    <SteamHero
-      :instance="instance"
-      @export="openExportMenu"
-      @update="showPackUpdate = true"
-      @folder="tasks.guard(() => openInstanceFolder(instance!.id))"
-      @settings="tab = 'settings'"
-    />
-    <nav class="mx-6 flex flex-wrap rounded-sm bg-surface" role="tablist">
-      <button
-        v-for="name in INSTANCE_TABS"
-        :key="name"
-        role="tab"
-        :aria-selected="tab === name"
-        class="steam-tab flex h-11 shrink-0 items-center gap-2 px-4 text-[13px] transition-colors"
-        :class="tab === name ? 'steam-tab-active text-fg' : 'text-muted hover:bg-hover hover:text-fg'"
-        @click="tab = name"
-      >
-        <UiIcon :name="`tab-${name}`" :icon="INSTANCE_TAB_ICONS[name]" :size="15" class="text-icon" />
-        {{ t.instance.tabs[name] }}
-      </button>
-    </nav>
-    <section class="px-6 pt-5 pb-6">
-      <h2 class="section-title mb-3">{{ t.instance.tabs[tab] }}</h2>
-      <InstanceTabContent :instance="instance" :tab="tab" :list-key="listKey" />
-    </section>
+    <SteamHero :instance="instance" />
+    <!-- at least one screen tall, so the art can scroll away completely and the play bar stays pinned at the top;
+         the logs tab takes exactly one screen, so its log box fills the window instead of growing past it -->
+    <div class="flex flex-col" :class="tab === 'logs' ? 'h-full' : 'min-h-full'">
+      <!-- the play bar and the tabs stay pinned at the top while the content scrolls -->
+      <div class="sticky top-0 z-[45] shrink-0 bg-base pb-3 shadow-[0_8px_12px_-8px_var(--c-base)]">
+        <SteamPlayBar :instance="instance" @export="openExportMenu" @update="showPackUpdate = true" @folder="tasks.guard(() => openInstanceFolder(instance!.id))" />
+        <nav class="mx-6 flex flex-wrap rounded-sm bg-surface" role="tablist">
+          <button
+            v-for="name in INSTANCE_TABS"
+            :key="name"
+            role="tab"
+            :aria-selected="tab === name"
+            class="steam-tab flex h-11 shrink-0 items-center gap-2 px-4 text-[13px] transition-colors"
+            :class="tab === name ? 'steam-tab-active text-fg' : 'text-muted hover:bg-hover hover:text-fg'"
+            @click="tab = name"
+          >
+            <UiIcon :name="`tab-${name}`" :icon="INSTANCE_TAB_ICONS[name]" :size="15" class="text-icon" />
+            {{ t.instance.tabs[name] }}
+          </button>
+        </nav>
+      </div>
+      <section class="flex min-h-0 flex-1 flex-col px-6 pt-2 pb-6">
+        <h2 class="section-title mb-3 shrink-0">{{ t.instance.tabs[tab] }}</h2>
+        <InstanceTabContent :instance="instance" :tab="tab" :list-key="listKey" :fill="tab === 'logs'" />
+      </section>
+    </div>
   </div>
   <div v-else-if="instance" class="flex h-full min-h-0 flex-col">
     <header class="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3">

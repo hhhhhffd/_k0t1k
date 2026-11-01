@@ -10,7 +10,8 @@ import { errorMessage } from '../../utils/format'
 import { uploadSessionLog } from '../../utils/uploadLog'
 import ToggleSwitch from '../ToggleSwitch.vue'
 
-const props = defineProps<{ instanceId: string }>()
+/** `fill`: the tab is laid out by a flex column of a fixed height and takes what is left of it. */
+const props = defineProps<{ instanceId: string; fill?: boolean }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
 
@@ -78,7 +79,7 @@ async function copy() {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-250px)] min-h-72 flex-col gap-2">
+  <div class="flex flex-col gap-2" :class="fill ? 'min-h-40 flex-1' : 'h-[calc(100vh-250px)] min-h-72'">
     <div v-if="sessions.length > 1" class="flex flex-wrap gap-1" role="tablist" :aria-label="t.instance.sessionsLabel">
       <button
         v-for="s in sessions"

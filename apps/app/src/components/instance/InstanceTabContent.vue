@@ -33,8 +33,8 @@ import ServersTab from './ServersTab.vue'
 import VersionTab from './VersionTab.vue'
 import WorldsTab from './WorldsTab.vue'
 
-/** `listKey` changes when files were added from outside, so the lists reload. */
-const props = defineProps<{ instance: Instance; tab: InstanceTab; listKey: number }>()
+/** `listKey` changes when files were added from outside, so the lists reload. `fill`: the logs tab takes the height it is given instead of a fixed one. */
+const props = defineProps<{ instance: Instance; tab: InstanceTab; listKey: number; fill?: boolean }>()
 
 const sharedFolderOfTab = { resourcepacks: 'resourcepacks', shaders: 'shaderpacks' } as const
 /** The notice shown above a resource list whose folder is linked to the shared one. */
@@ -61,6 +61,6 @@ function sharedNote(tab: InstanceTab) {
   <ScreenshotsTab v-else-if="tab === 'screenshots'" :key="instance.id" :instance-id="instance.id" :shared="instance.sharedFolders.includes('screenshots')" />
   <ServersTab v-else-if="tab === 'servers'" :key="instance.id" :instance-id="instance.id" />
   <GameOptionsTab v-else-if="tab === 'options'" :key="instance.id" :instance-id="instance.id" />
-  <LogsTab v-else-if="tab === 'logs'" :instance-id="instance.id" />
+  <LogsTab v-else-if="tab === 'logs'" :instance-id="instance.id" :fill="fill" />
   <InstanceSettingsTab v-else :key="instance.id" :instance="instance" />
 </template>

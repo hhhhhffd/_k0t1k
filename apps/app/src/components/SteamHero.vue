@@ -1,20 +1,14 @@
 <script setup lang="ts">
-import { Clock, FolderOpen, History, Layers, RefreshCw, Settings, Upload } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import type { Instance } from '../api/types'
-import { t } from '../i18n'
-import { formatPlaytime, formatRelative, loaderOf, minecraftVersionOf } from '../utils/format'
+import { minecraftVersionOf } from '../utils/format'
 import InstanceIcon from './InstanceIcon.vue'
 import PanoramaView from './PanoramaView.vue'
-import PlayButton from './PlayButton.vue'
-import UiIcon from './UiIcon.vue'
 
-/** The top of an instance page in the Steam-like mode: its version's title-screen panorama and the play bar. */
+/** The top of an instance page in the Steam-like mode: its version's title-screen panorama with the name over it. */
 const props = defineProps<{ instance: Instance }>()
-const emit = defineEmits<{ export: [e: MouseEvent]; update: []; folder: []; settings: [] }>()
 
 const version = computed(() => minecraftVersionOf(props.instance))
-const loader = computed(() => loaderOf(props.instance))
 /** Versions without a panorama (or offline) get a gradient instead. */
 const failed = ref(false)
 watch(version, () => (failed.value = false))
@@ -30,37 +24,6 @@ watch(version, () => (failed.value = false))
     <span v-if="instance.group" class="absolute top-4 right-4 rounded-sm bg-black/55 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-white/85 uppercase">{{ instance.group }}</span>
     <h1 class="hero-title absolute right-6 bottom-6 left-6 line-clamp-2 text-[52px] leading-none font-black tracking-tight text-white">{{ instance.name }}</h1>
   </div>
-
-  <div class="flex flex-wrap items-center gap-x-8 gap-y-3 px-6 py-4">
-    <PlayButton :instance-id="instance.id" large class="steam-play" />
-    <div class="flex items-center gap-2.5">
-      <UiIcon name="steam-version" :icon="Layers" :size="26" class="text-icon" />
-      <div class="leading-tight">
-        <div class="stat-label">{{ t.steam.version }}</div>
-        <div class="text-[12.5px] text-muted">Minecraft {{ version }}<template v-if="loader"> · {{ loader.label }} {{ loader.version }}</template></div>
-      </div>
-    </div>
-    <div class="flex items-center gap-2.5">
-      <UiIcon name="steam-last-played" :icon="History" :size="26" class="text-icon" />
-      <div class="leading-tight">
-        <div class="stat-label">{{ t.steam.lastPlayed }}</div>
-        <div class="text-[12.5px] text-muted">{{ formatRelative(instance.lastPlayed) }}</div>
-      </div>
-    </div>
-    <div class="flex items-center gap-2.5">
-      <UiIcon name="steam-played" :icon="Clock" :size="26" class="text-icon" />
-      <div class="leading-tight">
-        <div class="stat-label">{{ t.steam.played }}</div>
-        <div class="text-[12.5px] text-muted">{{ formatPlaytime(instance.playtime.totalSecs) }}</div>
-      </div>
-    </div>
-    <div class="ml-auto flex gap-1.5">
-      <button v-if="instance.managedPack" class="btn btn-icon h-9 w-9" :title="t.pack.check" :aria-label="t.pack.check" @click="emit('update')"><UiIcon name="update" :icon="RefreshCw" :size="17" class="text-icon" /></button>
-      <button class="btn btn-icon h-9 w-9" :title="t.transfer.export" :aria-label="t.transfer.export" @click="emit('export', $event)"><UiIcon name="export" :icon="Upload" :size="17" class="text-icon" /></button>
-      <button class="btn btn-icon h-9 w-9" :title="t.instance.instanceFolderHint" :aria-label="t.instance.instanceFolder" @click="emit('folder')"><UiIcon name="folder" :icon="FolderOpen" :size="17" class="text-icon" /></button>
-      <button class="btn btn-icon h-9 w-9" :title="t.instance.tabs.settings" :aria-label="t.instance.tabs.settings" @click="emit('settings')"><UiIcon name="settings" :icon="Settings" :size="17" class="text-icon" /></button>
-    </div>
-  </div>
 </template>
 
 <style scoped>
@@ -75,22 +38,5 @@ watch(version, () => (failed.value = false))
 }
 .hero-title {
   text-shadow: 0 2px 18px rgb(0 0 0 / 0.75);
-}
-.stat-label {
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-/* Steam's green play button, from the theme's own "ok" colour */
-.steam-play.btn-primary {
-  background: linear-gradient(90deg, var(--c-ok), color-mix(in srgb, var(--c-ok) 75%, white));
-  color: #fff;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  min-width: 11rem;
-}
-.steam-play.btn-primary:hover:not(:disabled) {
-  filter: brightness(1.08);
 }
 </style>
