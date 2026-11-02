@@ -219,6 +219,11 @@ export const ru: Dictionary = {
     install: 'Установить и перезапустить',
     installing: 'Установка…',
     afterGame: 'Игра запущена: установите обновление после её закрытия.',
+    dialogTitle: 'Доступно обновление',
+    dialogVersions: (from: string, to: string) => `${from} → ${to}`,
+    updateNow: 'Обновить сейчас',
+    later: 'Позже',
+    skipVersion: 'Пропустить эту версию',
   },
   tasks: { title: 'Задачи', error: 'Ошибка' },
   library: {

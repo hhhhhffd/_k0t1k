@@ -219,6 +219,11 @@ export const en = {
     install: 'Install and restart',
     installing: 'Installing…',
     afterGame: 'The game is running: install the update after closing it.',
+    dialogTitle: 'Update available',
+    dialogVersions: (from: string, to: string) => `${from} → ${to}`,
+    updateNow: 'Update now',
+    later: 'Later',
+    skipVersion: 'Skip this version',
   },
   library: {
     searchPlaceholder: 'Search instances…',

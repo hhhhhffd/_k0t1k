@@ -15,6 +15,7 @@ import SteamNav from './components/SteamNav.vue'
 import TitleBar from './components/TitleBar.vue'
 import TaskBar from './components/TaskBar.vue'
 import ToastHost from './components/ToastHost.vue'
+import UpdateDialog from './components/UpdateDialog.vue'
 import { language, t } from './i18n'
 import { useCustomizationStore } from './stores/customization'
 import { useInstancesStore } from './stores/instances'
@@ -44,7 +45,7 @@ onMounted(async () => {
   await tasks.guard(() => Promise.all([settings.load(), instances.init()]))
   // after the settings: theme files and the chosen cat or icon set apply on top of them
   await customization.refresh()
-  if (settings.settings?.updates.checkOnStartup) void update.check(false, true)
+  if (settings.settings?.updates.checkOnStartup) void update.check(true, true, true)
   const report = await tasks.guard(getRelocationReport)
   if (!report) return
   if (report.problems.length) relocationReport.value = report
@@ -76,6 +77,7 @@ onMounted(async () => {
     <CrashDialog v-if="onboarding === null" />
     <ModCompatDialog />
     <LaunchScanDialog />
+    <UpdateDialog v-if="update.prompting && update.release" />
     <ToastHost />
     <SizeGrip />
   </div>
