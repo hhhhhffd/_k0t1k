@@ -14,6 +14,7 @@ import ActionPanel from '../ActionPanel.vue'
 import type { PanelAction } from '../ActionPanel.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContextMenu from '../ContextMenu.vue'
+import EmptyState from '../EmptyState.vue'
 import MarqueeBox from '../MarqueeBox.vue'
 import ModalDialog from '../ModalDialog.vue'
 import SelectMenu from '../SelectMenu.vue'
@@ -150,7 +151,9 @@ function openMenu(e: MouseEvent, index: number) {
     <div class="flex items-start gap-3">
       <div class="min-w-0 flex-1">
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
-        <p v-else-if="!servers.length" class="py-10 text-center text-faint">{{ t.servers.empty }}</p>
+        <EmptyState v-else-if="!servers.length" :title="t.servers.empty">
+          <button class="btn btn-primary" @click="startEdit(null)"><Plus :size="15" />{{ t.servers.add }}</button>
+        </EmptyState>
         <div v-else class="overflow-hidden rounded-xl border border-line !outline-none" @dragstart.prevent>
           <div class="flex items-center gap-3 border-b border-line px-3 py-2 text-[12px] font-semibold text-faint">
             <span class="w-10 shrink-0" />

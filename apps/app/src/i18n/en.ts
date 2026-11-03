@@ -345,6 +345,7 @@ export const en = {
     updateTo: 'Update to',
     updated: 'Updated',
     noResources: 'Nothing here yet',
+    noResourcesHint: 'Find something in the catalogs, or add files you already have.',
     filterPlaceholder: 'Filter by name…',
     deleteResource: 'Delete file?',
     logsEmpty: 'The log is empty: launch the game',

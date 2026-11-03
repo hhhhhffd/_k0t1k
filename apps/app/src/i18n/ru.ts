@@ -346,6 +346,7 @@ export const ru: Dictionary = {
     updateTo: 'Обновить до',
     updated: 'Обновлено',
     noResources: 'Здесь пока пусто',
+    noResourcesHint: 'Найдите что-нибудь в каталогах или добавьте файлы, которые у вас уже есть.',
     filterPlaceholder: 'Фильтр по названию…',
     deleteResource: 'Удалить файл?',
     logsEmpty: 'Лог пуст — запустите игру',

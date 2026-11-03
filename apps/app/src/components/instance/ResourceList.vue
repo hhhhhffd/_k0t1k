@@ -56,6 +56,7 @@ import CompressPackDialog from './CompressPackDialog.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContentDialog from '../ContentDialog.vue'
 import ContextMenu from '../ContextMenu.vue'
+import EmptyState from '../EmptyState.vue'
 import MarqueeBox from '../MarqueeBox.vue'
 import ModalDialog from '../ModalDialog.vue'
 import ModListDialog from '../ModListDialog.vue'
@@ -509,7 +510,11 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
         </div>
 
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
-        <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.instance.noResources }}</p>
+        <EmptyState v-else-if="!visible.length && !resources.length" :title="t.instance.noResources" :hint="t.instance.noResourcesHint">
+          <button class="btn btn-primary" @click="showContent = true"><Download :size="15" />{{ t.instance.download[kind] }}</button>
+          <button class="btn" @click="addFiles"><FilePlus :size="15" />{{ t.instance.addFile }}</button>
+        </EmptyState>
+        <p v-else-if="!visible.length" class="py-10 text-center text-faint">{{ t.common.nothingFound }}</p>
         <div
           v-else
           :class="view === 'list' ? 'overflow-hidden rounded-xl border border-line' : ''"

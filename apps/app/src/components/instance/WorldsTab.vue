@@ -17,6 +17,7 @@ import ActionPanel from '../ActionPanel.vue'
 import type { PanelAction } from '../ActionPanel.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import ContextMenu from '../ContextMenu.vue'
+import EmptyState from '../EmptyState.vue'
 import type { MenuItem } from '../ContextMenu.vue'
 import MarqueeBox from '../MarqueeBox.vue'
 import ModalDialog from '../ModalDialog.vue'
@@ -199,7 +200,9 @@ async function confirmDelete() {
     <div class="flex items-start gap-3">
       <div class="flex min-w-0 flex-1 flex-col gap-2">
         <p v-if="loading" class="py-10 text-center text-faint">{{ t.common.loading }}</p>
-        <p v-else-if="!worlds.length" class="py-10 text-center text-faint">{{ t.worlds.empty }}</p>
+        <EmptyState v-else-if="!worlds.length" :title="t.worlds.empty">
+          <button class="btn btn-primary" @click="importZip"><Upload :size="15" />{{ t.worlds.import }}</button>
+        </EmptyState>
         <template v-else>
         <div class="flex items-center gap-2">
           <span class="mr-auto text-faint">{{ t.instance.counted(worlds.length) }}<template v-if="selected.size"> · {{ t.instance.selectedCount(selected.size) }}</template></span>
