@@ -88,9 +88,6 @@ function openStopMenu(e: MouseEvent) {
   <NoAccountDialog
     v-if="needAccount"
     @close="needAccount = false"
-    @added="
-      needAccount = false
-      launch()
-    "
+    @added="needAccount = false; launch()"
   />
 </template>
