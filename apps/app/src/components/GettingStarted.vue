@@ -32,7 +32,15 @@ const items = computed(() => {
   ]
 })
 const doneCount = computed(() => items.value.filter((i) => i.done).length)
-const visible = computed(() => !!settings.settings && store.loaded && !settings.settings.onboarding.checklistHidden && doneCount.value < items.value.length)
+// Only for people who came through the welcome: an existing user with instances is not new and needs no checklist.
+const visible = computed(
+  () =>
+    !!settings.settings &&
+    store.loaded &&
+    settings.settings.onboarding.welcomeDone &&
+    !settings.settings.onboarding.checklistHidden &&
+    doneCount.value < items.value.length,
+)
 </script>
 
 <template>
