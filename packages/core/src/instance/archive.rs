@@ -22,8 +22,8 @@ use crate::progress::{ProgressEvent, ProgressFn};
 use crate::settings::MemorySettings;
 
 const GAME_DIR_IN_ZIP: &str = "minecraft";
-const PRISM_CONFIG: &str = "instance.cfg";
-const PRISM_PACK: &str = "mmc-pack.json";
+pub(super) const PRISM_CONFIG: &str = "instance.cfg";
+pub(super) const PRISM_PACK: &str = "mmc-pack.json";
 const TASK: &str = "export";
 
 /// Prism's export dialog leaves these out by default (`ExportInstanceDialog.cpp`).
@@ -305,8 +305,6 @@ pub fn read_prism_zip(archive: &mut zip::ZipArchive<impl Read + Seek>) -> Result
     let pack = read_entry(archive, &format!("{root}{PRISM_PACK}"))?
         .ok_or_else(|| Error::Other(format!("the Prism instance has no {PRISM_PACK}")))?;
 
-    let config = parse_prism_config(&String::from_utf8_lossy(&config));
-    let components = map_prism_components(&pack)?;
     // Prism names the game dir `.minecraft`; old MultiMC versions used `minecraft`.
     let dot_minecraft = format!("{root}.minecraft/");
     let mut has_dot_minecraft = false;
@@ -314,7 +312,14 @@ pub fn read_prism_zip(archive: &mut zip::ZipArchive<impl Read + Seek>) -> Result
         has_dot_minecraft |= archive.by_index(index)?.name()?.starts_with(&dot_minecraft);
     }
     let game_prefix = if has_dot_minecraft { dot_minecraft } else { format!("{root}minecraft/") };
+    prism_instance(&config, &pack, game_prefix).map(Some)
+}
 
+/// The instance described by the contents of a Prism `instance.cfg` and `mmc-pack.json`; `game_prefix`
+/// says where its game dir is (in a zip or relative to the instance folder).
+pub(super) fn prism_instance(config: &[u8], pack: &[u8], game_prefix: String) -> Result<ImportedInstance> {
+    let config = parse_prism_config(&String::from_utf8_lossy(config));
+    let components = map_prism_components(pack)?;
     let name = config.get("name").filter(|name| !name.is_empty()).cloned().unwrap_or_else(|| "Prism instance".to_owned());
     let flag = |key: &str| config.get(key).is_some_and(|value| value == "true");
     let number = |key: &str| config.get(key).and_then(|value| value.parse::<u32>().ok());
@@ -329,7 +334,7 @@ pub fn read_prism_zip(archive: &mut zip::ZipArchive<impl Read + Seek>) -> Result
         settings.jvm_args = config.get("JvmArgs").cloned();
     }
     // Playtime restarts at zero and the icon key is Prism's own, so neither is carried over.
-    Ok(Some(ImportedInstance {
+    Ok(ImportedInstance {
         name,
         components,
         source: InstanceSource {
@@ -340,11 +345,11 @@ pub fn read_prism_zip(archive: &mut zip::ZipArchive<impl Read + Seek>) -> Result
             managed_pack: None,
             pack_state: None,
         },
-    }))
+    })
 }
 
 /// `key=value` lines of Qt's INI, escapes undone and surrounding quotes dropped. Section headers are skipped.
-fn parse_prism_config(text: &str) -> BTreeMap<String, String> {
+pub(super) fn parse_prism_config(text: &str) -> BTreeMap<String, String> {
     text.lines()
         .filter_map(|line| line.split_once('='))
         .map(|(key, value)| {

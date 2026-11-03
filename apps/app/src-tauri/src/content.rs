@@ -18,6 +18,7 @@ use k0t1k_core::download::{Checksum, download_checked};
 use k0t1k_core::error::IoContext;
 use k0t1k_core::instance::archive::read_custom_icon;
 use k0t1k_core::instance::icon::custom_file_name;
+use k0t1k_core::instance::prism::{self, PrismInstanceInfo};
 use k0t1k_core::instance::{Instance, ManagedPack, ManagedPlatform, NewInstance};
 use k0t1k_core::launch::tuning::cap_recommended_ram;
 use k0t1k_core::settings::{MemorySettings, total_memory_mib};
@@ -342,6 +343,54 @@ pub async fn import_modpack_file(app: AppHandle, state: State<'_, AppState>, pat
     let task = format!("modpack:{path}");
     let title = tr_fmt!("Importing modpack: {label}", "Импорт модпака: {label}");
     tracked(&app, &task, &title, create_from_pack(&app, &state, zip_path, name, None, &task, &title)).await
+}
+
+/// Prism Launcher and MultiMC instances on disk: those of the standard Prism data folders, or, with
+/// `folder`, those of the chosen instance, instances or launcher folder.
+#[tauri::command]
+pub async fn find_prism_instances(folder: Option<String>) -> CommandResult<Vec<PrismInstanceInfo>> {
+    blocking(move || Ok(prism::find_prism_instances(folder.as_deref().map(Path::new)))).await
+}
+
+/// Creates an instance from an installed Prism/MultiMC instance folder and copies its game files
+/// (`.minecraft`) over. The original is only read; a failed copy removes the new instance again.
+#[tauri::command]
+pub async fn import_prism_instance(app: AppHandle, state: State<'_, AppState>, path: String) -> CommandResult<ModpackImport> {
+    let state = state.inner().clone();
+    let source_dir = PathBuf::from(&path);
+    let read_dir = source_dir.clone();
+    let imported = blocking(move || prism::read_prism_dir(&read_dir)).await?;
+    let label = imported.name.clone();
+    let task = format!("prism:{path}");
+    let title = tr_fmt!("Importing instance: {label}", "Импорт экземпляра: {label}");
+
+    let work = async {
+        // Resolving also checks that the instance's Minecraft and loader versions exist.
+        let (components, _) = game::resolve(&state.paths, imported.components.clone()).await?;
+        let new = NewInstance { name: imported.name, icon: None, group: None, components: imported.components, managed_pack: None };
+        let (manager, paths, progress) = (state.instances.clone(), state.paths.clone(), progress_fn(&app, &task, &title));
+        let (source, copy_task) = (imported.source, task.clone());
+        let instance = blocking(move || {
+            let instance = manager.create(new)?;
+            let filled = manager
+                .update(&instance.id, |instance| {
+                    instance.notes = source.notes;
+                    instance.settings = source.settings;
+                })
+                .and_then(|instance| {
+                    prism::copy_prism_game_dir(&source_dir, &source.game_prefix, &instance.game_dir(&paths), &copy_task, &progress)?;
+                    Ok(instance)
+                });
+            filled.map_err(|error| match manager.delete(&instance.id) {
+                Ok(()) => error,
+                Err(cleanup) => k0t1k_core::Error::Other(format!("{error}; the partly created instance could not be removed: {cleanup}")),
+            })
+        })
+        .await?;
+        game::spawn_game_install(app.clone(), state.clone(), instance.clone(), components);
+        Ok(ModpackImport { instance: instance.into(), blocked: Vec::new() })
+    };
+    tracked(&app, &task, &title, work).await
 }
 
 #[tauri::command]

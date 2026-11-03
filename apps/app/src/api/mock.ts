@@ -38,6 +38,7 @@ import type {
   MinecraftVersion,
   ModpackImport,
   OnboardingInfo,
+  PrismInstanceInfo,
   Platform,
   LoginStage,
   ProgressEvent,
@@ -961,6 +962,22 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
         icon: 'gem', group: 'Модпаки', components: components('1.20.1', { id: 'fabric', version: '0.16.10' }),
       })
       await fakeTask(`import-${inst.id}`, `Импорт ${inst.name}`, ['Чтение манифеста', 'Скачивание модов', 'Применение overrides'], 450)
+      instances.push(inst)
+      return clone({ instance: inst, blocked: [] } satisfies ModpackImport)
+    }
+    case 'find_prism_instances': {
+      await sleep(300)
+      return [
+        { path: 'C:\\Users\\user\\AppData\\Roaming\\PrismLauncher\\instances\\Fabulously Optimized', name: 'Fabulously Optimized', minecraftVersion: '1.21.1', loader: 'Fabric 0.16.10', launcher: 'Prism' },
+        { path: 'C:\\Users\\user\\AppData\\Roaming\\PrismLauncher\\instances\\1.8.9', name: 'Old PvP', minecraftVersion: '1.8.9', loader: null, launcher: 'Prism' },
+      ] satisfies PrismInstanceInfo[]
+    }
+    case 'import_prism_instance': {
+      const path = a.path as string
+      const inst = newInstance({
+        id: nextId('inst'), name: path.split(/[\\/]/).pop() ?? 'Prism', icon: 'gem', components: components('1.21.1', { id: 'fabric', version: '0.16.10' }),
+      })
+      await fakeTask(`prism:${path}`, `Импорт ${inst.name}`, ['Копирование файлов'], 600)
       instances.push(inst)
       return clone({ instance: inst, blocked: [] } satisfies ModpackImport)
     }

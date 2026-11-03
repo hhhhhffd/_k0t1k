@@ -7,6 +7,7 @@ mod links;
 mod manager;
 mod nbt;
 pub mod options;
+pub mod prism;
 pub mod servers;
 pub mod worlds;
 

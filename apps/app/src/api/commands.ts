@@ -96,6 +96,9 @@
  *   open_config_folder(instanceId)                           -> void     (the game's config folder; created when missing)
  *   check_updates(instanceId, kind: LocalResourceKind)       -> AvailableUpdate[]
  *   import_modpack_file(path, name?)                         -> ModpackImport (.mrpack / CurseForge .zip; emits `progress`)
+ *   find_prism_instances(folder?)                            -> PrismInstanceInfo[]  (installed Prism Launcher instances; with `folder`: that
+ *                                                                      instance / instances / launcher data folder, e.g. a MultiMC one)
+ *   import_prism_instance(path)                              -> ModpackImport (copies the instance's .minecraft; the original stays untouched; emits `progress`)
  *   install_modpack_version(platform, projectId, versionId, name?) -> ModpackImport (emits `progress`)
  * Worlds (the modifying commands fail while the instance is running)
  *   list_worlds(instanceId)                                  -> World[]  (folders with a level.dat, last played first)
@@ -210,6 +213,7 @@ import type {
   MinecraftVersion,
   ModpackImport,
   OnboardingInfo,
+  PrismInstanceInfo,
   Platform,
   LoginStage,
   ProgressEvent,
@@ -417,6 +421,8 @@ export const checkUpdates = (instanceId: string, kind: LocalResourceKind) =>
   call<AvailableUpdate[]>('check_updates', { instanceId, kind })
 export const importModpackFile = (path: string, name?: string) =>
   call<ModpackImport>('import_modpack_file', { path, name })
+export const findPrismInstances = (folder?: string) => call<PrismInstanceInfo[]>('find_prism_instances', { folder })
+export const importPrismInstance = (path: string) => call<ModpackImport>('import_prism_instance', { path })
 export const installModpackVersion = (version: ProjectVersion, name?: string) =>
   call<ModpackImport>('install_modpack_version', {
     platform: version.platform,
