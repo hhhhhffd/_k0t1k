@@ -122,6 +122,14 @@ function loaderVersions(mc: string, loader: LoaderId): LoaderVersion[] {
 
 // ---- settings ----
 const SETTINGS_KEY = 'k0t1k.mock.settings'
+/** `localStorage['k0t1k.mock.fresh'] = '1'` or `?fresh` in the URL simulates a fresh install: no accounts, no instances, no onboarding flags. */
+const freshInstall = (() => {
+  try {
+    return localStorage.getItem('k0t1k.mock.fresh') === '1' || new URLSearchParams(location.search).has('fresh')
+  } catch {
+    return new URLSearchParams(location.search).has('fresh')
+  }
+})()
 const defaultSettings: GlobalSettings = {
   java: { path: null, autoSelect: true, autoDownload: true },
   memory: { minMib: 512, maxMib: 4096, auto: false },
@@ -135,7 +143,7 @@ const defaultSettings: GlobalSettings = {
   discord: { enabled: true },
   overlay: { enabled: false },
   updates: { checkOnStartup: true },
-  onboarding: { keepPortableAt: null, createdShortcuts: [] },
+  onboarding: { keepPortableAt: null, createdShortcuts: [], welcomeDone: false, checklistHidden: false, instanceTourDone: false },
   sharedFoldersDefault: ['resourcepacks', 'shaderpacks'],
   accounts: [{ id: 'acc-1', name: 'k0t1k_player', kind: 'offline' }],
   selectedAccountId: 'acc-1',
@@ -146,7 +154,7 @@ function loadSettings(): GlobalSettings {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const stored = JSON.parse(raw) as Partial<GlobalSettings>
-      return { ...defaultSettings, ...stored, ui: { ...defaultSettings.ui, ...stored.ui }, updates: { ...defaultSettings.updates, ...stored.updates } }
+      return { ...defaultSettings, ...stored, ui: { ...defaultSettings.ui, ...stored.ui }, updates: { ...defaultSettings.updates, ...stored.updates }, onboarding: { ...defaultSettings.onboarding, ...stored.onboarding } }
     }
   } catch {
     // mock only: fall back to defaults when storage is unavailable
@@ -154,6 +162,9 @@ function loadSettings(): GlobalSettings {
   return clone(defaultSettings)
 }
 let settings = loadSettings()
+if (freshInstall) {
+  settings = { ...settings, accounts: [], selectedAccountId: null, onboarding: { ...defaultSettings.onboarding } }
+}
 let mockLoginCancelled = false
 
 /** Adds (or updates) a fake premium account, like the backend does after a successful sign-in. */
@@ -216,6 +227,7 @@ const instances: Instance[] = [
     created: daysAgo(200), playtime: { totalSecs: 3600 * 140, lastSecs: 900 }, lastPlayed: daysAgo(30) }),
   newInstance({ id: 'inst-5', name: 'Снапшоты', icon: 'ghost', components: components('25w06a'), created: daysAgo(5) }),
 ]
+if (freshInstall) instances.length = 0
 const findInstance = (id: unknown): Instance => {
   const inst = instances.find((i) => i.id === id)
   if (!inst) throw new Error(`Экземпляр не найден: ${String(id)}`)
@@ -666,7 +678,19 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       return undefined
     }
     case 'get_settings': return clone(settings)
-    case 'save_settings': settings = clone(a.settings as GlobalSettings); persistSettings(); return undefined
+    case 'save_settings': {
+      // Like the backend, the onboarding record belongs to its own commands
+      const { onboarding } = settings
+      settings = { ...clone(a.settings as GlobalSettings), onboarding }
+      persistSettings()
+      return undefined
+    }
+    case 'mark_onboarding': {
+      const flag = { welcome: 'welcomeDone', checklist: 'checklistHidden', instanceTour: 'instanceTourDone' } as const
+      settings.onboarding[flag[a.step as keyof typeof flag]] = true
+      persistSettings()
+      return undefined
+    }
     case 'get_system_info':
       return { totalRamMib: 16_384, os: 'Windows 11 (мок)', appVersion: '0.1.0', dataDir, portable: false, exeDir: 'C:\\Program Files\\_k0t1k' } satisfies SystemInfo
     // `?update=available|error|blocked|none|delayed` previews the update states

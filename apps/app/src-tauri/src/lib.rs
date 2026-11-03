@@ -126,6 +126,7 @@ pub fn run() {
             settings::open_launcher_folder,
             onboarding::get_onboarding,
             onboarding::get_relocation_report,
+            onboarding::mark_onboarding,
             onboarding::relocate,
             onboarding::keep_portable_here,
             onboarding::create_shortcuts,

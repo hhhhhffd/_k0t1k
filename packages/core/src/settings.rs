@@ -257,6 +257,12 @@ pub struct OnboardingSettings {
     pub keep_portable_at: Option<PathBuf>,
     /// Shortcuts the launcher created, removed again by an uninstall.
     pub created_shortcuts: Vec<PathBuf>,
+    /// The first-run welcome (language, account, first instance) was completed or skipped.
+    pub welcome_done: bool,
+    /// The "Getting started" checklist was dismissed.
+    pub checklist_hidden: bool,
+    /// The hints shown when the first instance is opened were seen.
+    pub instance_tour_done: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -535,6 +541,14 @@ mod tests {
         assert!(settings.discord.enabled);
         let off: GlobalSettings = serde_json::from_str(r#"{"discord":{"enabled":false}}"#).unwrap();
         assert!(!off.discord.enabled);
+    }
+
+    #[test]
+    fn old_onboarding_record_gets_false_flags() {
+        let old: GlobalSettings = serde_json::from_str(r#"{"onboarding":{"keepPortableAt":null,"createdShortcuts":[]}}"#).unwrap();
+        assert!(!old.onboarding.welcome_done && !old.onboarding.checklist_hidden && !old.onboarding.instance_tour_done);
+        let new: GlobalSettings = serde_json::from_str(r#"{"onboarding":{"welcomeDone":true}}"#).unwrap();
+        assert!(new.onboarding.welcome_done && !new.onboarding.checklist_hidden);
     }
 
     #[test]

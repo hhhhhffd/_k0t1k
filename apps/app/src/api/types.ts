@@ -209,7 +209,16 @@ export interface GlobalSettings {
   overlay: { enabled: boolean }
   updates: { checkOnStartup: boolean }
   /** Owned by the onboarding commands: `save_settings` never overwrites it. */
-  onboarding: { keepPortableAt: string | null; createdShortcuts: string[] }
+  onboarding: {
+    keepPortableAt: string | null
+    createdShortcuts: string[]
+    /** The first-run welcome (language, account, first instance) was completed or skipped. */
+    welcomeDone: boolean
+    /** The "Getting started" checklist was dismissed. */
+    checklistHidden: boolean
+    /** The hints shown when the first instance is opened were seen. */
+    instanceTourDone: boolean
+  }
   /** Folders that new instances (and imported modpacks) share. */
   sharedFoldersDefault: SharedFolder[]
   accounts: Account[]

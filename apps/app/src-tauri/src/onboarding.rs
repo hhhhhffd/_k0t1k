@@ -22,7 +22,7 @@ use std::time::Duration;
 use k0t1k_core::paths::Paths;
 use k0t1k_core::placement::{self, Clutter, KnownFolders, RemovalPlan};
 use k0t1k_core::settings::GlobalSettings;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 use crate::datadir::{self, DataDirSource};
@@ -381,6 +381,30 @@ pub fn get_onboarding(state: State<'_, AppState>) -> CommandResult<Option<Onboar
 #[tauri::command]
 pub fn get_relocation_report(pending: State<'_, PendingReport>) -> Option<RelocationReport> {
     pending.report().take()
+}
+
+/// The first-run steps the UI reports as done.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OnboardingStep {
+    Welcome,
+    Checklist,
+    InstanceTour,
+}
+
+/// Remembers that a first-run step is done (or dismissed); `save_settings` never touches these flags.
+#[tauri::command]
+pub async fn mark_onboarding(state: State<'_, AppState>, step: OnboardingStep) -> CommandResult<()> {
+    let paths = state.paths.clone();
+    blocking(move || {
+        GlobalSettings::update(&paths, |settings| match step {
+            OnboardingStep::Welcome => settings.onboarding.welcome_done = true,
+            OnboardingStep::Checklist => settings.onboarding.checklist_hidden = true,
+            OnboardingStep::InstanceTour => settings.onboarding.instance_tour_done = true,
+        })?;
+        Ok(())
+    })
+    .await
 }
 
 /// Copies the running exe into the install folder for `chosen` (see `placement::install_target`).
