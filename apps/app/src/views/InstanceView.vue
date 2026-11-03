@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { openInstanceFolder } from '../api/commands'
 import type { ExportFormat } from '../api/types'
+import CoachMarks from '../components/CoachMarks.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import type { MenuItem } from '../components/ContextMenu.vue'
 import DropOverlay from '../components/DropOverlay.vue'
@@ -41,6 +42,9 @@ const steam = computed(() => layout.mode === 'steam')
 const tabFromRoute = () => INSTANCE_TABS.find((name) => name === route.query.tab) ?? 'mods'
 const tab = ref<InstanceTab>(tabFromRoute())
 watch(() => route.query.tab, () => (tab.value = tabFromRoute()))
+
+/** The tabs the first-open tour points at. */
+const tourAnchor = (name: InstanceTab) => (name === 'mods' || name === 'settings' ? name : undefined)
 
 const exportMenu = ref<{ x: number; y: number } | null>(null)
 const exportFormat = ref<ExportFormat | null>(null)
@@ -119,6 +123,7 @@ const { dragging } = useFileDrop(async (paths) => {
             v-for="name in INSTANCE_TABS"
             :key="name"
             role="tab"
+            :data-tour="tourAnchor(name)"
             :aria-selected="tab === name"
             class="steam-tab flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-[13px] transition-colors"
             :class="tab === name ? 'steam-tab-active text-fg' : 'text-muted hover:bg-hover hover:text-fg'"
@@ -161,6 +166,7 @@ const { dragging } = useFileDrop(async (paths) => {
           v-for="name in INSTANCE_TABS"
           :key="name"
           role="tab"
+          :data-tour="tourAnchor(name)"
           :aria-selected="tab === name"
           class="tool h-9 w-full justify-start"
           :class="tab === name ? 'tool-active text-accent' : ''"
@@ -182,6 +188,7 @@ const { dragging } = useFileDrop(async (paths) => {
     <ContextMenu v-if="exportMenu" :x="exportMenu.x" :y="exportMenu.y" :items="exportItems" @close="exportMenu = null" />
     <ExportDialog v-if="exportFormat" :instance="instance" :format="exportFormat" @close="exportFormat = null" />
     <PackUpdateDialog v-if="showPackUpdate && instance.managedPack" :instance="instance" @close="showPackUpdate = false" />
+    <CoachMarks />
     <DropOverlay v-if="dragging" :text="t.transfer.dropHere" />
   </template>
 </template>
