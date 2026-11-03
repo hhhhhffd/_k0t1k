@@ -34,11 +34,11 @@ function etaText(id: string) {
       <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-raised" role="progressbar" :aria-label="t.tasks.title" :aria-valuenow="task.done" :aria-valuemax="task.total">
         <div
           class="h-full rounded-full transition-[width]"
-          :class="task.error ? 'bg-danger' : 'bg-accent'"
+          :class="[task.error ? 'bg-danger' : 'bg-accent', !task.total && !task.finished && !task.error && 'animate-pulse']"
           :style="{ width: `${task.total ? Math.min(100, (task.done / task.total) * 100) : 100}%` }"
         />
       </div>
-      <span class="w-12 text-right text-[12px] text-faint">{{ task.done }}/{{ task.total }}</span>
+      <span class="w-12 text-right text-[12px] text-faint">{{ task.total ? `${task.done}/${task.total}` : task.done }}</span>
       <span class="w-24 shrink-0 text-right text-[12px] text-faint">{{ etaText(task.task) }}</span>
     </div>
     <p v-if="firstLaunch && launching" class="text-[12px] text-muted">{{ t.tasks.firstLaunch }}</p>

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref, shallowReactive } from 'vue'
 import * as api from '../api/commands'
-import type { GameCrashed, GameLogBatch, GameLogLine, Instance, InstanceRunState, ModpackImport, ProjectVersion, RunSession, RunState, SessionId } from '../api/types'
+import type { GameCrashed, GameLogBatch, GameLogLine, Instance, InstanceRunState, LoaderId, ModpackImport, ProjectVersion, RunSession, RunState, SessionId } from '../api/types'
 import { t } from '../i18n'
 import { useModCompatStore } from './modCompat'
 import { useRatscanStore } from './ratscan'
@@ -117,7 +117,7 @@ export const useInstancesStore = defineStore('instances', () => {
     createFromPack({ name: name || baseName(path).replace(/\.(mrpack|zip)$/i, ''), group: group ?? null }, () => api.importModpackFile(path, name))
   const importModpackUrl = (url: string, name?: string, group?: string) =>
     createFromPack({ name: name || url, group: group ?? null }, () => api.importModpackUrl(url, name))
-  const importPrism = (path: string, name: string) => createFromPack({ name, group: null }, () => api.importPrismInstance(path))
+  const importPrism = (path: string, name: string, loader?: LoaderId) => createFromPack({ name, group: null }, () => api.importPrismInstance(path, loader))
   const installModpack = (version: ProjectVersion, name: string, group?: string) =>
     createFromPack({ name: name || version.name, group: group ?? null }, () => api.installModpackVersion(version, name || undefined))
   const installFtbPack = (packId: number, versionId: number, name: string, group?: string) =>
