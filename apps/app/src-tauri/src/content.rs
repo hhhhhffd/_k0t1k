@@ -18,6 +18,7 @@ use k0t1k_core::download::{Checksum, download_checked};
 use k0t1k_core::error::IoContext;
 use k0t1k_core::instance::archive::read_custom_icon;
 use k0t1k_core::instance::icon::custom_file_name;
+use k0t1k_core::instance::discover;
 use k0t1k_core::instance::prism::{self, PrismInstanceInfo};
 use k0t1k_core::instance::{Instance, ManagedPack, ManagedPlatform, NewInstance};
 use k0t1k_core::launch::tuning::cap_recommended_ram;
@@ -350,6 +351,16 @@ pub async fn import_modpack_file(app: AppHandle, state: State<'_, AppState>, pat
 #[tauri::command]
 pub async fn find_prism_instances(folder: Option<String>) -> CommandResult<Vec<PrismInstanceInfo>> {
     blocking(move || Ok(prism::find_prism_instances(folder.as_deref().map(Path::new)))).await
+}
+
+/// Instances of every Prism-family launcher (Prism, PolyMC, MultiMC, UltimMC, Fjord) on this machine,
+/// portable installs included: the disk is searched for their executables for about 20 seconds at most.
+#[tauri::command]
+pub async fn discover_launcher_instances(app: AppHandle) -> CommandResult<Vec<PrismInstanceInfo>> {
+    let task = "discover:launchers";
+    let title = tr("Searching for launchers", "Поиск лаунчеров");
+    let progress = progress_fn(&app, task, title);
+    tracked(&app, task, title, blocking(move || Ok(discover::discover_launcher_instances(task, &progress)))).await
 }
 
 /// Creates an instance from an installed Prism/MultiMC instance folder and copies its game files

@@ -496,7 +496,7 @@ export interface ModpackImport {
   blocked: BlockedFile[]
 }
 
-/** A Prism Launcher / MultiMC instance found on disk (`find_prism_instances`). */
+/** A Prism-family launcher instance found on disk (`find_prism_instances`, `discover_launcher_instances`). */
 export interface PrismInstanceInfo {
   /** The instance folder; pass it to `import_prism_instance`. */
   path: string
@@ -504,7 +504,13 @@ export interface PrismInstanceInfo {
   minecraftVersion: string
   /** The mod loader with its version, e.g. `Fabric 0.15.11`; null for vanilla. */
   loader: string | null
-  launcher: 'Prism' | 'MultiMC'
+  launcher: 'Prism' | 'MultiMC' | 'PolyMC' | 'UltimMC' | 'Fjord'
+  /** The launcher's data folder (holds the instances and settings), to group instances by install; null when unknown. */
+  launcherDir: string | null
+  /** The loader the instance declares; null for vanilla. */
+  declaredLoader: LoaderId | null
+  /** The one loader all loader-specific mods target, when it differs from the declared one; null when consistent, mixed or no mods. */
+  modLoader: LoaderId | null
 }
 
 /** A picture or looping video from the launcher's `catpacks` folder, shown behind the library. */

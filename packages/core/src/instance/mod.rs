@@ -1,6 +1,7 @@
 //! Instances: `instances/<id>/instance.json` plus the `minecraft/` game dir and `sessions/<id>/` (natives of a running launch).
 
 pub mod archive;
+pub mod discover;
 pub(crate) mod fsutil;
 pub mod icon;
 mod links;

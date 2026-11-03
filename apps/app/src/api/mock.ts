@@ -969,9 +969,14 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     case 'find_prism_instances': {
       await sleep(300)
       return [
-        { path: 'C:\\Users\\user\\AppData\\Roaming\\PrismLauncher\\instances\\Fabulously Optimized', name: 'Fabulously Optimized', minecraftVersion: '1.21.1', loader: 'Fabric 0.16.10', launcher: 'Prism' },
-        { path: 'C:\\Users\\user\\AppData\\Roaming\\PrismLauncher\\instances\\1.8.9', name: 'Old PvP', minecraftVersion: '1.8.9', loader: null, launcher: 'Prism' },
+        { path: 'C:\\Users\\user\\AppData\\Roaming\\PrismLauncher\\instances\\Fabulously Optimized', name: 'Fabulously Optimized', minecraftVersion: '1.21.1', loader: 'Fabric 0.16.10', launcher: 'Prism', launcherDir: 'C:\\Users\\user\\AppData\\Roaming\\PrismLauncher', declaredLoader: 'fabric', modLoader: null },
+        { path: 'C:\\Users\\user\\AppData\\Roaming\\PrismLauncher\\instances\\1.8.9', name: 'Old PvP', minecraftVersion: '1.8.9', loader: null, launcher: 'Prism', launcherDir: 'C:\\Users\\user\\AppData\\Roaming\\PrismLauncher', declaredLoader: null, modLoader: null },
+        { path: 'C:\\Users\\user\\Desktop\\PrismLauncher-Portable\\instances\\1.21.11', name: '1.21.11', minecraftVersion: '1.21.11', loader: 'NeoForge 21.11.48', launcher: 'Prism', launcherDir: 'C:\\Users\\user\\Desktop\\PrismLauncher-Portable', declaredLoader: 'neoForge', modLoader: 'fabric' },
       ] satisfies PrismInstanceInfo[]
+    }
+    case 'discover_launcher_instances': {
+      await fakeTask('discover:launchers', 'Поиск лаунчеров', ['Поиск лаунчеров'], 900)
+      return invoke('find_prism_instances', {})
     }
     case 'import_prism_instance': {
       const path = a.path as string

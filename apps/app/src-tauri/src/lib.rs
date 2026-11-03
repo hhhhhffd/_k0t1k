@@ -158,6 +158,7 @@ pub fn run() {
             content::check_updates,
             content::import_modpack_file,
             content::find_prism_instances,
+            content::discover_launcher_instances,
             content::import_prism_instance,
             content::install_modpack_version,
             content::import_modpack_url,

@@ -315,7 +315,7 @@ fn read_jar(path: &Path, cache: &Cache) -> Option<Jar> {
     Some(Jar { file_name, path: path.to_owned(), key, descriptors, readable, target: true })
 }
 
-fn accepts(instance: Loader, jar: Loader) -> bool {
+pub(crate) fn accepts(instance: Loader, jar: Loader) -> bool {
     match instance {
         Loader::Fabric => jar == Loader::Fabric,
         Loader::Quilt => matches!(jar, Loader::Quilt | Loader::Fabric),
