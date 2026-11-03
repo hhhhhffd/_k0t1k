@@ -27,6 +27,8 @@ age = { version = "0.12", default-features = false }
 ed25519-dalek = "3"
 # SRV records (`_minecraft._tcp`) for the server list ping; std and tokio only resolve A/AAAA.
 hickory-resolver = "0.26.3"
+# Installed font families for the interface font picker.
+fontdb = "0.24"
 
 [dev-dependencies]
 tempfile = "3"

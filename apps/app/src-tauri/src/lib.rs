@@ -198,6 +198,7 @@ pub fn run() {
             transfer::save_text_file,
             overlay::clear_overlay_history,
             overlay::set_overlay_theme,
+            customization::list_system_fonts,
             transfer::set_update_lock,
             plugins::list_plugins,
             plugins::read_plugin_file,

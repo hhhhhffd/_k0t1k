@@ -6,6 +6,7 @@ pub mod component;
 pub mod content;
 pub mod download;
 pub mod error;
+pub mod fonts;
 pub mod i18n;
 pub mod install;
 pub mod instance;

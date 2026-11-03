@@ -121,6 +121,8 @@ pub struct UiSettings {
     pub window_controls: WindowControlsSide,
     /// Interface zoom in percent; `None` lets the UI pick one from the screen size.
     pub scale: Option<u16>,
+    /// Installed font family used for the interface; `None` for the built-in font stack.
+    pub font: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,6 +149,14 @@ pub struct CustomTheme {
 impl UiSettings {
     /// Theme values are injected into CSS by the UI, so only a narrow charset is accepted.
     pub fn validate(&self) -> Result<()> {
+        if let Some(font) = &self.font {
+            // the name is put into a quoted CSS string by the UI
+            let font_ok = (1..=128).contains(&font.chars().count())
+                && !font.chars().any(|c| c.is_control() || "\"'\\;{}<>".contains(c));
+            if !font_ok {
+                return Err(Error::Other(format!("invalid interface font name {font:?}")));
+            }
+        }
         let mut seen = std::collections::HashSet::new();
         for theme in &self.custom_themes {
             if theme.id.is_empty() || !seen.insert(theme.id.as_str()) {
@@ -180,6 +190,7 @@ impl Default for UiSettings {
             icon_set: None,
             window_controls: WindowControlsSide::Left,
             scale: None,
+            font: None,
         }
     }
 }
@@ -458,6 +469,17 @@ mod tests {
         assert!(settings.playtime.record && settings.playtime.show);
         assert_eq!(settings.behavior.on_game_launch, OnGameLaunch::HideToTray);
         assert_eq!(settings.behavior.on_close, OnClose::Tray);
+    }
+
+    #[test]
+    fn interface_font_name_is_validated() {
+        let with = |font: &str| UiSettings { font: Some(font.to_owned()), ..UiSettings::default() };
+        assert!(UiSettings::default().validate().is_ok());
+        assert!(with("Segoe UI Variable").validate().is_ok());
+        assert!(with("Noto Sans CJK JP").validate().is_ok());
+        for bad in ["", "A\"B", "A\\B", "A;B", "A{B", "A}B", "A<B", "A\nB", "A'B", &"x".repeat(129)] {
+            assert!(with(bad).validate().is_err(), "{bad:?} must be rejected");
+        }
     }
 
     #[test]

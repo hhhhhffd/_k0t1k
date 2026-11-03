@@ -304,3 +304,9 @@ mod tests {
         assert_eq!(set.files.keys().collect::<Vec<_>>(), ["play"]);
     }
 }
+
+/// Installed font families for the interface font picker; the webview cannot list local fonts itself.
+#[tauri::command]
+pub async fn list_system_fonts() -> CommandResult<Vec<String>> {
+    blocking(|| Ok(k0t1k_core::fonts::list_system_families())).await
+}
