@@ -24,7 +24,7 @@ function createClosed() {
   if (store.instances.length || store.pending.length) emit('chosen')
 }
 
-const POPULAR = 4
+const POPULAR = 6
 const popular = ref<SearchHit[]>([])
 const popularState = ref<'loading' | 'ready' | 'failed'>('loading')
 const installing = ref(new Set<string>())
@@ -94,7 +94,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex w-full max-w-2xl flex-col gap-4 text-left">
+  <div class="@container w-full max-w-4xl text-left">
+    <div class="grid grid-cols-1 items-start gap-4 @min-[38rem]:grid-cols-2">
+    <div class="flex min-w-0 flex-col gap-4">
     <button class="card flex items-center gap-4 border-accent/60 p-4 text-left transition-colors hover:bg-hover" @click="createPage = 'custom'">
       <span class="pix flex size-12 shrink-0 items-center justify-center bg-accent text-white"><Plus :size="26" /></span>
       <span class="min-w-0">
@@ -102,25 +104,6 @@ onMounted(() => {
         <span class="block text-muted">{{ t.start.createHint }}</span>
       </span>
     </button>
-
-    <section class="card flex flex-col gap-2 p-3">
-      <h3 class="font-mono text-[13px] font-bold">{{ t.start.popular }}</h3>
-      <p v-if="popularState === 'loading'" class="py-3 text-center text-faint">{{ t.common.loading }}</p>
-      <div v-else-if="popularState === 'failed'" class="flex items-center justify-between gap-3 py-1">
-        <span class="text-faint">{{ t.start.popularFailed }}</span>
-        <button class="btn" @click="loadPopular">{{ t.start.retry }}</button>
-      </div>
-      <ul v-else class="flex flex-col">
-        <li v-for="hit in popular" :key="hit.projectId" class="flex items-center gap-3 rounded-md p-1.5">
-          <ProjectIcon :hit="hit" :size="36" />
-          <span class="min-w-0 flex-1">
-            <span class="block truncate font-semibold">{{ hit.title }}</span>
-            <span class="flex items-center gap-1 text-[12px] text-faint"><Download :size="11" />{{ formatCount(hit.downloads) }}</span>
-          </span>
-          <button class="btn" :disabled="installing.has(hit.projectId)" @click="install(hit)">{{ installing.has(hit.projectId) ? t.common.loading : t.start.install }}</button>
-        </li>
-      </ul>
-    </section>
 
     <section class="card flex flex-col gap-2 p-3">
       <div class="flex items-center justify-between gap-2">
@@ -141,11 +124,33 @@ onMounted(() => {
       <div><button class="btn" @click="pickPrismFolder"><FolderOpen :size="15" />{{ t.start.chooseFolder }}</button></div>
     </section>
 
-    <section class="card flex items-center gap-3 p-3">
+    <section class="card flex flex-wrap items-center gap-3 p-3">
       <FileArchive :size="22" class="shrink-0 text-icon" />
-      <p class="min-w-0 flex-1 text-muted">{{ t.start.files }}</p>
+      <p class="min-w-[12rem] flex-1 text-muted">{{ t.start.files }}</p>
       <button class="btn shrink-0" @click="createPage = 'import'">{{ t.start.importFile }}</button>
     </section>
+
+    </div>
+    <section class="card flex flex-col gap-2 p-3">
+      <h3 class="font-mono text-[13px] font-bold">{{ t.start.popular }}</h3>
+      <p v-if="popularState === 'loading'" class="py-3 text-center text-faint">{{ t.common.loading }}</p>
+      <div v-else-if="popularState === 'failed'" class="flex items-center justify-between gap-3 py-1">
+        <span class="text-faint">{{ t.start.popularFailed }}</span>
+        <button class="btn" @click="loadPopular">{{ t.start.retry }}</button>
+      </div>
+      <ul v-else class="flex flex-col">
+        <li v-for="hit in popular" :key="hit.projectId" class="flex items-center gap-3 rounded-md p-1.5">
+          <ProjectIcon :hit="hit" :size="36" />
+          <span class="min-w-0 flex-1">
+            <span class="block truncate font-semibold">{{ hit.title }}</span>
+            <span class="flex items-center gap-1 text-[12px] text-faint"><Download :size="11" />{{ formatCount(hit.downloads) }}</span>
+          </span>
+          <button class="btn" :disabled="installing.has(hit.projectId)" @click="install(hit)">{{ installing.has(hit.projectId) ? t.common.loading : t.start.install }}</button>
+        </li>
+      </ul>
+    </section>
+
+    </div>
 
     <CreateInstanceDialog v-if="createPage" :initial-page="createPage" @close="createClosed" />
   </div>

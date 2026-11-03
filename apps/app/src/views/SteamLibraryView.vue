@@ -32,6 +32,7 @@ const collapsed = ref(new Set<string>())
 
 /** The instance route picks the page; the plain library shows the last selected instance. */
 const currentId = computed(() => (route.name === 'instance' ? String(route.params.id) : layout.selectedId))
+const highlightAdd = computed(() => store.loaded && !store.instances.length)
 const current = computed(() => (currentId.value ? store.byId(currentId.value) : undefined))
 
 const UNGROUPED = ''
@@ -95,18 +96,19 @@ function openMenu(e: MouseEvent, inst: Instance) {
       </nav>
       <GettingStarted />
       <button
-        class="flex h-10 shrink-0 items-center gap-2 border-t border-line px-3 text-[13px]"
-        :class="store.loaded && !store.instances.length ? 'animate-pulse bg-accent font-semibold text-white' : 'text-muted hover:bg-hover hover:text-fg'"
+        class="relative flex h-10 shrink-0 items-center gap-2 border-t border-line px-3 text-[13px]"
+        :class="highlightAdd ? 'bg-accent font-semibold text-accent-fg hover:brightness-110' : 'text-muted hover:bg-hover hover:text-fg'"
         @click="showCreate = true"
       >
-        <UiIcon name="add" :icon="Plus" :size="16" class="text-icon" />{{ t.toolbar.add }}
+        <span v-if="highlightAdd" class="pointer-events-none absolute inset-0 animate-pulse ring-2 ring-inset ring-white/60" aria-hidden="true" />
+        <UiIcon name="add" :icon="Plus" :size="16" :class="highlightAdd ? 'text-accent-fg' : 'text-icon'" />{{ t.toolbar.add }}
       </button>
     </aside>
 
     <div class="min-w-0 flex-1">
       <InstanceView v-if="current" :id="current.id" />
-      <div v-else-if="store.loaded" class="flex h-full flex-col items-center gap-3 overflow-y-auto px-6 py-8 text-center" :class="store.instances.length ? 'justify-center' : ''">
-        <img :src="mascot" alt="" class="pixelated anim-bob size-24 opacity-90" />
+      <div v-else-if="store.loaded" class="flex h-full flex-col items-center gap-2 overflow-y-auto px-6 py-4 text-center" :class="store.instances.length ? 'justify-center' : ''">
+        <img :src="mascot" alt="" class="pixelated anim-bob shrink-0" :class="store.instances.length ? 'size-24' : 'size-16'" />
         <p class="text-[16px] font-semibold">{{ store.instances.length ? t.steam.pick : t.library.empty }}</p>
         <template v-if="!store.instances.length && !store.pending.length">
           <p class="text-muted">{{ t.library.emptyHint }}</p>

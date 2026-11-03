@@ -184,8 +184,8 @@ const { dragging, position: dragPosition } = useFileDrop(async (paths, at) => {
       <div class="absolute inset-0 overflow-y-auto px-3 py-2">
       <div ref="libraryRoot" class="min-h-full outline-none" @click.self="clearSelection">
         <div v-if="store.instances.length" class="flex justify-end px-1 pb-1" @click.self="clearSelection"><ViewToggle v-model="view" /></div>
-        <div v-if="store.loaded && !store.instances.length && !store.pending.length" class="flex flex-col items-center gap-3 py-10 text-center">
-          <img :src="mascot" alt="" class="pixelated anim-bob size-24 opacity-90" />
+        <div v-if="store.loaded && !store.instances.length && !store.pending.length" class="flex flex-col items-center gap-2 py-4 text-center">
+          <img :src="mascot" alt="" class="pixelated anim-bob size-16 opacity-90" />
           <p class="text-[16px] font-semibold">{{ t.library.empty }}</p>
           <p class="text-muted">{{ t.library.emptyHint }}</p>
           <GetStarted />

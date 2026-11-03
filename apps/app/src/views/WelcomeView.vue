@@ -41,21 +41,22 @@ async function finish() {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-6">
-    <div class="anim-fade flex w-full max-w-2xl flex-col gap-5">
-      <div class="flex items-center gap-4">
-        <img :src="mascot" alt="" class="pixelated anim-bob size-20 shrink-0" />
+  <div class="flex min-h-0 flex-1 justify-center px-6 py-4">
+    <div class="anim-fade flex min-h-0 w-full flex-col gap-4 sm:my-auto sm:max-h-full" :class="step === STEPS - 1 ? 'max-w-4xl' : 'max-w-2xl'">
+      <div class="flex shrink-0 items-center gap-4">
+        <img :src="mascot" alt="" class="pixelated anim-bob size-16 shrink-0" />
         <div class="flex flex-col gap-1">
           <h1 class="font-mono text-2xl font-bold tracking-tight">{{ step === 0 ? t.welcome.title : titles[step]() }}</h1>
           <p class="text-muted">{{ [t.welcome.languageHint, t.welcome.accountHint, t.welcome.instanceHint][step] }}</p>
         </div>
       </div>
 
-      <div class="flex items-center gap-2" role="progressbar" :aria-valuenow="step + 1" aria-valuemin="1" :aria-valuemax="STEPS" :aria-label="t.welcome.stepOf(step + 1, STEPS)">
+      <div class="flex shrink-0 items-center gap-2" role="progressbar" :aria-valuenow="step + 1" aria-valuemin="1" :aria-valuemax="STEPS" :aria-label="t.welcome.stepOf(step + 1, STEPS)">
         <span v-for="i in STEPS" :key="i" class="h-1.5 flex-1 rounded-full transition-colors" :class="i <= step + 1 ? 'bg-accent' : 'bg-raised'" />
         <span class="badge ml-1">{{ t.welcome.stepOf(step + 1, STEPS) }}</span>
       </div>
 
+      <div class="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-1">
       <section v-if="step === 0" :key="0" class="anim-pop grid gap-3 sm:grid-cols-2">
         <button
           v-for="lang in LANGUAGES"
@@ -77,8 +78,9 @@ async function finish() {
       <section v-else :key="2" class="anim-pop flex justify-center">
         <GetStarted @chosen="finish" />
       </section>
+      </div>
 
-      <div class="flex items-center justify-between gap-3">
+      <div class="flex shrink-0 items-center justify-between gap-3">
         <button class="btn btn-ghost" @click="finish">{{ t.welcome.skip }}</button>
         <div class="flex gap-2">
           <button v-if="step > 0" class="btn" @click="step--"><ArrowLeft :size="15" />{{ t.common.back }}</button>
