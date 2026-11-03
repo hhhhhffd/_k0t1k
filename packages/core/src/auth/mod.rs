@@ -7,6 +7,7 @@
 pub mod elyby;
 pub mod microsoft;
 mod protect;
+pub mod share;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;

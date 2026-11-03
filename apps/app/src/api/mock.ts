@@ -8,6 +8,7 @@ import type {
   BlockedFile,
   BlockedScan,
   DeviceCodeInfo,
+  AccountImportResult,
   ElybyLoginResult,
   DragDropEvent,
   ExportEntry,
@@ -728,6 +729,16 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
       if (a.password === 'wrong') throw 'Неверный логин или пароль ely.by'
       if ((a.username as string).includes('2fa') && !a.totp) return { account: null, twoFactorRequired: true } satisfies ElybyLoginResult
       return { account: mockPremiumAccount('elyby', (a.username as string).split('@')[0]), twoFactorRequired: false } satisfies ElybyLoginResult
+    }
+    case 'export_account':
+      if ((a.password as string).length < 10) throw 'The password must be at least 10 characters'
+      return undefined
+    case 'import_account': {
+      await sleep(400)
+      if (a.password === 'wrong') throw 'Wrong password or the file is damaged'
+      const existing = settings.accounts.find((x) => x.id === 'ms-mocksteve')
+      if (existing && !a.overwrite) return { account: existing, alreadyExists: true } satisfies AccountImportResult
+      return { account: mockPremiumAccount('microsoft', 'MockSteve'), alreadyExists: false } satisfies AccountImportResult
     }
     case 'remove_account':
       settings.accounts = settings.accounts.filter((x) => x.id !== a.accountId)

@@ -75,6 +75,9 @@
  *                                                                          declined or expired; re-adding an account updates it)
  *   cancel_microsoft_login()                                 -> void
  *   elyby_login(username, password, totp: string | null)     -> ElybyLoginResult  (retry with the code when twoFactorRequired)
+ *   export_account(accountId, password, path)                -> void  (one account's tokens into a password-encrypted file; the password
+ *                                                                          must be at least 10 characters)
+ *   import_account(password, path, overwrite)                -> AccountImportResult  (alreadyExists: nothing changed, repeat with overwrite)
  * Content
  *   search_content(query: SearchQuery)                       -> SearchPage
  *   get_project_versions(platform, projectId, filter: VersionFilter) -> ProjectVersion[]
@@ -164,6 +167,7 @@ import type {
   BlockedFile,
   BlockedScan,
   DeviceCodeInfo,
+  AccountImportResult,
   ElybyLoginResult,
   DragDropEvent,
   OverlayTheme,
@@ -363,6 +367,10 @@ export const finishMicrosoftLogin = () => call<Account>('finish_microsoft_login'
 export const cancelMicrosoftLogin = () => call<void>('cancel_microsoft_login')
 export const elybyLogin = (username: string, password: string, totp: string | null) =>
   call<ElybyLoginResult>('elyby_login', { username, password, totp })
+export const exportAccount = (accountId: string, password: string, path: string) =>
+  call<void>('export_account', { accountId, password, path })
+export const importAccount = (password: string, path: string, overwrite: boolean) =>
+  call<AccountImportResult>('import_account', { password, path, overwrite })
 export const selectAccount = (accountId: string) => call<void>('select_account', { accountId })
 
 // ---- content ----

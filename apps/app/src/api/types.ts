@@ -180,6 +180,12 @@ export interface ElybyLoginResult {
   twoFactorRequired: boolean
 }
 
+/** `alreadyExists`: the account is already signed in; nothing was imported until import_account is repeated with `overwrite`. */
+export interface AccountImportResult {
+  account: Account
+  alreadyExists: boolean
+}
+
 /** What the window does while a game runs: destroy it (frees the web view's memory), hide it, or leave it. */
 export type OnGameLaunch = 'hide_to_tray' | 'keep_open'
 /** What the window's close button does: close to the tray or exit the launcher. */

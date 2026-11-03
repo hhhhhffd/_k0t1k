@@ -5,13 +5,15 @@
 //! stops the wait (closing the dialog).
 
 use k0t1k_core::i18n::tr;
+use k0t1k_core::auth::share::{self, ImportOutcome};
 use k0t1k_core::auth::{self, ElybyOutcome, microsoft};
 use k0t1k_core::settings::Account;
 use serde::Serialize;
+use std::path::PathBuf;
 use tauri::{AppHandle, State};
 use tokio::sync::watch;
 
-use crate::error::{AppError, CommandResult};
+use crate::error::{AppError, CommandResult, blocking};
 use crate::events;
 use crate::state::{AppState, MSA_CLIENT_ID, MicrosoftLogin};
 
@@ -29,6 +31,14 @@ pub struct ElybyLoginResult {
     account: Option<Account>,
     /// The account has two-factor auth: call again with the code.
     two_factor_required: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountImportResult {
+    account: Account,
+    /// The account was already signed in and `overwrite` was not set: nothing was imported.
+    already_exists: bool,
 }
 
 fn client_id() -> CommandResult<&'static str> {
@@ -103,5 +113,23 @@ pub async fn elyby_login(
     Ok(match auth::elyby_login(&state.paths, &state.http, username, &password, totp).await? {
         ElybyOutcome::Done(account) => ElybyLoginResult { account: Some(account), two_factor_required: false },
         ElybyOutcome::TwoFactorRequired => ElybyLoginResult { account: None, two_factor_required: true },
+    })
+}
+
+/// Writes the tokens of one account to a password-encrypted file; they never reach the UI.
+#[tauri::command]
+pub async fn export_account(state: State<'_, AppState>, account_id: String, password: String, path: PathBuf) -> CommandResult<()> {
+    let paths = state.paths.clone();
+    blocking(move || share::export_account(&paths, &account_id, &password, &path)).await
+}
+
+/// Imports an account from a file made by `export_account`. When the account is already signed in the answer says
+/// so and nothing changes, until the call is repeated with `overwrite`.
+#[tauri::command]
+pub async fn import_account(state: State<'_, AppState>, password: String, path: PathBuf, overwrite: bool) -> CommandResult<AccountImportResult> {
+    let paths = state.paths.clone();
+    Ok(match blocking(move || share::import_account(&paths, &password, &path, overwrite)).await? {
+        ImportOutcome::Imported(account) => AccountImportResult { account, already_exists: false },
+        ImportOutcome::AlreadyExists(account) => AccountImportResult { account, already_exists: true },
     })
 }
