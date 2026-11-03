@@ -248,7 +248,13 @@ export const ru: Dictionary = {
     later: 'Позже',
     skipVersion: 'Пропустить эту версию',
   },
-  tasks: { title: 'Задачи', error: 'Ошибка' },
+  tasks: {
+    title: 'Задачи',
+    error: 'Ошибка',
+    etaSeconds: (n: number) => `ещё ~${n} с`,
+    etaMinutes: (n: number) => `ещё ~${n} мин`,
+    firstLaunch: 'Первый запуск скачивает игру, Java и ресурсы, поэтому длится дольше. Дальше будет быстро.',
+  },
   library: {
     searchPlaceholder: 'Поиск по экземплярам…',
     import: 'Импорт',

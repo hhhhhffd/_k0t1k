@@ -22,6 +22,11 @@ export const useTasksStore = defineStore('tasks', () => {
   // Errors already shown through a progress event, so the rejected command does not toast them again.
   const reported = new Set<string>()
   let toastId = 0
+  // Per task, the smoothed rate of `done` per millisecond, for the time-left estimate.
+  const pace = new Map<string, { startedAt: number; at: number; done: number; total: number; rate: number }>()
+  /** No estimate before this long (the first rate is too noisy) or when it would be absurdly long. */
+  const ETA_AFTER_MS = 4000
+  const ETA_MAX_SECS = 6 * 3600
 
   const list = computed(() => [...tasks.values()])
 
@@ -44,8 +49,34 @@ export const useTasksStore = defineStore('tasks', () => {
     }
   }
 
+  function trackPace(e: ProgressEvent) {
+    const now = Date.now()
+    const p = pace.get(e.task)
+    // A new phase (the counter went back or the total changed) starts a fresh estimate.
+    if (!p || e.done < p.done || e.total !== p.total) {
+      pace.set(e.task, { startedAt: now, at: now, done: e.done, total: e.total, rate: 0 })
+      return
+    }
+    const elapsed = now - p.at
+    if (elapsed < 500 || e.done === p.done) return
+    const instant = (e.done - p.done) / elapsed
+    p.rate = p.rate ? p.rate * 0.7 + instant * 0.3 : instant
+    p.at = now
+    p.done = e.done
+  }
+  /** Seconds left for a running task, or null while there is no trustworthy estimate. */
+  function etaSecs(task: string): number | null {
+    const e = tasks.get(task)
+    const p = pace.get(task)
+    if (!e || !p || e.finished || e.error || e.total <= 0 || !p.rate || Date.now() - p.startedAt < ETA_AFTER_MS) return null
+    const secs = Math.max(0, e.total - e.done) / p.rate / 1000
+    return secs <= ETA_MAX_SECS ? secs : null
+  }
+
   function handle(e: ProgressEvent) {
     tasks.set(e.task, e)
+    if (e.finished || e.error) pace.delete(e.task)
+    else trackPace(e)
     if (e.error) {
       // Stored the way `guard` compares it, so the same error is not toasted twice.
       const message = errorMessage(e.error)
@@ -69,5 +100,5 @@ export const useTasksStore = defineStore('tasks', () => {
     await onProgress(handle)
   }
 
-  return { tasks: list, toasts, blocked, blockedInstanceId, toast, dismiss, guard, showBlocked, init }
+  return { tasks: list, toasts, blocked, blockedInstanceId, toast, dismiss, guard, showBlocked, etaSecs, init }
 })

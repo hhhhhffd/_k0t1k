@@ -1,9 +1,26 @@
 <script setup lang="ts">
 import { AlertTriangle, Check, Loader } from '@lucide/vue'
+import { computed, ref, watch } from 'vue'
 import { t } from '../i18n'
+import { useInstancesStore } from '../stores/instances'
 import { useTasksStore } from '../stores/tasks'
 
 const tasks = useTasksStore()
+const instances = useInstancesStore()
+
+const isLaunch = (id: string) => id.startsWith('launch:')
+const launching = computed(() => tasks.tasks.some((task) => isLaunch(task.task)))
+// Latched when a launch begins: the instance's last-played time may be written while it still runs.
+const firstLaunch = ref(false)
+watch(launching, (now) => {
+  firstLaunch.value = now && instances.loaded && instances.instances.every((i) => !i.lastPlayed)
+})
+
+function etaText(id: string) {
+  const secs = tasks.etaSecs(id)
+  if (secs === null) return ''
+  return secs < 90 ? t.tasks.etaSeconds(Math.max(5, Math.round(secs / 5) * 5)) : t.tasks.etaMinutes(Math.round(secs / 60))
+}
 </script>
 
 <template>
@@ -22,6 +39,8 @@ const tasks = useTasksStore()
         />
       </div>
       <span class="w-12 text-right text-[12px] text-faint">{{ task.done }}/{{ task.total }}</span>
+      <span class="w-24 shrink-0 text-right text-[12px] text-faint">{{ etaText(task.task) }}</span>
     </div>
+    <p v-if="firstLaunch && launching" class="text-[12px] text-muted">{{ t.tasks.firstLaunch }}</p>
   </div>
 </template>

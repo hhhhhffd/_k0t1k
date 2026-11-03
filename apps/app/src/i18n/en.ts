@@ -115,7 +115,13 @@ export const en = {
     instanceTotal: (time: string) => `${time} in total`,
     total: (time: string) => `Total play time: ${time}`,
   },
-  tasks: { title: 'Tasks', error: 'Error' },
+  tasks: {
+    title: 'Tasks',
+    error: 'Error',
+    etaSeconds: (n: number) => `~${n} s left`,
+    etaMinutes: (n: number) => `~${n} min left`,
+    firstLaunch: 'First launch downloads the game, Java and assets, so it takes longer once. After that it is fast.',
+  },
   scan: {
     scanMods: 'Scan mods',
     scanning: (done: number, total: number) => `Scanning ${done}/${total}…`,
