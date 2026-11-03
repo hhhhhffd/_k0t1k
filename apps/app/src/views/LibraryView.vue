@@ -7,6 +7,8 @@ import mascot from '../assets/mascot.png'
 import CatBackdrop from '../components/CatBackdrop.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import DropOverlay from '../components/DropOverlay.vue'
+import GettingStarted from '../components/GettingStarted.vue'
+import GetStarted from '../components/GetStarted.vue'
 import InstanceActionDialogs from '../components/InstanceActionDialogs.vue'
 import InstanceIcon from '../components/InstanceIcon.vue'
 import InstancePanel from '../components/InstancePanel.vue'
@@ -179,13 +181,15 @@ const { dragging, position: dragPosition } = useFileDrop(async (paths, at) => {
   <div class="flex h-full min-h-0" :class="layout.panel === 'left' ? 'flex-row-reverse' : ''" @pointerdown.capture="rememberPointer">
     <div class="relative min-w-0 flex-1">
       <CatBackdrop />
+      <div class="absolute right-2 bottom-2 z-10 w-64"><GettingStarted /></div>
       <div class="absolute inset-0 overflow-y-auto px-3 py-2">
       <div ref="libraryRoot" class="min-h-full outline-none" @click.self="clearSelection">
         <div v-if="store.instances.length" class="flex justify-end px-1 pb-1" @click.self="clearSelection"><ViewToggle v-model="view" /></div>
-        <div v-if="store.loaded && !store.instances.length && !store.pending.length" class="flex flex-col items-center gap-3 py-24 text-center">
+        <div v-if="store.loaded && !store.instances.length && !store.pending.length" class="flex flex-col items-center gap-3 py-10 text-center">
           <img :src="mascot" alt="" class="pixelated anim-bob size-24 opacity-90" />
           <p class="text-[16px] font-semibold">{{ t.library.empty }}</p>
           <p class="text-muted">{{ t.library.emptyHint }}</p>
+          <GetStarted />
         </div>
         <p v-else-if="store.loaded && !sections.length" class="py-16 text-center text-faint">{{ t.common.nothingFound }}</p>
   

@@ -6,6 +6,8 @@ import type { Instance } from '../api/types'
 import mascot from '../assets/mascot.png'
 import ContextMenu from '../components/ContextMenu.vue'
 import CreateInstanceDialog from '../components/CreateInstanceDialog.vue'
+import GettingStarted from '../components/GettingStarted.vue'
+import GetStarted from '../components/GetStarted.vue'
 import InstanceActionDialogs from '../components/InstanceActionDialogs.vue'
 import InstanceIcon from '../components/InstanceIcon.vue'
 import UiIcon from '../components/UiIcon.vue'
@@ -91,17 +93,25 @@ function openMenu(e: MouseEvent, inst: Instance) {
         </div>
         <p v-if="store.loaded && store.instances.length && !sections.length" class="px-3 py-6 text-center text-faint">{{ t.common.nothingFound }}</p>
       </nav>
-      <button class="flex h-10 shrink-0 items-center gap-2 border-t border-line px-3 text-[13px] text-muted hover:bg-hover hover:text-fg" @click="showCreate = true">
+      <GettingStarted />
+      <button
+        class="flex h-10 shrink-0 items-center gap-2 border-t border-line px-3 text-[13px]"
+        :class="store.loaded && !store.instances.length ? 'animate-pulse bg-accent font-semibold text-white' : 'text-muted hover:bg-hover hover:text-fg'"
+        @click="showCreate = true"
+      >
         <UiIcon name="add" :icon="Plus" :size="16" class="text-icon" />{{ t.toolbar.add }}
       </button>
     </aside>
 
     <div class="min-w-0 flex-1">
       <InstanceView v-if="current" :id="current.id" />
-      <div v-else-if="store.loaded" class="flex h-full flex-col items-center justify-center gap-3 text-center">
+      <div v-else-if="store.loaded" class="flex h-full flex-col items-center gap-3 overflow-y-auto px-6 py-8 text-center" :class="store.instances.length ? 'justify-center' : ''">
         <img :src="mascot" alt="" class="pixelated anim-bob size-24 opacity-90" />
         <p class="text-[16px] font-semibold">{{ store.instances.length ? t.steam.pick : t.library.empty }}</p>
-        <p v-if="!store.instances.length" class="text-muted">{{ t.library.emptyHint }}</p>
+        <template v-if="!store.instances.length && !store.pending.length">
+          <p class="text-muted">{{ t.library.emptyHint }}</p>
+          <GetStarted />
+        </template>
       </div>
     </div>
 

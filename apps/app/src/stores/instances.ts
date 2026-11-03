@@ -117,6 +117,7 @@ export const useInstancesStore = defineStore('instances', () => {
     createFromPack({ name: name || baseName(path).replace(/\.(mrpack|zip)$/i, ''), group: group ?? null }, () => api.importModpackFile(path, name))
   const importModpackUrl = (url: string, name?: string, group?: string) =>
     createFromPack({ name: name || url, group: group ?? null }, () => api.importModpackUrl(url, name))
+  const importPrism = (path: string, name: string) => createFromPack({ name, group: null }, () => api.importPrismInstance(path))
   const installModpack = (version: ProjectVersion, name: string, group?: string) =>
     createFromPack({ name: name || version.name, group: group ?? null }, () => api.installModpackVersion(version, name || undefined))
   const installFtbPack = (packId: number, versionId: number, name: string, group?: string) =>
@@ -243,6 +244,6 @@ export const useInstancesStore = defineStore('instances', () => {
 
   return {
     instances, pending, loaded, crashes, instancesDir, groups, byId, stateOf, sessionsOf, liveSessionsOf, logOf, refresh, upsert, create, rename, copy, setIcon, resetIcon, setGroup,
-    updateSettings, changeVersions, setComponentDisabled, remove, importModpack, importModpackUrl, installFtbPack, installModpack, updateModpack, launch, kill, killSession, dismissCrash, clearLog, init,
+    updateSettings, changeVersions, setComponentDisabled, remove, importModpack, importModpackUrl, importPrism, installFtbPack, installModpack, updateModpack, launch, kill, killSession, dismissCrash, clearLog, init,
   }
 })

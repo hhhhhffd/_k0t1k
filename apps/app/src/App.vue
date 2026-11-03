@@ -24,6 +24,7 @@ import { useSettingsStore } from './stores/settings'
 import { useTasksStore } from './stores/tasks'
 import { useUpdateStore } from './stores/update'
 import OnboardingView from './views/OnboardingView.vue'
+import WelcomeView from './views/WelcomeView.vue'
 import SteamLibraryView from './views/SteamLibraryView.vue'
 
 const settings = useSettingsStore()
@@ -36,6 +37,8 @@ const customization = useCustomizationStore()
 // `undefined` until the backend has said whether the launcher still has to ask where to live
 const onboarding = ref<OnboardingInfo | null | undefined>(undefined)
 const relocationReport = ref<RelocationReport | null>(null)
+// Decided once after loading: adding an account or an instance during the welcome must not close it.
+const welcome = ref(false)
 
 onMounted(async () => {
   // tasks first so no progress event emitted during startup is missed
@@ -45,6 +48,8 @@ onMounted(async () => {
   await tasks.guard(() => Promise.all([settings.load(), instances.init()]))
   // after the settings: theme files and the chosen cat or icon set apply on top of them
   await customization.refresh()
+  const loaded = settings.settings
+  welcome.value = !!loaded && !loaded.onboarding.welcomeDone && !loaded.accounts.length && !instances.instances.length
   if (settings.settings?.updates.checkOnStartup) void update.check(true, true, true)
   const report = await tasks.guard(getRelocationReport)
   if (!report) return
@@ -58,6 +63,7 @@ onMounted(async () => {
   <div :key="language" class="flex h-full flex-col">
     <TitleBar />
     <OnboardingView v-if="onboarding" :info="onboarding" />
+    <WelcomeView v-else-if="onboarding === null && welcome" @done="welcome = false" />
     <template v-else-if="onboarding === null">
       <SteamNav v-if="layout.mode === 'steam'" />
       <MainToolbar v-else-if="layout.toolbar === 'top'" />

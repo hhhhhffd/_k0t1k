@@ -134,5 +134,13 @@ export const useSettingsStore = defineStore('settings', () => {
     await load()
   }
 
-  return { settings, themeFiles, load, setThemeFiles, save, setUi, reapply, addAccount, removeAccount, selectAccount }
+  /** Remembers a finished first-run step; the backend owns the flags, so the local copy is updated too. */
+  async function markOnboarding(step: 'welcome' | 'checklist' | 'instanceTour') {
+    await api.markOnboarding(step)
+    if (!settings.value) return
+    const flag = { welcome: 'welcomeDone', checklist: 'checklistHidden', instanceTour: 'instanceTourDone' } as const
+    settings.value.onboarding[flag[step]] = true
+  }
+
+  return { settings, themeFiles, load, setThemeFiles, save, setUi, reapply, addAccount, removeAccount, selectAccount, markOnboarding }
 })

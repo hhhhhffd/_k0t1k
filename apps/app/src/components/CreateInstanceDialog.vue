@@ -19,6 +19,7 @@ import McVersionList from './McVersionList.vue'
 import ModalDialog from './ModalDialog.vue'
 import PackBrowser, { type PackChoice } from './PackBrowser.vue'
 
+const props = defineProps<{ initialPage?: 'custom' | 'import' }>()
 const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
@@ -34,7 +35,7 @@ const pages: { id: Page; logo?: string }[] = [
   { id: 'curseForge', logo: curseforgeLogo },
   { id: 'ftb', logo: ftbLogo },
 ]
-const page = ref<Page>('custom')
+const page = ref<Page>(props.initialPage ?? 'custom')
 
 const name = ref('')
 const group = ref('')
