@@ -878,6 +878,10 @@ export const en = {
   },
   titlebar: { window: 'Window controls', minimize: 'Minimize', maximize: 'Maximize', restore: 'Restore', resize: 'Drag to resize the window' },
   themes: {
+    font: 'Interface font',
+    fontDefault: 'Default',
+    fontSearch: 'Search fonts',
+    fontHint: 'Fonts installed on this computer',
     title: 'Custom themes',
     hint: 'Create a theme based on a built-in one, or pick your own to change its colors.',
     base: 'Base',

@@ -41,6 +41,11 @@ const catOptions = computed(() => [
   { value: 'mascot', label: t.settings.mascotCat },
   ...customization.catPacks.map((p) => ({ value: p.id, label: p.name, hint: p.kind === 'video' ? t.settings.video : undefined })),
 ])
+const fontOptions = computed(() => [
+  { value: '', label: t.themes.fontDefault },
+  // the family is quoted for the preview style; names come from the OS list, which has no quotes or backslashes
+  ...(store.systemFonts ?? []).map((name) => ({ value: name, label: name, fontFamily: `"${name.replace(/["\\]/g, '')}"` })),
+])
 const iconSetOptions = computed(() => [
   { value: '', label: t.settings.builtinIcons },
   ...customization.iconSets.map((set) => ({ value: set.id, label: set.name, hint: `${Object.keys(set.files).length}` })),
@@ -161,6 +166,7 @@ onMounted(async () => {
   if (!update.status && s.value?.updates.checkOnStartup) void update.check(false, true)
   system.value = (await tasks.guard(getSystemInfo)) ?? null
   await tasks.guard(plugins.load)
+  void tasks.guard(store.loadSystemFonts)
   await loadManagedJava()
 })
 
@@ -368,6 +374,17 @@ function setSharedDefault(folder: SharedFolder, on: boolean) {
                 <Check v-if="s.ui.theme === th.id" :size="15" style="color: var(--c-accent)" />
               </div>
             </button>
+          </div>
+          <div class="mt-4 grid grid-cols-[160px_1fr] items-center gap-x-3">
+            <span><span class="label block">{{ t.themes.font }}</span><span class="text-[12px] text-faint">{{ t.themes.fontHint }}</span></span>
+            <SelectMenu
+              :model-value="s.ui.font ?? ''"
+              :options="fontOptions"
+              searchable
+              :search-placeholder="t.themes.fontSearch"
+              :aria-label="t.themes.font"
+              @update:model-value="store.setUi({ font: $event || null })"
+            />
           </div>
         </section>
         <ThemeEditor />

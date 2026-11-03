@@ -54,6 +54,7 @@
  *   list_cat_packs()                                         -> CatPack[]  (catpacks/; allows the asset protocol)
  *   list_icon_sets()                                         -> IconSet[]  (iconsets/<set>/<key>.png|svg|gif|webp; allows the asset protocol)
  *   list_theme_files()                                       -> ThemeFiles  (themes/*.json, ids `file:<name>`)
+ *   list_system_fonts()                                      -> string[]  (installed font families, sorted; for the interface font picker)
  *   open_shared_folder(folder: SharedFolder)                 -> void  (creates shared/<folder> if missing)
  *   set_data_dir(path: string | null)                        -> boolean  (true = restart needed; data is not moved; null = default location)
  * Onboarding / install (Windows; the launcher asks where to live when its exe sits in Desktop, Downloads or Documents,
@@ -353,6 +354,7 @@ export const listIconLibrary = () => call<string[]>('list_icon_library')
 export const listCatPacks = () => call<CatPack[]>('list_cat_packs')
 export const listIconSets = () => call<IconSet[]>('list_icon_sets')
 export const listThemeFiles = () => call<ThemeFiles>('list_theme_files')
+export const listSystemFonts = () => call<string[]>('list_system_fonts')
 export const openSharedFolder = (folder: SharedFolder) => call<void>('open_shared_folder', { folder })
 export const setDataDir = (path: string | null) => call<boolean>('set_data_dir', { path })
 

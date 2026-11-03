@@ -711,6 +711,7 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     case 'list_icon_library': return []
     case 'list_cat_packs': return [] satisfies CatPack[]
     case 'list_icon_sets': return [] satisfies IconSet[]
+    case 'list_system_fonts': return ['Arial', 'Bahnschrift', 'Calibri', 'Cambria', 'Candara', 'Cascadia Code', 'Comic Sans MS', 'Consolas', 'Constantia', 'Corbel', 'Courier New', 'Segoe Print', 'Franklin Gothic Medium', 'Gabriola', 'Georgia', 'Impact', 'Inter', 'Lucida Console', 'Microsoft YaHei', 'Palatino Linotype', 'Roboto', 'Segoe UI', 'Segoe UI Variable', 'Sitka', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'Yu Gothic', 'DejaVu Sans'] satisfies string[]
     case 'list_theme_files': return { themes: [], errors: [] } satisfies ThemeFiles
     // `?onboarding` in the URL previews the first-run screen (`?onboarding=temp` for the zip variant)
     case 'get_onboarding': {

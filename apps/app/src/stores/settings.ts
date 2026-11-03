@@ -54,6 +54,16 @@ function applyUi(theme: string, lite: boolean, custom: CustomTheme[]) {
   }
 }
 
+/** Same stack as `--font-sans` in style.css; the chosen font goes in front of it. */
+const DEFAULT_FONT_STACK = "'Segoe UI Variable Text', 'Segoe UI', Inter, system-ui, sans-serif"
+
+/** The name was validated by the backend (no quotes, backslashes or other characters that end a CSS string). */
+function applyFont(font: string | null | undefined) {
+  const root = document.documentElement
+  if (font) root.style.setProperty('--font-sans', `"${font}", ${DEFAULT_FONT_STACK}`)
+  else root.style.removeProperty('--font-sans')
+}
+
 /** Zoom that suits the screen: a 1440p or larger screen at 100 % Windows scaling gets a bigger interface. */
 export function autoScale(): number {
   const width = window.screen.width
@@ -87,6 +97,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<GlobalSettings | null>(null)
   /** Themes from the launcher's `themes` folder; chosen like custom themes, edited only as files. */
   const themeFiles = ref<CustomTheme[]>([])
+  /** Installed font families for the font picker; read once, the list does not change while the launcher runs. */
+  const systemFonts = ref<string[] | null>(null)
   const allThemes = () => [...(settings.value?.ui.customThemes ?? []), ...themeFiles.value]
 
   async function load() {
@@ -94,7 +106,12 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value = loaded
     setLanguage(loaded.ui.language)
     applyUi(loaded.ui.theme, loaded.ui.liteMode, allThemes())
+    applyFont(loaded.ui.font)
     void applyScale(loaded.ui.scale)
+  }
+
+  async function loadSystemFonts() {
+    systemFonts.value ??= await api.listSystemFonts()
   }
 
   /** Persist the current (already mutated) settings. */
@@ -107,6 +124,7 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value.ui = { ...settings.value.ui, ...patch }
     if (patch.language) setLanguage(patch.language)
     if ('scale' in patch) void applyScale(patch.scale)
+    if ('font' in patch) applyFont(patch.font)
     reapply()
     await save()
   }
@@ -142,5 +160,5 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value.onboarding[flag[step]] = true
   }
 
-  return { settings, themeFiles, load, setThemeFiles, save, setUi, reapply, addAccount, removeAccount, selectAccount, markOnboarding }
+  return { settings, themeFiles, systemFonts, loadSystemFonts, load, setThemeFiles, save, setUi, reapply, addAccount, removeAccount, selectAccount, markOnboarding }
 })

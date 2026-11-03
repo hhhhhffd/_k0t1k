@@ -8,6 +8,8 @@ export interface SelectOption {
   label: string
   /** Muted text shown at the right of the item. */
   hint?: string
+  /** CSS font-family value; renders the label in that font (a preview for font pickers). */
+  fontFamily?: string
 }
 
 const props = defineProps<{
@@ -17,6 +19,8 @@ const props = defineProps<{
   disabled?: boolean
   /** Adds a filter field; meant for long lists such as Minecraft versions. */
   searchable?: boolean
+  /** Replaces the default search field placeholder. */
+  searchPlaceholder?: string
 }>()
 const model = defineModel<string>({ required: true })
 
@@ -181,7 +185,7 @@ onBeforeUnmount(() => {
       @click="open ? close() : openMenu()"
       @keydown="onKey"
     >
-      <span class="min-w-0 flex-1 truncate" :class="selected ? '' : 'text-faint'">{{ selected?.label ?? placeholder ?? '' }}</span>
+      <span class="min-w-0 flex-1 truncate" :class="selected ? '' : 'text-faint'" :style="{ fontFamily: selected?.fontFamily }">{{ selected?.label ?? placeholder ?? '' }}</span>
       <ChevronDown :size="15" class="shrink-0 text-faint transition-transform" :class="open ? 'rotate-180' : ''" />
     </button>
 
@@ -204,7 +208,7 @@ onBeforeUnmount(() => {
             ref="searchInput"
             v-model="query"
             class="h-6 min-w-0 flex-1 border-0 bg-transparent p-0 text-fg outline-none placeholder:text-faint"
-            :placeholder="t.common.search"
+            :placeholder="searchPlaceholder ?? t.common.search"
             :aria-label="t.common.search"
             :aria-controls="`${uid}-list`"
             :aria-activedescendant="visible.length ? optionId(active) : undefined"
@@ -223,7 +227,7 @@ onBeforeUnmount(() => {
             @mousemove="active = i"
             @click="choose(i)"
           >
-            <span class="min-w-0 flex-1 truncate">{{ o.label }}</span>
+            <span class="min-w-0 flex-1 truncate" :style="{ fontFamily: o.fontFamily }">{{ o.label }}</span>
             <span v-if="o.hint" class="shrink-0 text-[11px] text-faint">{{ o.hint }}</span>
             <Check v-if="o.value === model" :size="14" class="shrink-0" />
           </li>
