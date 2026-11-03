@@ -980,8 +980,9 @@ async function invoke(cmd: string, input: Args | Uint8Array = {}, headers?: Reco
     }
     case 'import_prism_instance': {
       const path = a.path as string
+      const loader = (a.loader as LoaderId | undefined) ?? 'fabric'
       const inst = newInstance({
-        id: nextId('inst'), name: path.split(/[\\/]/).pop() ?? 'Prism', icon: 'gem', components: components('1.21.1', { id: 'fabric', version: '0.16.10' }),
+        id: nextId('inst'), name: path.split(/[\\/]/).pop() ?? 'Prism', icon: 'gem', components: components('1.21.1', { id: loader, version: '0.16.10' }),
       })
       await fakeTask(`prism:${path}`, `Импорт ${inst.name}`, ['Копирование файлов'], 600)
       instances.push(inst)

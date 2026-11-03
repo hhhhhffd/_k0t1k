@@ -7,6 +7,8 @@ use base64::engine::general_purpose::STANDARD;
 use k0t1k_core::i18n::tr;
 use k0t1k_core::tr_fmt;
 use k0t1k_core::component::MINECRAFT_UID;
+use k0t1k_core::content::modcompat::{loader_of_components, minecraft_of_components};
+use k0t1k_core::meta::MetaClient;
 use k0t1k_core::content::pack_url::{PackUrl, parse_pack_url};
 use k0t1k_core::content::packwiz::PwMod;
 use k0t1k_core::content::{
@@ -364,13 +366,22 @@ pub async fn discover_launcher_instances(app: AppHandle) -> CommandResult<Vec<Pr
 }
 
 /// Creates an instance from an installed Prism/MultiMC instance folder and copies its game files
-/// (`.minecraft`) over. The original is only read; a failed copy removes the new instance again.
+/// (`.minecraft`) over. The original is only read; a failed copy removes the new instance again. With
+/// `loader` the instance gets that loader, at its best version for the instance's Minecraft, instead of
+/// the declared one.
 #[tauri::command]
-pub async fn import_prism_instance(app: AppHandle, state: State<'_, AppState>, path: String) -> CommandResult<ModpackImport> {
+pub async fn import_prism_instance(app: AppHandle, state: State<'_, AppState>, path: String, loader: Option<Loader>) -> CommandResult<ModpackImport> {
     let state = state.inner().clone();
     let source_dir = PathBuf::from(&path);
     let read_dir = source_dir.clone();
-    let imported = blocking(move || prism::read_prism_dir(&read_dir)).await?;
+    let mut imported = blocking(move || prism::read_prism_dir(&read_dir)).await?;
+    if let Some(loader) = loader.filter(|loader| Some(*loader) != loader_of_components(&imported.components)) {
+        let minecraft = minecraft_of_components(&imported.components).unwrap_or_default();
+        // The first entry is the best default: recommended, then the newest release.
+        let versions = MetaClient::new(&state.paths, false).loader_versions(meta_loader(loader), minecraft).await?;
+        let best = versions.first().ok_or_else(|| k0t1k_core::Error::Other(tr_fmt!("No {} version exists for Minecraft {}", "Нет версии {} для Minecraft {}", loader.modrinth_id(), minecraft)))?;
+        imported.components = prism::with_loader(imported.components, loader, &best.version);
+    }
     let label = imported.name.clone();
     let task = format!("prism:{path}");
     let title = tr_fmt!("Importing instance: {label}", "Импорт экземпляра: {label}");
