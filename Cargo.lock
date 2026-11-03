@@ -2789,7 +2789,7 @@ dependencies = [
 
 [[package]]
 name = "k0t1k-app"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -2813,7 +2813,7 @@ dependencies = [
 
 [[package]]
 name = "k0t1k-core"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "age",
  "base64 0.23.1",
