@@ -218,6 +218,9 @@ fn list_files(dir: &Path, relative: &Path, out: &mut Vec<PathBuf>) -> Result<()>
             list_files(&entry.path(), &entry_relative, out)?;
         } else if kind.is_file() {
             out.push(entry_relative);
+        } else {
+            // Links are not followed (no loops, nothing read from outside the instance), so linked worlds or mod folders stay behind.
+            tracing::warn!("not importing {}: links and special files are skipped", entry.path().display());
         }
     }
     Ok(())

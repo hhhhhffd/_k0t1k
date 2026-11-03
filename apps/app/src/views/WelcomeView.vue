@@ -28,7 +28,7 @@ onMounted(() => {
   if (languagePreselected) return
   languagePreselected = true
   const guess = navigator.language.toLowerCase().startsWith('ru') ? 'ru' : 'en'
-  if (guess !== language.value) void settings.setUi({ language: guess })
+  if (guess !== language.value) void tasks.guard(() => settings.setUi({ language: guess }))
 })
 
 const next = () => (step.value < STEPS - 1 ? step.value++ : finish())
@@ -63,7 +63,7 @@ async function finish() {
           class="card p-6 text-center font-mono text-xl font-bold transition-colors"
           :class="language === lang.id ? 'border-accent bg-accent/15 text-accent' : 'hover:bg-hover'"
           :aria-pressed="language === lang.id"
-          @click="settings.setUi({ language: lang.id })"
+          @click="tasks.guard(() => settings.setUi({ language: lang.id }))"
         >
           {{ lang.label }}
         </button>

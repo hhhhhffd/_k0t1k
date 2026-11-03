@@ -54,15 +54,16 @@ const loader = computed(() => loaderOf(props.instance))
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-/* Steam's green play button, from the theme's own "ok" colour */
-.steam-play.btn-primary {
+/* Steam's green play button, from the theme's own "ok" colour. :deep because PlayButton has several roots,
+   so this component's scope attribute does not reach the button. */
+:deep(.steam-play.btn-primary) {
   background: linear-gradient(90deg, var(--c-ok), color-mix(in srgb, var(--c-ok) 75%, white));
   color: #fff;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   min-width: 11rem;
 }
-.steam-play.btn-primary:hover:not(:disabled) {
+:deep(.steam-play.btn-primary:hover:not(:disabled)) {
   filter: brightness(1.08);
 }
 </style>

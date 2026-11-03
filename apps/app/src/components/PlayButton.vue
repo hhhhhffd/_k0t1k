@@ -8,6 +8,9 @@ import { useTasksStore } from '../stores/tasks'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import NoAccountDialog from './NoAccountDialog.vue'
 
+// The template has several roots (the account dialog sits beside the button), so attributes such as
+// SteamPlayBar's class are bound to the button by hand.
+defineOptions({ inheritAttrs: false })
 const props = defineProps<{ instanceId: string; large?: boolean }>()
 const store = useInstancesStore()
 const settings = useSettingsStore()
@@ -53,12 +56,12 @@ function openStopMenu(e: MouseEvent) {
 </script>
 
 <template>
-  <button v-if="state === 'stopped'" data-tour="play" class="btn btn-primary pix" :class="large ? 'btn-lg min-w-36' : 'min-w-24'" @click.stop="launch">
+  <button v-if="state === 'stopped'" v-bind="$attrs" data-tour="play" class="btn btn-primary pix" :class="large ? 'btn-lg min-w-36' : 'min-w-24'" @click.stop="launch">
     <Play :size="large ? 18 : 15" fill="currentColor" />
     {{ t.library.play }}
   </button>
   <!-- the instance has live sessions: Stop acts on all of them, "+" starts one more -->
-  <div v-else data-tour="play" class="flex gap-1.5" @click.stop>
+  <div v-else v-bind="$attrs" data-tour="play" class="flex gap-1.5" @click.stop>
     <button
       class="btn btn-danger flex-1"
       :class="large ? 'btn-lg min-w-36' : 'min-w-24'"

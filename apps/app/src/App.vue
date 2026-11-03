@@ -43,13 +43,18 @@ const welcome = ref(false)
 onMounted(async () => {
   // tasks first so no progress event emitted during startup is missed
   await tasks.init()
-  onboarding.value = (await tasks.guard(getOnboarding)) ?? null
-  if (onboarding.value) return
+  const pending = (await tasks.guard(getOnboarding)) ?? null
+  if (pending) {
+    onboarding.value = pending
+    return
+  }
   await tasks.guard(() => Promise.all([settings.load(), instances.init()]))
   // after the settings: theme files and the chosen cat or icon set apply on top of them
   await customization.refresh()
   const loaded = settings.settings
   welcome.value = !!loaded && !loaded.onboarding.welcomeDone && !loaded.accounts.length && !instances.instances.length
+  // only now: showing the library first would flash it (and start its requests) before the welcome replaces it
+  onboarding.value = null
   if (settings.settings?.updates.checkOnStartup) void update.check(true, true, true)
   const report = await tasks.guard(getRelocationReport)
   if (!report) return

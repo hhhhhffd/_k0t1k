@@ -54,7 +54,10 @@ function next() {
   }
 }
 
-const active = computed(() => !!settings.settings && !settings.settings.onboarding.instanceTourDone && !finished.value)
+// Like the checklist, only for people who came through the welcome: long-time users know the instance page.
+const active = computed(
+  () => !!settings.settings && settings.settings.onboarding.welcomeDone && !settings.settings.onboarding.instanceTourDone && !finished.value,
+)
 const isLast = computed(() => firstAvailable(index.value + 1) >= STEPS.length)
 const bubble = computed(() => {
   const r = target.value

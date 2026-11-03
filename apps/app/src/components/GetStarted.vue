@@ -76,7 +76,12 @@ async function pickPrismFolder() {
 async function importOne(info: PrismInstanceInfo) {
   imported.value = new Set(imported.value).add(info.path)
   emit('chosen')
-  await tasks.guard(() => store.importPrism(info.path, info.name))
+  const done = await tasks.guard(() => store.importPrism(info.path, info.name).then(() => true))
+  if (!done) {
+    const next = new Set(imported.value)
+    next.delete(info.path)
+    imported.value = next
+  }
 }
 function importAll() {
   for (const info of prism.value) if (!imported.value.has(info.path)) void importOne(info)
