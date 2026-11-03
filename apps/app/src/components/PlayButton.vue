@@ -6,6 +6,7 @@ import { useInstancesStore } from '../stores/instances'
 import { useSettingsStore } from '../stores/settings'
 import { useTasksStore } from '../stores/tasks'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
+import NoAccountDialog from './NoAccountDialog.vue'
 
 const props = defineProps<{ instanceId: string; large?: boolean }>()
 const store = useInstancesStore()
@@ -14,6 +15,7 @@ const tasks = useTasksStore()
 
 const state = computed(() => store.stateOf(props.instanceId))
 const live = computed(() => store.liveSessionsOf(props.instanceId))
+const needAccount = ref(false)
 const stopMenu = ref<{ x: number; y: number } | null>(null)
 
 // Stopping one session keeps the menu open, so the rest can be stopped one by one; it goes away with the chevron.
@@ -36,6 +38,11 @@ watch(
 )
 
 function launch() {
+  // Settings are loaded but nobody is signed in: ask for an account instead of failing in the backend.
+  if (settings.settings && !settings.settings.selectedAccountId) {
+    needAccount.value = true
+    return
+  }
   void tasks.guard(() => store.launch(props.instanceId, settings.settings?.selectedAccountId ?? undefined))
 }
 
@@ -78,4 +85,12 @@ function openStopMenu(e: MouseEvent) {
     </button>
     <ContextMenu v-if="stopMenu" :x="stopMenu.x" :y="stopMenu.y" :items="stopItems" @close="stopMenu = null" />
   </div>
+  <NoAccountDialog
+    v-if="needAccount"
+    @close="needAccount = false"
+    @added="
+      needAccount = false
+      launch()
+    "
+  />
 </template>
