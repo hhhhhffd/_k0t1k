@@ -19,7 +19,7 @@ import McVersionList from './McVersionList.vue'
 import ModalDialog from './ModalDialog.vue'
 import PackBrowser, { type PackChoice } from './PackBrowser.vue'
 
-const props = defineProps<{ initialPage?: 'custom' | 'import' }>()
+const props = defineProps<{ initialPage?: 'custom' | 'import' | 'modrinth' }>()
 const emit = defineEmits<{ close: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()

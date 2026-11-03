@@ -17,7 +17,7 @@ const emit = defineEmits<{ chosen: [] }>()
 const store = useInstancesStore()
 const tasks = useTasksStore()
 
-const createPage = ref<'custom' | 'import' | null>(null)
+const createPage = ref<'custom' | 'import' | 'modrinth' | null>(null)
 
 function createClosed() {
   createPage.value = null
@@ -132,7 +132,7 @@ onMounted(() => {
 
 <template>
   <div class="@container w-full max-w-4xl text-left">
-    <div class="grid grid-cols-1 items-start gap-4 @min-[38rem]:grid-cols-2">
+    <div class="grid grid-cols-1 gap-4 @min-[38rem]:grid-cols-2">
     <div class="flex min-w-0 flex-col gap-4">
     <button class="card flex items-center gap-4 border-accent/60 p-4 text-left transition-colors hover:bg-hover" @click="createPage = 'custom'">
       <span class="pix flex size-12 shrink-0 items-center justify-center bg-accent text-white"><Plus :size="26" /></span>
@@ -142,7 +142,7 @@ onMounted(() => {
       </span>
     </button>
 
-    <section class="card flex flex-col gap-2 p-3">
+    <section class="card flex flex-1 flex-col gap-2 p-3">
       <div class="flex items-center justify-between gap-2">
         <div class="min-w-0">
           <h3 class="font-mono text-[13px] font-bold">{{ t.start.prism }}</h3>
@@ -151,7 +151,7 @@ onMounted(() => {
         <button v-if="prism.length > 1" class="btn shrink-0" @click="importAll">{{ t.start.importAll }}</button>
       </div>
       <p v-if="prismLoading" class="py-1 text-faint">{{ t.common.loading }}</p>
-      <ul v-else-if="prism.length" class="flex max-h-56 flex-col overflow-y-auto">
+      <ul v-else-if="prism.length" class="flex max-h-44 flex-col overflow-y-auto">
         <li v-for="info in prism" :key="info.path" class="flex items-center gap-3 rounded-md p-1.5">
           <span class="min-w-0 flex-1">
             <span class="block truncate font-semibold">{{ info.name }}</span>
@@ -165,7 +165,7 @@ onMounted(() => {
         </li>
       </ul>
       <p v-else class="text-faint">{{ t.start.prismEmpty }}</p>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="mt-auto flex flex-wrap items-center gap-2">
         <button class="btn" :disabled="searching" @click="discover">
           <Loader v-if="searching" :size="15" class="animate-spin" /><Search v-else :size="15" />{{ searching ? t.start.discovering : t.start.discover }}
         </button>
@@ -181,7 +181,10 @@ onMounted(() => {
 
     </div>
     <section class="card flex flex-col gap-2 p-3">
-      <h3 class="font-mono text-[13px] font-bold">{{ t.start.popular }}</h3>
+      <div class="min-w-0">
+        <h3 class="font-mono text-[13px] font-bold">{{ t.start.popular }}</h3>
+        <p class="truncate text-[12px] text-faint">{{ t.start.popularHint }}</p>
+      </div>
       <p v-if="popularState === 'loading'" class="py-3 text-center text-faint">{{ t.common.loading }}</p>
       <div v-else-if="popularState === 'failed'" class="flex items-center justify-between gap-3 py-1">
         <span class="text-faint">{{ t.start.popularFailed }}</span>
@@ -197,6 +200,8 @@ onMounted(() => {
           <button class="btn" :disabled="installing.has(hit.projectId)" @click="install(hit)">{{ installing.has(hit.projectId) ? t.common.loading : t.start.install }}</button>
         </li>
       </ul>
+      <!-- the card is as tall as the left column; the catalog link sits at its bottom -->
+      <button v-if="popularState !== 'failed'" class="btn mt-auto self-start" @click="createPage = 'modrinth'"><Search :size="15" />{{ t.start.morePacks }}</button>
     </section>
 
     </div>

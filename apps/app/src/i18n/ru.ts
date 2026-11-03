@@ -687,6 +687,8 @@ export const ru: Dictionary = {
     create: 'Создать экземпляр',
     createHint: 'Выберите версию Minecraft и загрузчик или сборку с Modrinth, CurseForge и FTB.',
     popular: 'Популярные сборки',
+    popularHint: 'Самые скачиваемые на Modrinth',
+    morePacks: 'Все сборки',
     popularFailed: 'Не удалось загрузить сборки. Проверьте подключение.',
     retry: 'Повторить',
     install: 'Установить',

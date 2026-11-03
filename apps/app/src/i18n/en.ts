@@ -686,6 +686,8 @@ export const en = {
     create: 'Create instance',
     createHint: 'Pick a Minecraft version and a loader, or a modpack from Modrinth, CurseForge and FTB.',
     popular: 'Popular modpacks',
+    popularHint: 'Most downloaded on Modrinth',
+    morePacks: 'All modpacks',
     popularFailed: 'Could not load modpacks. Check the connection.',
     retry: 'Retry',
     install: 'Install',
