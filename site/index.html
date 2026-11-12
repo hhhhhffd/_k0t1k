@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>_k0t1k — Minecraft, your way</title>
-<meta name="description" content="Your Minecraft, your way. A launcher for Windows and Linux with mods, modpacks, a Steam-like library and an optional in-game overlay.">
+<meta name="description" content="Your Minecraft, your way. Windows and Linux, with a macOS preview in preparation. Mods, modpacks, a Steam-like library and an optional in-game overlay.">
 <meta name="theme-color" content="#100c19">
 <meta name="color-scheme" content="dark light">
 <link rel="icon" type="image/png" href="assets/mascot.png">
@@ -142,7 +142,7 @@ details p { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
 .download-top h2 { margin-bottom: 12px; }
 .download-cat { width: 100px; image-rendering: pixelated; }
 .download-top p { margin: 0; color: var(--muted); }
-.download-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.download-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 .download-card { padding: 28px; background: var(--base); border: 1px solid var(--line); border-radius: 18px; }
 .download-card h3 { margin: 0 0 4px; font-size: 23px; letter-spacing: -.025em; }
 .download-card > p { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
@@ -168,7 +168,7 @@ dialog img { width: 100%; max-height: calc(94dvh - 90px); object-fit: contain; }
   .hero-top { grid-template-columns: 1fr 1fr; gap: 32px; }
   .nav { gap: 18px; }
   .top .wrap { gap: 20px; }
-  .features { grid-template-columns: repeat(2, 1fr); }
+  .features, .download-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .overlay-panel { padding: 36px; }
   .overlay-grid { gap: 30px; }
   .library, .import-panel, .faq-grid { gap: 38px; }
@@ -261,7 +261,7 @@ dialog img { width: 100%; max-height: calc(94dvh - 90px); object-fit: contain; }
             <a class="btn" href="#download"><span class="en">Get _k0t1k</span><span class="ru">Скачать _k0t1k</span><span aria-hidden="true">↓</span></a>
             <a class="btn secondary" href="#overlay"><span class="en">Meet the overlay</span><span class="ru">Что за оверлей?</span></a>
           </div>
-          <p class="platform-note">Windows · Linux · <span class="en">English &amp; Russian</span><span class="ru">Русский и English</span></p>
+          <p class="platform-note">Windows · Linux · macOS <span class="en">preview</span><span class="ru">превью</span> · <span class="en">English &amp; Russian</span><span class="ru">Русский и English</span></p>
         </div>
       </div>
       <div class="hero-visual">
@@ -379,6 +379,7 @@ dialog img { width: 100%; max-height: calc(94dvh - 90px); object-fit: contain; }
       <div class="section-head"><p class="eyebrow">FAQ</p><h2><span class="en">Before you<br>jump in.</span><span class="ru">Перед тем<br>как начать.</span></h2></div>
       <div>
         <details><summary><span class="en">Does it work on Linux?</span><span class="ru">А на Linux работает?</span></summary><p class="en">Yes. There is an x86_64 AppImage for Ubuntu 22.04 or newer and similar systems. Make the downloaded file executable and run it. Windows needs Windows 10 or newer with WebView2.</p><p class="ru">Да. Есть AppImage для x86_64: Ubuntu 22.04 или новее и похожие системы. Сделай скачанный файл исполняемым и запусти. Для Windows нужна Windows 10 или новее с WebView2.</p></details>
+        <details><summary><span class="en">What about macOS?</span><span class="ru">А что с macOS?</span></summary><p class="en">A native macOS preview is being prepared. A DMG link appears in the downloads section only when the file is attached to the latest release. Check its release notes for the supported architecture and system version. Updates on Mac are installed manually.</p><p class="ru">Готовим нативную preview-сборку для macOS. Ссылка на DMG появляется в разделе скачивания только после добавления файла в последний релиз. Поддерживаемые архитектура и версия системы будут указаны в описании сборки. Обновления на Mac устанавливаются вручную.</p></details>
         <details><summary><span class="en">Do I need to find Java myself?</span><span class="ru">Java нужно искать самому?</span></summary><p class="en">Not with automatic Java enabled. The launcher selects and downloads a runtime for your Minecraft version. The first game launch also downloads game files and assets, so allow some time for it.</p><p class="ru">С включённым автовыбором — нет. Лаунчер подбирает и скачивает Java под версию Minecraft. Первый запуск также загружает игру и ресурсы, поэтому ему понадобится время.</p></details>
         <details><summary><span class="en">Is the overlay required?</span><span class="ru">Оверлей обязателен?</span></summary><p class="en">No. It is off by default. Enable it in Settings for Minecraft 1.8 or newer, then restart the game. Before enabling it, read the chat-history notice above: private messages are saved too.</p><p class="ru">Нет, по умолчанию он выключен. Включи его в настройках для Minecraft 1.8 или новее и перезапусти игру. Перед включением прочитай предупреждение об истории чата выше: личные сообщения тоже сохраняются.</p></details>
         <details><summary><span class="en">What if something breaks?</span><span class="ru">Что делать, если что-то сломалось?</span></summary><p class="en">This is an open beta. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Tell us on Discord</a> or <a href="https://github.com/hhhhhffd/_k0t1k/issues">open a GitHub issue</a>. Check logs for private information before sharing them.</p><p class="ru">Это открытая бета. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Расскажи в Discord</a> или <a href="https://github.com/hhhhhffd/_k0t1k/issues">создай issue на GitHub</a>. Перед отправкой проверь логи на личные данные.</p></details>
@@ -392,6 +393,7 @@ dialog img { width: 100%; max-height: calc(94dvh - 90px); object-fit: contain; }
       <div class="download-grid">
         <article class="download-card"><h3>Windows</h3><p><span class="en">Portable executable · .exe</span><span class="ru">Портативный исполняемый файл · .exe</span></p><a class="btn" data-download="_k0t1k.exe" href="https://github.com/hhhhhffd/_k0t1k/releases/latest/download/_k0t1k.exe"><span class="en">Download for Windows ↓</span><span class="ru">Скачать для Windows ↓</span><span class="dl-size" data-asset="_k0t1k.exe"></span></a><p class="requirement"><span class="en">Windows 10 or newer with WebView2. Give the launcher its own folder for game files and settings.</span><span class="ru">Windows 10 или новее с WebView2. Выдели лаунчеру свою папку для игры и настроек.</span></p><p class="asset-missing" data-missing="_k0t1k.exe" hidden><span class="en">This file is not listed in the latest release. The button opens release details instead.</span><span class="ru">В последнем релизе нет этого файла. Кнопка откроет страницу релиза.</span></p></article>
         <article class="download-card"><h3>Linux</h3><p>AppImage · x86_64</p><a class="btn secondary" data-download="_k0t1k-x86_64.AppImage" href="https://github.com/hhhhhffd/_k0t1k/releases/latest/download/_k0t1k-x86_64.AppImage"><span class="en">Download for Linux ↓</span><span class="ru">Скачать для Linux ↓</span><span class="dl-size" data-asset="_k0t1k-x86_64.AppImage"></span></a><p class="requirement"><span class="en">Ubuntu 22.04 or newer and similar systems. Make the AppImage executable before running it.</span><span class="ru">Ubuntu 22.04 или новее и похожие системы. Перед запуском сделай AppImage исполняемым.</span></p><p class="asset-missing" data-missing="_k0t1k-x86_64.AppImage" hidden><span class="en">This file is not listed in the latest release. The button opens release details instead.</span><span class="ru">В последнем релизе нет этого файла. Кнопка откроет страницу релиза.</span></p></article>
+        <article class="download-card"><h3>macOS <span class="tag">Preview</span></h3><p><span class="en">Experimental build · .dmg</span><span class="ru">Экспериментальная сборка · .dmg</span></p><a class="btn secondary" data-download="_k0t1k-macos.dmg" href="https://github.com/hhhhhffd/_k0t1k/releases/latest"><span class="en">macOS release ↗</span><span class="ru">Релиз для macOS ↗</span><span class="dl-size" data-asset="_k0t1k-macos.dmg"></span></a><p class="requirement"><span class="en">Check release notes for the supported Mac architecture and macOS version. Updates are installed manually; automatic installation currently supports Windows and Linux only.</span><span class="ru">Архитектура Mac и версия macOS указаны в описании сборки. Обновления устанавливаются вручную: автоматическая установка пока работает только в Windows и Linux.</span></p><p class="asset-missing" data-missing="_k0t1k-macos.dmg"><span class="en">The macOS download appears here once its build is published. Until then, the button opens GitHub Releases.</span><span class="ru">Ссылка на DMG появится после публикации сборки. Пока кнопка открывает GitHub Releases.</span></p></article>
       </div>
       <p class="release-line" role="status"><span class="en">Open beta</span><span class="ru">Открытая бета</span><span id="release-version"></span> · <span id="release-fallback"><span class="en">Version and file sizes on </span><span class="ru">Версия и размеры файлов — на </span></span><a href="https://github.com/hhhhhffd/_k0t1k/releases/latest"><span class="en">GitHub Releases ↗</span><span class="ru">GitHub Releases ↗</span></a></p>
       <div class="download-bottom"><p><span class="en">Beta means bugs can happen. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Help us find them on Discord ↗</a></span><span class="ru">В бете бывают баги. <a href="https://discord.gg/zxnMAfUvJ" rel="noopener">Помоги найти их в Discord ↗</a></span></p><a href="https://github.com/hhhhhffd/_k0t1k"><span class="en">Explore the source ↗</span><span class="ru">Посмотреть исходники ↗</span></a></div>
@@ -410,8 +412,8 @@ dialog img { width: 100%; max-height: calc(94dvh - 90px); object-fit: contain; }
   var dialog = document.getElementById('lb');
   var current = null;
   var descriptions = {
-    en: 'Your Minecraft, your way. A launcher for Windows and Linux with mods, modpacks, a Steam-like library and an optional in-game overlay.',
-    ru: 'Minecraft по-твоему. Лаунчер для Windows и Linux: моды, сборки, библиотека в духе Steam и внутриигровой оверлей по желанию.'
+    en: 'Your Minecraft, your way. Windows and Linux, with a macOS preview in preparation. Mods, modpacks, a Steam-like library and an optional in-game overlay.',
+    ru: 'Minecraft по-твоему. Windows и Linux, готовится превью для macOS. Моды, сборки, библиотека в духе Steam и внутриигровой оверлей по желанию.'
   };
 
   function fillLightbox() {
@@ -492,10 +494,10 @@ dialog img { width: 100%; max-height: calc(94dvh - 90px); object-fit: contain; }
       document.getElementById('release-version').textContent = ' ' + release.tag_name;
       document.querySelectorAll('[data-download]').forEach(function (link) {
         var asset = release.assets.find(function (item) { return item.name === link.dataset.download; });
-        if (!asset) {
-          link.href = 'https://github.com/hhhhhffd/_k0t1k/releases/latest';
-          document.querySelector('[data-missing="' + link.dataset.download + '"]').hidden = false;
-        }
+        link.href = asset
+          ? 'https://github.com/hhhhhffd/_k0t1k/releases/latest/download/' + encodeURIComponent(asset.name)
+          : 'https://github.com/hhhhhffd/_k0t1k/releases/latest';
+        document.querySelector('[data-missing="' + link.dataset.download + '"]').hidden = Boolean(asset);
       });
       var allSizesAvailable = true;
       document.querySelectorAll('.dl-size').forEach(function (element) {
