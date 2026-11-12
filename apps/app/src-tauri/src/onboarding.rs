@@ -53,6 +53,8 @@ pub struct StartupArgs {
     pub portable_here: bool,
     /// The executable this one replaces.
     pub finish_relocation: Option<PathBuf>,
+    #[cfg(target_os = "macos")]
+    pub finish_macos_update: Option<PathBuf>,
     pub desktop_shortcut: bool,
 }
 
@@ -69,6 +71,11 @@ impl StartupArgs {
                 Some(FINISH_RELOCATION) => {
                     let old_exe = args.next().ok_or_else(|| format!("{FINISH_RELOCATION} needs a path"))?;
                     parsed.finish_relocation = Some(PathBuf::from(old_exe));
+                }
+                #[cfg(target_os = "macos")]
+                Some(crate::update::macos::FINISH_UPDATE) => {
+                    let stage = args.next().ok_or_else(|| format!("{} needs a path", crate::update::macos::FINISH_UPDATE))?;
+                    parsed.finish_macos_update = Some(PathBuf::from(stage));
                 }
                 Some(PORTABLE_HERE) => parsed.portable_here = true,
                 Some(DESKTOP_SHORTCUT) => parsed.desktop_shortcut = true,
@@ -116,6 +123,17 @@ pub fn run_startup_tasks(args: &StartupArgs) -> Option<RelocationReport> {
             Ok(true) => {}
             Ok(false) => report.problems.push(format!("the previous launcher process {pid} did not exit within {WAIT_FOR_EXIT:?}")),
             Err(error) => report.problems.push(error.to_string()),
+        }
+    }
+    #[cfg(target_os = "macos")]
+    if let Some(stage) = &args.finish_macos_update {
+        // Never delete the recovery bundle if the predecessor might still be using it.
+        if report.problems.is_empty() {
+            let result = args.wait_for.ok_or_else(|| AppError::new("macOS update cleanup requires a predecessor process id"))
+                .and_then(|pid| crate::update::macos::finish_update(stage, pid));
+            if let Err(error) = result {
+                report.problems.push(error.to_string());
+            }
         }
     }
     if let Some(old_exe) = &args.finish_relocation {
@@ -568,6 +586,15 @@ mod tests {
         assert_eq!(parse(&[]).unwrap(), StartupArgs::default());
         assert!(parse(&["--wait-for", "soon"]).is_err());
         assert!(parse(&["--finish-relocation"]).is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn parses_macos_update_cleanup_arguments() {
+        let args = parse(&["--wait-for", "42", "--finish-macos-update", "/Applications/.k0t1k-update-test"]).unwrap();
+        assert_eq!(args.wait_for, Some(42));
+        assert_eq!(args.finish_macos_update, Some(PathBuf::from("/Applications/.k0t1k-update-test")));
+        assert!(parse(&["--finish-macos-update"]).is_err());
     }
 
     #[test]

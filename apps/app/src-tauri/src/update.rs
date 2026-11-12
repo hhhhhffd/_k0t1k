@@ -4,8 +4,11 @@
 //! a running image, Linux keeps the mounted AppImage open), the verified `<file>.new` takes its name,
 //! and the new process is started with `--wait-for <pid>`, which makes it wait for this process to exit
 //! before the single-instance plugin is created. The next start deletes the leftovers.
+//! macOS uses a separately verified complete .app bundle and owned recovery staging (see `macos`).
 
+#[cfg(any(test, not(target_os = "macos")))]
 use std::ffi::OsString;
+#[cfg(any(test, not(target_os = "macos")))]
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,7 +20,10 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 
 use crate::error::{AppError, CommandResult};
-use crate::events::{self, progress_fn, tracked};
+use crate::events;
+#[cfg(not(target_os = "macos"))]
+use crate::events::{progress_fn, tracked};
+#[cfg(not(target_os = "macos"))]
 use crate::onboarding::{PORTABLE_HERE, WAIT_FOR, spawn_detached};
 use crate::state::AppState;
 
@@ -25,6 +31,9 @@ use crate::state::AppState;
 /// a game runs) shows the notice without asking GitHub again.
 static LAST_CHECK: Mutex<Option<UpdateStatus>> = Mutex::new(None);
 static INSTALLING: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_os = "macos")]
+pub(crate) mod macos;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +48,7 @@ pub struct UpdateStatus {
 }
 
 /// `<exe>.<suffix>` in the exe's own folder.
+#[cfg(any(test, not(target_os = "macos")))]
 fn sibling(exe: &Path, suffix: &str) -> PathBuf {
     let mut name = OsString::from(exe.as_os_str());
     name.push(suffix);
@@ -47,6 +57,7 @@ fn sibling(exe: &Path, suffix: &str) -> PathBuf {
 
 /// The file an update replaces: the exe on Windows, the AppImage on Linux (the running executable is
 /// inside the AppImage's read-only mount or a temporary extraction of it).
+#[cfg(not(target_os = "macos"))]
 fn launcher_file() -> Result<PathBuf, String> {
     if cfg!(target_os = "linux") {
         std::env::var_os("APPIMAGE").map(PathBuf::from).ok_or_else(|| {
@@ -61,12 +72,20 @@ fn launcher_file() -> Result<PathBuf, String> {
 }
 
 fn install_blocked() -> Option<String> {
-    if !cfg!(any(windows, target_os = "linux")) {
-        return Some(tr("Installing updates is only supported on Windows and Linux", "Установка обновлений поддерживается только в Windows и Linux").to_owned());
+    if !cfg!(any(windows, target_os = "linux", target_os = "macos")) {
+        return Some(tr("Installing updates is not supported on this platform", "Установка обновлений не поддерживается на этой платформе").to_owned());
     }
     if cfg!(debug_assertions) {
         return Some(tr("This is a development build, it cannot replace itself", "Это сборка для разработки, она не может заменить себя").to_owned());
     }
+    #[cfg(target_os = "macos")]
+    { macos::install_blocked() }
+    #[cfg(not(target_os = "macos"))]
+    { install_file_blocked() }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn install_file_blocked() -> Option<String> {
     let exe = match launcher_file() {
         Ok(exe) => exe,
         Err(reason) => return Some(reason),
@@ -83,6 +102,10 @@ fn install_blocked() -> Option<String> {
 }
 
 /// Deletes the files a finished or failed update leaves next to the exe. Failures are logged.
+#[cfg(target_os = "macos")]
+pub fn remove_leftovers() {}
+
+#[cfg(not(target_os = "macos"))]
 pub fn remove_leftovers() {
     let Ok(exe) = launcher_file() else {
         return;
@@ -159,6 +182,7 @@ fn ensure_idle(state: &AppState) -> CommandResult<()> {
 }
 
 /// What a failed [`swap_files`] left behind.
+#[cfg(any(test, not(target_os = "macos")))]
 #[derive(Debug)]
 struct SwapError {
     error: std::io::Error,
@@ -168,6 +192,7 @@ struct SwapError {
 
 /// Puts `new` in place of `exe`, keeping the old file as `old`. Any failure leaves `exe` as it was,
 /// or says (`restored`) that it could not.
+#[cfg(any(test, not(target_os = "macos")))]
 fn swap_files(exe: &Path, new: &Path, old: &Path) -> Result<(), SwapError> {
     let early = |error| SwapError { error, restored: true };
     match std::fs::remove_file(old) {
@@ -182,6 +207,7 @@ fn swap_files(exe: &Path, new: &Path, old: &Path) -> Result<(), SwapError> {
     Ok(())
 }
 
+#[cfg(not(target_os = "macos"))]
 fn manual_recovery(exe: &Path, old: &Path, cause: &dyn std::fmt::Display) -> AppError {
     AppError::new(tr_fmt!(
         "The update failed ({cause}) and the launcher could not be put back. Rename {old} to {exe} to restore it.",
@@ -209,6 +235,7 @@ pub async fn install_update(app: AppHandle, state: State<'_, AppState>, version:
     result
 }
 
+#[cfg(not(target_os = "macos"))]
 fn remove_new(new: &Path) {
     if let Err(error) = std::fs::remove_file(new)
         && error.kind() != std::io::ErrorKind::NotFound
@@ -218,7 +245,6 @@ fn remove_new(new: &Path) {
 }
 
 async fn install(app: &AppHandle, state: &AppState, version: &str) -> CommandResult<()> {
-    let exe = launcher_file().map_err(AppError::new)?;
     let current_version = app.package_info().version.to_string();
     let client = update::http_client();
     let UpdateCheck::Available { release } = update::check(&current_version).await.map_err(|error| failure(&error))? else {
@@ -231,6 +257,23 @@ async fn install(app: &AppHandle, state: &AppState, version: &str) -> CommandRes
             release.version
         )));
     }
+    #[cfg(target_os = "macos")]
+    {
+        let prepared = macos::prepare(app, &client, &release, &current_version).await?;
+        QUITTING.store(true, Ordering::SeqCst);
+        ensure_idle(state)?;
+        tokio::task::spawn_blocking(move || macos::replace_and_restart(prepared)).await??;
+        let app = app.clone();
+        tokio::task::spawn_blocking(move || crate::window::exit(&app)).await?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    { install_file(app, state, &client, &release, &current_version).await }
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn install_file(app: &AppHandle, state: &AppState, client: &reqwest::Client, release: &update::ReleaseInfo, current_version: &str) -> CommandResult<()> {
+    let exe = launcher_file().map_err(AppError::new)?;
     let (new, old) = (sibling(&exe, ".new"), sibling(&exe, ".old"));
     let title = tr("Launcher update", "Обновление лаунчера");
     let progress = progress_fn(app, update::TASK, title);

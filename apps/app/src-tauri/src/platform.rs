@@ -1,4 +1,4 @@
-//! The few system calls onboarding and updates need: waiting for a process to exit (Windows and Linux)
+//! The few system calls onboarding and updates need: waiting for a process to exit (Windows, Linux, macOS)
 //! and creating `.lnk` shortcuts (Windows). Elsewhere they fail with an explicit error.
 
 use std::path::Path;
@@ -46,9 +46,51 @@ pub fn wait_for_exit(pid: u32, timeout: Duration) -> CommandResult<bool> {
     }
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+pub fn wait_for_exit(pid: u32, timeout: Duration) -> CommandResult<bool> {
+    // Use the system ps, not PATH or a shell. Exit 1 with no output means the process is gone.
+    if pid == 0 || pid == std::process::id() {
+        return Err(AppError::new("invalid predecessor process id"));
+    }
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        let output = std::process::Command::new("/bin/ps").args(["-p", &pid.to_string(), "-o", "stat="]).output()?;
+        let status = String::from_utf8_lossy(&output.stdout);
+        if (output.status.code() == Some(1) && status.trim().is_empty() && output.stderr.is_empty())
+            || (output.status.success() && status.trim_start().starts_with('Z'))
+        {
+            return Ok(true);
+        }
+        if !output.status.success() || status.trim().is_empty() {
+            return Err(AppError::new(format!("cannot inspect process {pid}: {}", String::from_utf8_lossy(&output.stderr))));
+        }
+        if std::time::Instant::now() >= deadline {
+            return Ok(false);
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 pub fn wait_for_exit(_pid: u32, _timeout: Duration) -> CommandResult<bool> {
-    Err(AppError::new("waiting for a process is only implemented on Windows and Linux"))
+    Err(AppError::new("waiting for a process is not implemented on this platform"))
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod macos_tests {
+    use super::*;
+
+    #[test]
+    fn waits_for_exit_and_rejects_self() {
+        let mut child = std::process::Command::new("/bin/sleep").arg("30").spawn().unwrap();
+        let running = wait_for_exit(child.id(), Duration::ZERO);
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(!running.unwrap());
+        assert!(wait_for_exit(child.id(), Duration::from_secs(1)).unwrap());
+        assert!(wait_for_exit(std::process::id(), Duration::ZERO).is_err());
+        assert!(wait_for_exit(0, Duration::ZERO).is_err());
+    }
 }
 
 /// Writes the shortcut `lnk` that starts `target`, with the target's folder as working directory.
