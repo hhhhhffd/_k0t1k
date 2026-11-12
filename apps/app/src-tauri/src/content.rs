@@ -209,6 +209,46 @@ pub async fn install_version(
     .await
 }
 
+/// Resolves requirements from backend-read JAR descriptors, never from UI-supplied IDs or URLs.
+/// Empty `paths` checks installed mods; nonempty `paths` are inspected before the UI copies them.
+#[tauri::command]
+pub async fn install_missing_mod_dependencies(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    paths: Vec<String>,
+) -> CommandResult<InstallReport> {
+    let state = state.inner().clone();
+    crate::worlds::ensure_stopped(&state, &instance_id)?;
+    let instance = instance_of(&state, &instance_id).await?;
+    let mut ctx = install_context(&state, &instance)?;
+    // Unlike the catalog browser, repairs must not use a disabled loader component.
+    ctx.loaders = loader_of_components(&instance.components)
+        .into_iter()
+        .flat_map(|loader| {
+            if loader == Loader::Quilt {
+                vec![Loader::Quilt, Loader::Fabric]
+            } else {
+                vec![loader]
+            }
+        })
+        .collect();
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    let task = format!("mod-dependencies:{instance_id}");
+    let title = tr(
+        "Installing mod dependencies",
+        "Установка зависимостей модов",
+    );
+    let progress = progress_fn(&app, &task, title);
+    tracked(&app, &task, title, async {
+        Ok(
+            core_content::install_missing_mod_dependencies(&state.clients, &ctx, &paths, &progress)
+                .await?,
+        )
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn list_local_resources(state: State<'_, AppState>, instance_id: String, kind: ResourceKind) -> CommandResult<Vec<LocalResourceView>> {
     let instance = instance_of(&state, &instance_id).await?;

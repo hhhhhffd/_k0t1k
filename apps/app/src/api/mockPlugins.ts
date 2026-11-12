@@ -1,7 +1,7 @@
 // Mock of the plugin commands. The plugins themselves are the real bundled wasm, run in the same worker
 // as in the app; only the file access is faked: jars and packs live in memory.
 import { callPlugin } from '../plugins/host'
-import type { JarScan, LocalResource, LocalResourceKind, PackCompat, PluginId, PluginInfo, ScanResult } from './types'
+import type { InstallReport, JarScan, LocalResource, LocalResourceKind, ModCompat, PackCompat, PluginId, PluginInfo, ScanResult } from './types'
 
 type Args = Record<string, unknown>
 export interface PluginMockContext {
@@ -13,6 +13,8 @@ const PLUGIN_IDS: PluginId[] = ['ratscan', 'packconv']
 const encoder = new TextEncoder()
 const files = new Map<string, Uint8Array>()
 const caches = new Map<string, Map<string, { pluginVersion: string; scannedAt: string; result: ScanResult }>>()
+const modCompatibility = new Map<string, ModCompat[]>()
+let dependencyInstallError: string | null = null
 const fileKey = (instanceId: string, kind: string, fileName: string) => `${instanceId}:${kind}:${fileName}`
 
 // ---- a minimal stored (uncompressed) zip writer, enough for a tiny jar or resource pack ----
@@ -103,6 +105,12 @@ const copyOf = (bytes: Uint8Array) => bytes.slice().buffer
 /** Lets a test put real files into the mock instance (a jar to scan, a pack to convert). */
 export function installTestHook(ctx: PluginMockContext) {
   ;(window as unknown as Record<string, unknown>).__k0t1kMock = {
+    setModCompat(instanceId: string, mods: ModCompat[]) {
+      modCompatibility.set(instanceId, structuredClone(mods))
+    },
+    failNextDependencyInstall(message: string) {
+      dependencyInstallError = message
+    },
     putFile(instanceId: string, kind: LocalResourceKind, fileName: string, bytes: Uint8Array) {
       files.set(fileKey(instanceId, kind, fileName), bytes)
       const list = ctx.resourcesFor(instanceId, kind)
@@ -178,8 +186,36 @@ export async function pluginCommand(cmd: string, a: Args, ctx: PluginMockContext
     }
     case 'mod_compat':
     case 'mod_compat_files':
-      // The real backend reads fabric.mod.json, mods.toml and friends in Rust; the mock jars have none.
-      return { value: [] }
+      // Real descriptor checking happens in Rust. Browser scenarios can seed the advice explicitly.
+      return { value: structuredClone(modCompatibility.get(a.instanceId as string) ?? []) }
+    case 'install_missing_mod_dependencies': {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      if (dependencyInstallError) {
+        const message = dependencyInstallError
+        dependencyInstallError = null
+        throw new Error(message)
+      }
+      const instanceId = a.instanceId as string
+      const mods = modCompatibility.get(instanceId) ?? []
+      const report: InstallReport = { installed: [], blocked: [], unresolvedDependencies: [] }
+      const handled = new Set<string>()
+      for (const mod of mods.filter((mod) => mod.enabled)) {
+        mod.dependencies = mod.dependencies.filter((dep) => {
+          if (dep.installed || dep.id.startsWith('unresolved-')) {
+            if (!report.unresolvedDependencies.includes(dep.id)) report.unresolvedDependencies.push(dep.id)
+            return true
+          }
+          if (handled.has(dep.id)) return false
+          handled.add(dep.id)
+          const fileName = `${dep.id}-mock.jar`
+          ctx.resourcesFor(instanceId, 'mod').push({ fileName, enabled: true, size: 1200, isDir: false, modified: new Date().toISOString(), metadata: null, origin: null })
+          report.installed.push({ platform: 'modrinth', projectId: dep.id, name: dep.id, fileName, isDependency: true })
+          return false
+        })
+      }
+      modCompatibility.set(instanceId, mods.filter((mod) => mod.minecraftMismatch || mod.loaderMismatch || mod.dependencies.length))
+      return { value: report }
+    }
     default:
       return undefined
   }

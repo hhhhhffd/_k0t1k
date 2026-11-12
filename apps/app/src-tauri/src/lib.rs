@@ -145,6 +145,7 @@ pub fn run() {
             content::search_content,
             content::get_project_versions,
             content::install_version,
+            content::install_missing_mod_dependencies,
             content::list_local_resources,
             content::open_content_folder,
             content::open_config_folder,

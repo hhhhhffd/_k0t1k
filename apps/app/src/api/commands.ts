@@ -159,6 +159,7 @@
  *   save_resource_file(raw body, header x-args)              -> string        (new file in the resource folder, never replaces; resolves to the name used)
  *   mod_compat_files(instanceId, paths)                     -> ModCompat[]   (the same check for jars about to be added)
  *   mod_compat(instanceId)                                  -> ModCompat[]   (mod jars made for another Minecraft version or loader, or missing a required mod; unreadable ones are left out)
+ *   install_missing_mod_dependencies(instanceId, paths)      -> InstallReport (verifies and downloads missing Modrinth providers; paths empty: installed mods)
  *   resourcepack_compat(instanceId)                          -> PackCompat[]  (zip packs: declared releases and whether they differ from the instance)
  * Events (backend -> frontend, via emit)
  *   microsoft-login-stage  LoginStage  (a step of finish_microsoft_login has started)
@@ -538,6 +539,8 @@ export function saveResourceFile(instanceId: string, kind: LocalResourceKind, fi
 }
 export const modCompat = (instanceId: string) => call<ModCompat[]>('mod_compat', { instanceId })
 export const modCompatFiles = (instanceId: string, paths: string[]) => call<ModCompat[]>('mod_compat_files', { instanceId, paths })
+export const installMissingModDependencies = (instanceId: string, paths: string[] = []) =>
+  call<InstallReport>('install_missing_mod_dependencies', { instanceId, paths })
 export const resourcepackCompat = (instanceId: string) => call<PackCompat[]>('resourcepack_compat', { instanceId })
 
 // ---- events ----

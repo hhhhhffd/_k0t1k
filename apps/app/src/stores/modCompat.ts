@@ -3,17 +3,23 @@ import { ref } from 'vue'
 import * as api from '../api/commands'
 import type { MissingDependency, ModCompat } from '../api/types'
 import { t } from '../i18n'
-import { LOADER_LABELS, minecraftVersionOf } from '../utils/format'
+import { errorMessage, LOADER_LABELS, minecraftVersionOf } from '../utils/format'
 import { baseName } from '../utils/useFileDrop'
 import { useInstancesStore } from './instances'
+import { useRatscanStore } from './ratscan'
+import { useTasksStore } from './tasks'
 
-/** The question before launching an instance with enabled mods that were made for another version or loader. */
+/** Compatibility advice when adding, launching, or repairing installed mods. */
 export interface ModCompatPrompt {
   instanceId: string
-  /** `launch`: before starting the game; `add`: before copying new jars in ('disable' then means skip them). */
-  mode: 'launch' | 'add'
+  /** In `add` mode, 'disable' means skip the incoming jars. `repair` never launches the game. */
+  mode: 'launch' | 'add' | 'repair'
+  paths: string[]
   minecraftVersion: string
   mods: ModCompat[]
+  downloading: boolean
+  message: string | null
+  error: string | null
   answer: (choice: Choice) => void
 }
 
@@ -38,6 +44,8 @@ export const useModCompatStore = defineStore('modCompat', () => {
   /** Mismatched mods of every instance seen so far, by file name. */
   const byFile = ref<Record<string, Record<string, ModCompat>>>({})
   const prompt = ref<ModCompatPrompt | null>(null)
+  /** Resource lists reload after dependency downloads, including a partially failed install. */
+  const changed = ref(0)
 
   async function refresh(instanceId: string) {
     const found = await api.modCompat(instanceId)
@@ -59,18 +67,64 @@ export const useModCompatStore = defineStore('modCompat', () => {
     return parts.join(' ')
   }
 
-  async function ask(instanceId: string, mode: ModCompatPrompt['mode'], mods: ModCompat[]): Promise<Choice> {
+  async function ask(instanceId: string, mode: ModCompatPrompt['mode'], mods: ModCompat[], paths: string[] = []): Promise<Choice> {
     const instance = useInstancesStore().instances.find((i) => i.id === instanceId)
     // A second question while one is open cancels the first one instead of leaving it pending forever.
     prompt.value?.answer('cancel')
     let current: ModCompatPrompt | undefined
     const choice = await new Promise<Choice>((resolve) => {
-      current = { instanceId, mode, minecraftVersion: instance ? minecraftVersionOf(instance) : '?', mods, answer: resolve }
+      current = { instanceId, mode, paths, minecraftVersion: instance ? minecraftVersionOf(instance) : '?', mods, downloading: false, message: null, error: null, answer: resolve }
       prompt.value = current
     })
     // Close the dialog only if it still shows this question; compared by `answer` because the ref holds a proxy.
     if (prompt.value && prompt.value.answer === current?.answer) prompt.value = null
     return choice
+  }
+
+  /** Opens the same repair flow from a mod badge or a notification; it never starts the game. */
+  async function openDependencies(instanceId: string) {
+    const mods = await useTasksStore().guard(() => refresh(instanceId))
+    if (!mods) return
+    const affected = mods.filter((mod) => mod.enabled && mod.dependencies.length)
+    if (affected.length) await ask(instanceId, 'repair', affected)
+    else useTasksStore().toast(t.modCompat.dependenciesReady, 'ok')
+  }
+
+  async function downloadDependencies() {
+    const current = prompt.value
+    if (!current || current.downloading) return
+    const tasks = useTasksStore()
+    current.downloading = true
+    current.message = null
+    current.error = null
+    try {
+      const report = await api.installMissingModDependencies(current.instanceId, current.paths)
+      tasks.showBlocked(report.blocked, current.instanceId)
+      const added = report.installed.map((mod) => mod.fileName)
+      if (added.length) {
+        useRatscanStore().scanAdded(current.instanceId, added)
+        tasks.toast(t.modCompat.dependenciesInstalled(added.length), 'ok')
+      }
+      const mods = current.mode === 'add'
+        ? await api.modCompatFiles(current.instanceId, current.paths)
+        : (await refresh(current.instanceId)).filter((mod) => mod.enabled)
+      // Another question may have replaced this one while the backend was working.
+      if (prompt.value?.answer !== current.answer) return
+      // Keep the caller's array in sync: "skip" / "disable" must act on the remaining problems only.
+      current.mods.splice(0, current.mods.length, ...(current.mode === 'repair' ? mods.filter((mod) => mod.dependencies.length) : mods))
+      if (report.unresolvedDependencies.length) {
+        current.message = t.modCompat.dependenciesUnresolved(report.unresolvedDependencies.join(', '))
+      } else if (!current.mods.some((mod) => mod.dependencies.length) && !report.blocked.length) {
+        current.message = t.modCompat.dependenciesReady
+      }
+      // Adding continues automatically. A launch still needs an explicit click after repair.
+      if (current.mode === 'add' && !current.mods.length && !report.blocked.length && !report.unresolvedDependencies.length) current.answer('launch')
+    } catch (error) {
+      current.error = errorMessage(error)
+    } finally {
+      current.downloading = false
+      changed.value++
+    }
   }
 
   /**
@@ -86,7 +140,7 @@ export const useModCompatStore = defineStore('modCompat', () => {
       return paths
     }
     if (!mods.length) return paths
-    const choice = await ask(instanceId, 'add', mods)
+    const choice = await ask(instanceId, 'add', mods, paths)
     if (choice === 'cancel') return null
     if (choice === 'launch') return paths
     const skipped = new Set(mods.map((mod) => mod.fileName))
@@ -113,5 +167,5 @@ export const useModCompatStore = defineStore('modCompat', () => {
     return true
   }
 
-  return { byFile, prompt, refresh, label, hint, confirmLaunch, confirmAdd }
+  return { byFile, prompt, changed, refresh, label, hint, confirmLaunch, confirmAdd, openDependencies, downloadDependencies }
 })

@@ -71,6 +71,7 @@ const changingVersion = ref<LocalResource | null>(null)
 const tasks = useTasksStore()
 const ratscan = useRatscanStore()
 const packs = usePacksStore()
+const modCompat = useModCompatStore()
 
 const resources = ref<LocalResource[]>([])
 const loading = ref(true)
@@ -165,6 +166,7 @@ async function openTab() {
 onMounted(openTab)
 watch(() => [props.instanceId, props.kind], openTab)
 watch(() => packs.changed, load)
+watch(() => modCompat.changed, () => { if (props.kind === 'mod') void load() })
 
 // There is no file watcher: files copied in with the file manager show up when the launcher window gets focus again.
 let syncing = false
@@ -183,7 +185,8 @@ async function syncWithDisk() {
       // only a loader or Minecraft version problem is compared with what the instance has
       const here = mod.loaderMismatch || !instance ? have : minecraftVersionOf(instance)
       const message = mod.loaderMismatch || mod.minecraftMismatch ? t.modCompat.addedMismatch(mod.fileName, needsOf(mod), here) : t.modCompat.addedProblem(mod.fileName, needsOf(mod))
-      tasks.toast(message, 'error')
+      const instanceId = props.instanceId
+      tasks.toast(message, 'error', mod.dependencies.length ? { label: t.modCompat.downloadDependencies, run: () => void modCompat.openDependencies(instanceId) } : undefined)
     }
   } finally {
     syncing = false
@@ -199,7 +202,6 @@ onBeforeUnmount(() => {
 })
 
 // ---- RatScan (mods) ----
-const modCompat = useModCompatStore()
 const instances = useInstancesStore()
 const view = useViewMode('resources')
 /** The mod check result for the status line; `null` until the check has finished. */
@@ -576,6 +578,11 @@ const columns: { key: SortKey; label: () => string; class: string }[] = [
                   <span v-if="kind === 'mod' && modCompat.byFile[instanceId]?.[r.fileName]" class="badge badge-warn" :title="modCompat.hint(modCompat.byFile[instanceId][r.fileName])">
                     {{ modCompat.label(modCompat.byFile[instanceId][r.fileName]) }}
                   </span>
+                  <button
+                    v-if="kind === 'mod' && modCompat.byFile[instanceId]?.[r.fileName]?.dependencies.length"
+                    class="badge badge-accent cursor-pointer"
+                    @click.stop="modCompat.openDependencies(instanceId)"
+                  ><Download :size="12" />{{ t.modCompat.downloadDependencies }}</button>
                   <span v-if="kind === 'resourcePack' && mismatchOf(r)?.mismatch" class="badge badge-warn" :title="t.packs.mismatchHint">
                     {{ t.packs.madeFor(mismatchOf(r)!.madeFor ?? '?') }}
                   </span>

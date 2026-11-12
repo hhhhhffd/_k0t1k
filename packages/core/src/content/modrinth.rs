@@ -44,6 +44,11 @@ impl Client {
         }
     }
 
+    #[cfg(test)]
+    pub(super) fn with_base_url(http: reqwest::Client, base_url: String) -> Self {
+        Self { http, base_url }
+    }
+
     fn url(&self, path: &str) -> String {
         format!("{}{path}", self.base_url)
     }

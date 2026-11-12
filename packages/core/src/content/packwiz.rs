@@ -266,6 +266,29 @@ pub fn write(index_dir: &Path, slug: &str, data: &PwMod) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Writes a fresh index without replacing any existing file. Used by dependency repair, which
+/// must not update or remove existing user metadata. Callers use a unique slug.
+pub(super) fn write_new(index_dir: &Path, slug: &str, data: &PwMod) -> Result<PathBuf> {
+    use std::io::Write;
+
+    if slug.is_empty() || slug.starts_with('.') || slug.contains(['/', '\\']) {
+        return Err(Error::Other(format!(
+            "{slug:?} is not usable as an index file name"
+        )));
+    }
+    let text = toml::to_string(data)
+        .map_err(|error| Error::Other(format!("cannot serialize packwiz index: {error}")))?;
+    std::fs::create_dir_all(index_dir).at(index_dir)?;
+    let path = index_dir.join(format!("{slug}{INDEX_SUFFIX}"));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .at(&path)?;
+    file.write_all(text.as_bytes()).at(&path)?;
+    Ok(path)
+}
+
 /// All readable index files of a directory; a missing directory is an empty index.
 pub fn list(index_dir: &Path) -> Result<Vec<IndexEntry>> {
     let entries = match std::fs::read_dir(index_dir) {
@@ -421,6 +444,23 @@ version = "OihdIimA"
         );
         assert!(write(&dir, "../evil", &data).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn dependency_indexes_never_overwrite_existing_user_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = PwMod {
+            name: "Original".into(),
+            ..PwMod::default()
+        };
+        let path = write_new(dir.path(), "dependency", &data).unwrap();
+        let replacement = PwMod {
+            name: "Replacement".into(),
+            ..PwMod::default()
+        };
+        assert!(write_new(dir.path(), "dependency", &replacement).is_err());
+        assert_eq!(read(&path).unwrap(), data);
+        assert!(write_new(dir.path(), "../escape", &replacement).is_err());
     }
 
     #[test]

@@ -43,7 +43,7 @@ pub use dropped::{AddFilesReport, SkipReason, add_local_files, identify_file};
 pub use export::{PackExportReport, PackExportRequest, export_curseforge, export_mrpack};
 pub use install::{
     AvailableUpdate, BlockedFile, InstallContext, InstallReport, InstalledResource, check_updates,
-    install_version,
+    install_missing_mod_dependencies, install_version,
 };
 pub use local::{
     FolderZip, LocalResource, compress_folder_pack, fix_nested_pack, replace_folder_with_zip, folder_declared_range, ResourceMetadata, delete_resource, parse_mod_jar, read_resource, scan_resources, set_enabled,

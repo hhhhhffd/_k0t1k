@@ -27,7 +27,7 @@ const CACHE_VERSION: u32 = 2;
 const MAX_NESTED_DEPTH: u8 = 3;
 /// Ids the game or the loader provides itself; a dependency on one of them is never "missing".
 /// `mixinextras` is bundled into recent Fabric and Quilt loaders.
-const PLATFORM_IDS: [&str; 13] = [
+pub(super) const PLATFORM_IDS: [&str; 13] = [
     "minecraft",
     "java",
     "fabricloader",
@@ -487,7 +487,7 @@ fn missing_dependencies(relevant: &[&Descriptor], context: &Context) -> Vec<Miss
     missing
 }
 
-fn satisfies(loader: Loader, alternatives: &[String], installed: &str) -> Option<bool> {
+pub(super) fn satisfies(loader: Loader, alternatives: &[String], installed: &str) -> Option<bool> {
     let version = Version::parse(installed)?;
     any_of(alternatives.iter().map(|alternative| match loader {
         Loader::Fabric | Loader::Quilt => matches_semver(alternative, &version),
@@ -495,7 +495,7 @@ fn satisfies(loader: Loader, alternatives: &[String], installed: &str) -> Option
     }))
 }
 
-fn matches_spec(loader: Loader, spec: &str, minecraft: &str) -> Option<bool> {
+pub(super) fn matches_spec(loader: Loader, spec: &str, minecraft: &str) -> Option<bool> {
     let version = minecraft_version(minecraft)?;
     match loader {
         Loader::Fabric | Loader::Quilt => matches_semver(spec, &version),

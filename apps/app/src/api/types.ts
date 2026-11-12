@@ -487,7 +487,7 @@ export interface BlockedFile {
 export interface InstallReport {
   installed: { platform: Platform; projectId: string; name: string; fileName: string; isDependency: boolean }[]
   blocked: BlockedFile[]
-  /** Required dependencies without a compatible version, as `platform:project id`. */
+  /** Unresolved catalog dependencies (`platform:project id`) or local descriptor mod IDs. */
   unresolvedDependencies: string[]
 }
 
