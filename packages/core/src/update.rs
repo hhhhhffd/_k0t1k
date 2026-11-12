@@ -2,7 +2,8 @@
 //! after checking its Ed25519 signature. Swapping the running executable is the app's job.
 //!
 //! A release carries the launcher for each system with a signature beside it: `_k0t1k.exe` and
-//! `_k0t1k.exe.sig` for Windows, `_k0t1k-x86_64.AppImage` and `_k0t1k-x86_64.AppImage.sig` for Linux. A
+//! `_k0t1k.exe.sig` for Windows, `_k0t1k-x86_64.AppImage` and `_k0t1k-x86_64.AppImage.sig` for Linux,
+//! and `_k0t1k-macos-{arm64,x86_64}.zip` with `.sig` for macOS (the complete app bundle). A
 //! signature is the base64 of a raw 64-byte pure Ed25519 signature over [`signed_message`]: a fixed
 //! prefix, the version and the SHA-256 of the file (`scripts/release.sh` makes it). Binding the version stops an old signed exe from being republished
 //! under a newer tag. Only the public key is embedded here.
@@ -28,18 +29,25 @@ use tokio::io::AsyncWriteExt;
 use crate::error::{Error, IoContext, Result};
 use crate::progress::{ProgressEvent, ProgressFn};
 
+pub mod macos;
+
 const REPO: &str = "hhhhhffd/_k0t1k";
 /// Raw 32-byte Ed25519 public key, base64. The private half is kept off the repository.
 const PUBLIC_KEY: &str = "NrARzBayytnggNAo7TAAGOuAUyNb44vAMpDhECFZs4U=";
 /// The release asset this build updates itself from, and its signature.
-#[cfg(not(target_os = "linux"))]
-const EXE_ASSET: &str = "_k0t1k.exe";
-#[cfg(not(target_os = "linux"))]
-const SIG_ASSET: &str = "_k0t1k.exe.sig";
-#[cfg(target_os = "linux")]
-const EXE_ASSET: &str = "_k0t1k-x86_64.AppImage";
-#[cfg(target_os = "linux")]
-const SIG_ASSET: &str = "_k0t1k-x86_64.AppImage.sig";
+const EXE_ASSET: &str = platform_assets(std::env::consts::OS, std::env::consts::ARCH).0;
+const SIG_ASSET: &str = platform_assets(std::env::consts::OS, std::env::consts::ARCH).1;
+
+const fn platform_assets(os: &str, arch: &str) -> (&'static str, &'static str) {
+    // Byte patterns keep this usable in constants without changing the public update API.
+    match (os.as_bytes(), arch.as_bytes()) {
+        (b"macos", b"aarch64") => ("_k0t1k-macos-arm64.zip", "_k0t1k-macos-arm64.zip.sig"),
+        (b"macos", b"x86_64") => ("_k0t1k-macos-x86_64.zip", "_k0t1k-macos-x86_64.zip.sig"),
+        (b"macos", _) => panic!("unsupported macOS update architecture"),
+        (b"linux", _) => ("_k0t1k-x86_64.AppImage", "_k0t1k-x86_64.AppImage.sig"),
+        _ => ("_k0t1k.exe", "_k0t1k.exe.sig"),
+    }
+}
 /// Stable task id of the download, as shown in the UI's task list.
 pub const TASK: &str = "update";
 /// A signature is 88 base64 characters; anything much larger is not one.
@@ -317,6 +325,20 @@ mod tests {
 
     fn message(version: &str, exe: &[u8]) -> Vec<u8> {
         signed_message(version, &Sha256::digest(exe))
+    }
+
+    #[test]
+    fn release_assets_match_platform_and_architecture() {
+        for (os, arch, expected) in [
+            ("macos", "aarch64", "_k0t1k-macos-arm64.zip"),
+            ("macos", "x86_64", "_k0t1k-macos-x86_64.zip"),
+            ("windows", "x86_64", "_k0t1k.exe"),
+            ("linux", "x86_64", "_k0t1k-x86_64.AppImage"),
+        ] {
+            let (asset, signature) = platform_assets(os, arch);
+            assert_eq!(asset, expected);
+            assert_eq!(signature, format!("{expected}.sig"));
+        }
     }
 
     #[test]
